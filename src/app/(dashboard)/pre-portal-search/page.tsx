@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { fetchCustomerRatings, type CustomerRating } from "@/utils/utils";
 import { useCustomer, useUser } from "@/contexts/CustomerContext";
 import AddAlert from "../_components/AddAlert";
+import NewModal from "../_components/NewModal";
 import { StarFilled } from '@ant-design/icons';
 import { useZoom } from '@/contexts/ZoomContext';
 import InfoIcon from '@/components/InfoIcon';
@@ -49,6 +50,7 @@ export default function PrePortalSearch() {
   const [selectionType] = useState<"checkbox" | "radio">("checkbox");
   const [isProfileVisible, setIsProfileVisible] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
+  const [isNewModalVisible, setIsNewModalVisible] = useState(false);
   const [selectedPlyer, setSelectedPlyer] = useState<AthleteData | null>(null);
   const [value, setValue] = useState("");
   const [data, setData] = useState<AthleteData[]>([]);
@@ -941,6 +943,14 @@ export default function PrePortalSearch() {
     setSearchQuery(value);
   };
 
+  const handleOpenNewModal = () => {
+    setIsNewModalVisible(true);
+  };
+
+  const handleCloseNewModal = () => {
+    setIsNewModalVisible(false);
+  };
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -1134,6 +1144,24 @@ export default function PrePortalSearch() {
                     renderActiveFilters={renderActiveFilters}
                   />
                 )}
+                <Button
+                        type="primary"
+                        size="large"
+                        className="alert-gradient-btn"
+                        onClick={handleOpenNewModal}
+                        style={{
+                          marginRight: 5,
+                          fontWeight: 500,
+                          background: "linear-gradient(90deg, #6affab 0%, #c8ff24 111.68%)",
+                          border: "none",
+                          fontFamily: '"Inter Tight", serif',
+                          boxShadow: "0 2px 8px rgba(202, 255, 36, 0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        Open New Modal
+                      </Button>
                 <Filters 
                   onApplyFilters={applyFilters} 
                   onResetFilters={resetFilters} 
@@ -1346,6 +1374,12 @@ export default function PrePortalSearch() {
           ))}
         </Flex>
       </Modal>
+
+      {/* New Modal Component */}
+      <NewModal 
+        isVisible={isNewModalVisible}
+        onClose={handleCloseNewModal}
+      />
         </Flex>
       </div>
     </div>
