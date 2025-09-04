@@ -1,0 +1,168 @@
+.filterMenu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100%;
+  background-color: #f8f9fa;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+  transform: translateX(100%);
+  transition: transform 0.3s ease-in-out;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.filterMenu.open {
+  transform: translateX(0);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background-color: #007bff;
+  color: white;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.closeButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+.activeFilters {
+  padding: 15px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.filterCategory {
+  margin-bottom: 10px;
+}
+
+.categoryName {
+  font-weight: bold;
+  margin-right: 5px;
+}
+
+.filterTag {
+  display: inline-block;
+  background-color: #e9ecef;
+  padding: 5px 10px;
+  margin: 2px;
+  border-radius: 15px;
+  font-size: 0.9rem;
+}
+
+.filterTag button {
+  background: none;
+  border: none;
+  color: #6c757d;
+  margin-left: 5px;
+  cursor: pointer;
+}
+
+.filterOptions {
+  padding: 15px;
+}
+
+.filterCategory h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1rem;
+  color: #495057;
+}
+
+.categoryGroup {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.rectangle {
+  display: inline-block;
+  padding: 5px 10px;
+  margin: 2px;
+  border: 1px solid #007bff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.rectangle:hover {
+  background-color: #e6f2ff;
+}
+
+.rectangle.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.category {
+  font-weight: bold;
+  border-width: 2px;
+  background-color: #f0f0f0;
+  margin-right: 10px;
+}
+
+.category:hover {
+  background-color: #e0e0e0;
+}
+
+.category.active {
+  background-color: #007bff;
+  color: white;
+}
+
+.positionGroup {
+  display: flex;
+  flex-wrap: wrap;
+  flex-grow: 1;
+}
+
+.position {
+  font-size: 0.9em;
+}
+
+.categoryLabel {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.positionLabel {
+  display: block;
+  margin-left: 20px;
+  margin-bottom: 3px;
+}
+
+.categoryLabel input,
+.positionLabel input {
+  margin-right: 5px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .filterMenu {
+    width: 100%;
+  }
+}
+
+.chevronIcon {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
+  }
+
+  .closeButton:hover .chevronIcon {
+    transform: translateX(3px);
+  }

@@ -1,0 +1,120 @@
+.filter-screen {
+  background-color: var(--bg-white);
+  box-shadow: 0px 30px 30px rgba(17, 31, 44, 0.25);
+  width: 360px;
+  height: 630px;
+  overflow: auto;
+  border: 1px solid rgba(28, 29, 77, 0.2);
+
+
+  h4 {
+    font-size: 24px !important;
+    font-weight: 600 !important;
+  }
+
+  .red {
+    color: var(--error);
+  }
+
+  .session {
+    justify-content: space-between;
+    border-bottom: 1px solid #1c1d4d1a;
+    align-items: center;
+    padding: 9px 0px;
+
+    p {
+      font-size: 14px !important;
+      font-weight: 400 !important;
+    }
+  }
+
+  .ant-collapse-header {
+    padding: 0px !important;
+    margin-top: 0 !important;
+    height: 40px;
+    align-items: center !important;
+    justify-content: space-between;
+    border-radius: 0 !important;
+    .ant-collapse-arrow {
+      font-size: 20px !important;
+      color: var(--primary);
+    }
+ 
+  }
+
+  .ant-collapse-item {
+    border-bottom: 1px solid #1c1d4d1a;
+    margin-bottom: 0;
+
+    .ant-collapse-content-box {
+      padding: 0px !important;
+    }
+    &:last-child {
+        border-radius: 0 !important;
+        border-bottom: 1px solid #1c1d4d1a !important;
+    }
+  }
+
+  .rating-type {
+    border: 0 !important;
+    gap: 4px;
+    margin: 14px 0px;
+    justify-content: left;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+
+    .ant-radio-button-wrapper {
+      border: 1px solid #1c1d4d;
+      opacity: 0.6;
+      width: 95px;
+      font-size: 16px;
+      font-weight: 500 !important;
+    }
+
+    .ant-radio-button-wrapper-checked {
+      border: 0 !important;
+      opacity: 1;
+    }
+  }
+
+  .filter-input {
+    margin-bottom: 22px;
+    padding-bottom: 3px;
+
+    p {
+      font-size: 14px !important;
+      font-weight: 500 !important;
+      color: var(--primary);
+    }
+
+    input {
+      border: 1px solid rgba(28, 29, 77, 0.2);
+      width: 100%;
+      background: #fff;
+      border-radius: 0%;
+      height: 40px;
+    }
+  }
+}
+.ant-collapse-content-active .ant-collapse-content-box{
+  padding:0 !important
+ }
+.aqua-light{
+  background: rgba(18, 109, 184, 0.1) !important;
+}
+.ant-collapse-arrow{
+  font-size: 20px;
+}
+.ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled), .ant-select-outlined.ant-select-multiple .ant-select-selection-item {
+    background-color: rgba(18, 109, 184, 0.1) !important;
+  }
+.ant-select-multiple .ant-select-selection-placeholder{
+    top:65%;
+  }
+.search-row{
+    text-align: left;
+    .ant-input-group >.ant-input-affix-wrapper:not(:last-child) .ant-input{
+      position: relative;
+      top:-5px;
+    }
+  }

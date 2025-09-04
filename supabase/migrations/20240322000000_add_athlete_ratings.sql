@@ -1,0 +1,43 @@
+-- -- Create athlete_ratings table
+-- CREATE TABLE IF NOT EXISTS public.athlete_ratings (
+--     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+--     athlete_id UUID NOT NULL REFERENCES public.athlete(id) ON DELETE CASCADE,
+--     coach UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+--     rating VARCHAR(2) NOT NULL CHECK (rating IN ('A+', 'A', 'A-', 'B+', 'B', 'B-', 'C', 'D')),
+--     sport VARCHAR(50) NOT NULL,
+--     team_id UUID NOT NULL,
+--     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+--     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+-- );
+
+-- -- Add RLS policies
+-- ALTER TABLE public.athlete_ratings ENABLE ROW LEVEL SECURITY;
+
+-- -- Policy to allow users to view ratings for athletes they have access to
+-- CREATE POLICY "Users can view ratings for their athletes"
+--     ON public.athlete_ratings
+--     FOR SELECT
+--     USING (
+--         EXISTS (
+--             SELECT 1 FROM recruiting_board
+--             WHERE user_id = auth.uid()
+--             AND athlete_id = athlete_ratings.athlete_id
+--         )
+--     );
+
+-- -- Policy to allow users to insert ratings for athletes they have access to
+-- CREATE POLICY "Users can insert ratings for their athletes"
+--     ON public.athlete_ratings
+--     FOR INSERT
+--     WITH CHECK (
+--         EXISTS (
+--             SELECT 1 FROM recruiting_board
+--             WHERE user_id = auth.uid()
+--             AND athlete_id = athlete_ratings.athlete_id
+--         )
+--     );
+
+-- -- Create index for faster queries
+-- CREATE INDEX IF NOT EXISTS idx_athlete_ratings_athlete_id ON public.athlete_ratings(athlete_id);
+-- CREATE INDEX IF NOT EXISTS idx_athlete_ratings_coach ON public.athlete_ratings(coach);
+-- CREATE INDEX IF NOT EXISTS idx_athlete_ratings_created_at ON public.athlete_ratings(created_at); 

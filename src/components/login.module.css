@@ -1,0 +1,95 @@
+/* Add styles for your login form */
+.login {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+  }
+  
+  .loginCard {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+  }
+  
+  .loginTitle {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .forgotPassword {
+    text-align: center;
+    margin-top: 1rem;
+  }
+  
+  .forgotPassword a {
+    color: #1677ff;
+    text-decoration: none;
+  }
+  
+  .forgotPassword a:hover {
+    text-decoration: underline;
+  }
+
+  .logoImage {
+    object-fit: contain;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .passwordInput {
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .passwordInput input {
+    padding: 8px 12px !important;
+    line-height: 1.5 !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .passwordInput .ant-input-suffix {
+    display: flex !important;
+    align-items: center !important;
+    height: 100% !important;
+  }
+
+  .columnHeader {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  
+  .columnFilter {
+    margin-left: 5px;
+    font-size: 0.8em;
+    width: 80px;
+  }
+
+  .toggleButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 5px;
+  }
+  
+  .table td, .table th {
+    padding: 8px;
+    text-align: left;
+  }
+  
+  /* Add responsive design for the expanded table */
+  @media (max-width: 1200px) {
+    .table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }

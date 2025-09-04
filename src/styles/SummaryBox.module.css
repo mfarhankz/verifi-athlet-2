@@ -1,0 +1,285 @@
+/* Base styles for all summary types */
+.teamSummary,
+.categorySummary,
+.positionSummary {
+  background-color: white;
+  border-radius: 12px;
+  padding: 0px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #eaeaea;
+  text-align: center;
+}
+
+
+/* Specific overrides for positionSummary */
+.positionSummary {
+  font-size: 0.95em;
+  min-width: 280px;
+  margin-top: -10px;
+}
+
+/* Specific overrides for teamSummary */
+.teamSummary {
+  margin-top: 25px;
+}
+
+/* Specific overrides for categorySummary */
+.categorySummary {
+  margin-top: 5px;
+}
+
+/* Hover effects for team and category summaries */
+.teamSummary:hover,
+.categorySummary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* Typography for position summary */
+.positionSummary h4 {
+  margin: 0 0 18px;
+  color: #2c3e50;
+  font-size: 1.2em;
+}
+
+.positionSummary h5 {
+  margin: 12px 0 8px;
+  font-size: 1.1em;
+  color: #34495e;
+}
+
+.positionSummary p {
+  margin: 5px 0;
+  color: #576574;
+  line-height: 1.4;
+}
+
+/* Summary content and layout */
+.summaryContent {
+  width: 100%;
+  padding: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  overflow: visible;
+}
+
+.summaryHeader {
+  display: flex;
+  padding: 4px 0;
+  border-bottom: 2px solid #eaeaea;
+  margin-bottom: 2px;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #2c3e50;
+  position: relative;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1px;
+  padding: 1px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.summaryRow:last-child {
+  border-bottom: none;
+}
+
+/* Grid layout for summary items */
+.position,
+.actual,
+.target,
+.diff {
+  flex: 1;
+  padding: 1px 2px;
+}
+
+.position {
+  text-align: left;
+  font-weight: bold;
+  font-size: 1.3em;
+  padding-top: 0;
+}
+
+.label {
+  flex: 1;
+  text-align: left;
+}
+
+/* Color states */
+.green { color: green; }
+.red { color: red; }
+.black { color: #000000; }
+
+/* Container transitions */
+.summariesContainer .summaryContent {
+  width: 300px;
+  transition: transform 0.3s ease;
+}
+
+.summariesContainer.hidden {
+  transform: translateX(calc(-100% + 10px));
+}
+
+.summariesContainer.hidden .summaryContent {
+  transform: translateX(-100%);
+  opacity: 0;
+  overflow: hidden;
+}
+
+.leftSidebar {
+  width: 350px;
+  transition: width 0.3s ease-in-out;
+}
+
+.leftSidebar.collapsed {
+  width: 30px;
+}
+
+
+.leftSidebar.collapsed .summariesContainer {
+  opacity: 0;
+  visibility: hidden;
+}
+
+
+.toggleSummariesButton {
+  position: absolute;
+  left: 0;
+  background-color: white;
+  border: none;
+  border-radius: 0 50% 50% 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1000;
+  color: #0070f3;
+}
+
+.toggleSummariesButton.hidden {
+  left: -30px;
+}
+
+.toggleSummariesButton:hover {
+  background-color: #e0e0e0;
+}
+
+.summariesContainer {
+  transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+  opacity: 1;
+  visibility: visible;
+  overflow: hidden;
+}
+
+/* Adjust the content inside summariesContainer */
+.summariesContainer .summaryContent {
+  width: 300px; /* Full width of the summaries */
+  transition: transform 0.3s ease;
+}
+
+.summariesContainer.hidden .summaryContent {
+  transform: translateX(-100%);
+  opacity: 0;
+  overflow: hidden;
+}
+
+.summariesContainer.hidden {
+  transform: translateX(calc(-100% + 10px)); /* Leave 10px visible */
+}
+
+
+
+.summariesContainer.hidden + .kanbanBoard {
+  margin-left: 10px; /* Adjust this to match the visible part of summaries */
+}
+
+.summariesContainer {
+  width: 350px; /* Adjust this value as needed */
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.summariesContainer.hidden {
+  width: 20px; /* Width of the visible portion when hidden */
+  /* font-size: 0.1em; */
+}
+
+
+.summariesContainer {
+  position: relative;
+  transition: transform 0.3s ease-in-out;
+}
+
+.totalRow {
+  border-top: 1px solid #eaeaea;
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+/* Detailed budget section */
+.detailedBudget {
+  margin-top: 5px;
+  padding-top: 4px;
+  border-top: 1px dashed #ccc;
+  font-size: 0.95em;
+}
+
+.detailedBudget .summaryRow {
+  padding: 1px 0;
+  margin-bottom: 0;
+}
+
+/* Expand/collapse button for summary cards */
+.expandCollapseButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 5px;
+  top: 2px;
+  padding: 2px;
+  font-size: 0.8em;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.expandCollapseButton:hover {
+  color: #000;
+  transform: scale(1.1);
+}
+
+/* Container for diff value and expand/collapse button */
+.diffContainer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+}
+
+/* Inline expand/collapse button that appears next to diff amount */
+.expandCollapseButtonInline {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin-left: 4px;
+  font-size: 0.8em;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.expandCollapseButtonInline:hover {
+  color: #000;
+  transform: scale(1.1);
+}

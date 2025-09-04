@@ -1,0 +1,345 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: auto !important;
+}
+
+#__next {
+  min-height: 100%;
+  min-width: fit-content;
+}
+
+.outer-container {
+  min-height: fit-content;
+  min-width: fit-content;
+  position: relative;
+}
+
+.fixed-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  z-index: 1000;
+  background-color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1rem;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+}
+
+.fixed-header.hidden {
+  transform: translateY(-100%);
+  box-shadow: none;
+}
+
+.fixed-header.visible {
+  transform: translateY(0);
+}
+
+.logo-container {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.left-controls, .right-controls {
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+}
+
+.main-content {
+  margin-top: 20px;
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+.side-menu {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  width: 250px;
+  height: calc(100vh - 100px);
+  background-color: #f0f0f0;
+  z-index: 999;
+  overflow-y: auto;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+}
+
+.kanban-board-container {
+  width: 100%;
+  min-height: calc(100vh - 100px);
+  margin-top: 30px;
+}
+
+/* Force scrollbars to appear */
+.outer-container::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 7px;
+}
+
+.outer-container::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, .5);
+  box-shadow: 0 0 1px rgba(255, 255, 255, .5);
+}
+
+#__next {
+  width: 100%;
+  height: 100%;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background-color: #fff; /* or any color that matches your design */
+}
+
+.scenario-controls {
+  display: inline-block;
+  border: 1px solid #ccc;
+  border-radius: 0.25rem;
+  padding: 0.25rem;
+}
+
+.scenario-controls .text-sm {
+  color: #000000;
+  font-size: 12px;
+  margin-bottom: 0;
+}
+
+.scenario-controls select,
+.scenario-controls button {
+  height: 24px;
+  line-height: 20px;
+}
+
+.neon-yellow {
+  transition: all 0.3s ease; /* Smooth transition for the neon effect */
+}
+
+.filter-button {
+  padding: 0.5rem;
+  color: white;
+  border-radius: 0.25rem;
+  margin-right: 1rem;
+  background-color: #93c5fd; /* lighter blue */
+}
+
+.filter-button.active {
+  background-color: #3b82f6; /* darker blue */
+}
+
+/* Twitter Feed Styles */
+.twitter-feed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.twitter-link {
+  display: inline-flex;
+  align-items: center;
+  color: #1DA1F2;
+  font-weight: 500;
+  text-decoration: none;
+  margin: 10px;
+  padding: 5px 0;
+}
+
+.twitter-link:hover {
+  text-decoration: underline;
+}
+
+.twitter-embed-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.twitter-timeline-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.twitter-timeline-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f8fa;
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  margin: 10px;
+}
+
+.twitter-timeline-error p {
+  color: #657786;
+  font-size: 14px;
+}
+
+.twitter-timeline-wrapper {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+}
+
+.twitter-timeline-wrapper iframe {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 500px !important;
+  border: none !important;
+}
+
+.arrow-bg {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  position: relative;
+  width: 100%;
+}
+
+.arrow-gray {
+  background-color: #f0f0f0;
+  padding: 8px 15px;
+  border-radius: 4px 0 0 4px;
+  max-width: 50%;
+}
+
+.arrow-green {
+  background-color: #4CAF50;
+  padding: 8px 15px;
+  border-radius: 0 4px 4px 0;
+  position: absolute;
+  left: 60%;
+  top: 0;
+}
+
+.arrow-gray h5, .arrow-green h5 {
+  margin: 0;
+  color: #333;
+}
+
+.arrow-green h5 {
+  color: white;
+  text-align: right;
+}
+
+/* Remove all status-related CSS */
+.badge {
+  /* Keep any base badge styles if needed */
+}
+
+/* Remove all these classes as they're no longer needed */
+.detail-box .badge,
+.detail-box .badge.status-active,
+.detail-box .badge i,
+.detail-box .badge.status-active i {
+  /* These styles are now handled by inline styles */
+}

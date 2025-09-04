@@ -1,0 +1,124 @@
+.player-information {
+    text-align: left;
+
+    h4 {
+    font-style: italic;
+    padding: 9px;
+    background: linear-gradient(90deg, rgba(106, 255, 171, 0.3) -100%, rgba(255, 255, 255, 0.5) 100%);
+    font-family: var(--antd-font-family);
+    margin-bottom: 10px;
+    display: inline-flex;
+    align-items: center;
+
+        span {
+            font-size: 18px;
+            font-style: normal;
+            font-weight: 600;
+            color: var(--primary);
+            opacity: 1;
+            letter-spacing: 0.5px;
+        }
+    }
+
+    p {
+        font-size: 14px;
+        font-style: normal;
+        font-weight: 400;
+        line-height: 20px;
+        /* 211.111% */
+    }
+
+    h6 {
+        color: var(--primary);
+        opacity: 0.5;
+        line-height: 16px;
+        margin-bottom: 2px;
+        font-weight: 400 !important;
+    }
+
+    h5 {
+        color: var(--primary);
+        line-height: 24px;
+         font-weight: 400 !important;
+
+        span {
+            width: 41px;
+            height: 41px;
+            font-size: 28px;
+            font-weight: 500;
+            text-align: center;
+            margin-right: 12px;
+        }
+
+        .ms {
+            background-color: #f5fdff;
+            color: #41c8ea;
+            display: flex;
+            align-items: center;
+        }
+
+        .js {
+            background: #fff8f4;
+            color: #ff7525;
+            display: flex;
+            align-items: center;
+        }
+    }
+
+    a {
+        color: #126db8;
+    }
+
+    h4 {
+        font-size: 18px !important;
+        font-weight: 600;
+     
+    }
+
+    .survey {
+        i {
+            color: var(--primary);
+            opacity: 30%;
+            font-size: 24px;
+        }
+
+        h6 {
+            font-size: 18px;
+        }
+
+        span {
+            font-size: 18px;
+        }
+    }
+    
+    
+    // .notes {
+    //     background-color: #fffcec;
+    //     padding: 20px 15px;
+    //     hr{
+    //         color: var(--warning);
+    //         margin: 20px 0px;
+    //     }
+        
+    //     .jm {
+    //         color: var(--primary);
+    //         font-size: 18px;
+    //         opacity: 1;
+    //         font-weight: 600;
+    //         background: var(--warning);
+    //         display: flex;
+    //         align-items: center;
+    //         justify-content: center;
+    //     }
+    //     h6{
+    //         font-size: 18px ;
+    //         font-weight: 600;
+    //     }
+    //     span{
+    //         font-weight: 400;
+    //         font-style: 14px;
+    //     }
+
+    // }
+}
+

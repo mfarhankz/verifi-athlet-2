@@ -1,0 +1,30 @@
+.subPositionHeader {
+  background: #fff;
+  border: 2px solid #667eea;
+  border-radius: 12px;
+  padding: 1rem 0;
+  cursor: move;
+  user-select: none;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.10);
+  min-width: 220px;
+  width: 240px;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: box-shadow 0.2s, border 0.2s;
+}
+
+.subPositionHeaderDragging {
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.18);
+  border-color: #764ba2;
+}
+
+.positionName {
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: #222b45;
+  text-align: center;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+} 

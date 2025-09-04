@@ -1,0 +1,61 @@
+.inputContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.dollarSign {
+  position: absolute;
+  left: 8px;
+  font-weight: bold;
+  color: #333;
+  z-index: 1;
+}
+
+.input {
+  width: 100%;
+  padding: 8px 28px 8px 20px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.dollarInput {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dollarInput span {
+  font-size: 1rem;
+  color: inherit;
+}
+
+.dollarInput input {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 4px 8px;
+  width: 100%;
+  font-size: 1rem;
+  outline: none;
+  text-align: right;
+}
+
+.dollarInput input:focus {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+}
+
+.dollarInput input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}

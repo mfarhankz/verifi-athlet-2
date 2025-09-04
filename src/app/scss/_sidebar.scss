@@ -1,0 +1,63 @@
+.sidebar-menu {
+    background: transparent !important;
+    border: none !important;
+    margin-top: 10px;
+    li {
+        margin: 0 !important;
+        width: 100% !important;
+        border-radius: 0 !important;
+        height: 52px !important;
+        line-height: 52px !important;
+        text-align: left !important;
+        &:active, &:focus-visible {
+            background-color: transparent !important;
+            outline: none !important;
+        }
+        .ant-menu-title-content {
+            margin: 0 !important;
+        }
+        a{
+            font-size: 14px;
+            font-weight: 400 !important;
+            font-family: var(--antd-font-family);
+            color: var(--text-white) !important;
+            padding-left: 10px;
+        }
+        i {
+            font-size: 24px !important;
+            color: var(--text-white) !important;
+        }
+        &.ant-menu-item-selected {
+            background: url(/nav-hover.svg) no-repeat;
+            i {
+                color: var(--primary) !important;
+            }
+            a{
+                color: var(--primary) !important;
+                font-weight: 600 !important;
+                font-size: 16px !important;
+            }
+        }
+    }
+}
+
+// Add styles for collapsed sidebar
+.ant-layout-sider-collapsed {
+    .sidebar-menu {
+        li {
+            i {
+                margin-left: -5px !important; // Center icons better in narrower space
+                font-size: 22px !important; // Slightly smaller icons when collapsed
+            }
+        }
+    }
+}
+.ant-btn-variant-outlined{
+  background:white !important;
+  border:1px solid rgba($color: #1C1D4D, $alpha: 0.5) !important;
+  box-shadow: 0px 1px 3px rgba($color: #1C1D4D, $alpha: 0.2);
+  &:hover{
+      background:white;
+       border:1px solid rgba($color: #1C1D4D, $alpha: 1)!important;
+  }
+}

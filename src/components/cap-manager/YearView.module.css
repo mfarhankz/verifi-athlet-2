@@ -1,0 +1,245 @@
+@import '../../styles/SummaryBox.module.css';
+
+.yearViewContainer {
+  display: flex;
+  position: relative;
+}
+
+.yearView {
+  flex: 1;
+  transition: margin-left 0.3s ease-in-out;
+}
+
+
+
+.yearTable {
+  border-collapse: collapse;
+  width: auto;
+  table-layout: auto;
+}
+
+.yrsColumn {
+  width: 60px;
+}
+
+/* Ensure other columns don't grow unnecessarily */
+.yearTable th:not(.yrsColumn),
+.yearTable td:not(.yrsColumn) {
+  width: auto;
+}
+
+.yearTable td:last-child {
+  width: 140px;  /* Reduced from 240px */
+  min-width: 140px;  /* Reduced from 240px */
+}
+
+.yearTable th {
+  position: sticky;
+  top: 0;
+  /* background-color: #f0f0f0; */
+  z-index: 10;
+}
+
+.yearTable tr[data-elig="1"] {
+  background-color: rgba(156, 141, 131, 0.3);
+}
+
+.yearTable tr[data-elig="2"] {
+  background-color: rgba(226, 146, 128, 0.3);
+}
+
+.yearTable tr[data-elig="3"] {
+  background-color: rgba(237, 179, 128, 0.3);
+}
+
+.yearTable tr[data-elig="4"] {
+  background-color: rgba(247, 212, 128, 0.3);
+}
+
+.yearTable tr[data-elig="5"] {
+  background-color: rgba(250, 245, 214, 0.3);
+}
+
+.committedFuture {
+  background-color: #4a90e2 !important;
+  color: white !important;
+}
+
+.uncommittedFuture {
+  background-color: #a8d2ff !important;
+  color: black !important;
+}
+
+.detailsSidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 300px;
+  height: 100%;
+  background-color: white;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.playerCard {
+  padding: 3px !important;
+}
+
+.summaryContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-weight: normal;
+}
+
+.label {
+  flex: 1;
+  text-align: left;
+}
+
+.yearLabel {
+  flex: 1;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.4em;
+}
+
+.actual, .target, .diff {
+  flex: 1;
+  text-align: center;
+}
+
+.green {
+  color: green;
+}
+
+.red {
+  color: red;
+}
+
+.black {
+  color: #000000;
+}
+
+.percentage {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.position {
+  font-weight: bold;
+  text-align: center;
+  flex: 1;
+  font-size: 1.3em;
+  padding-top: 1px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.rowSummary {
+  vertical-align: top;
+  padding: 8px;
+  padding-right: 20px !important;
+  border-left: 1px solid #ccc;
+  background-color: transparent;
+}
+
+.rowSummaryContent {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8em;  
+  white-space: nowrap;
+}
+
+.rowSummaryContent > div {
+  margin-bottom: 3px; 
+  display: flex;
+  justify-content: space-between;
+}
+
+.rowSummaryContent .label {
+  margin-right: 5px;  
+}
+
+.rowSummaryContent .value {
+  text-align: right;
+}
+
+.rowSummaryContent .percentage {
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
+.scholarshipPositive {
+  color: green;
+}
+
+.scholarshipNegative {
+  color: red;
+}
+
+.positionHeader {
+  text-align: center;
+  font-weight: normal;
+  padding: 10px 0;
+}
+
+.summaryHeader .actual,
+.summaryHeader .target,
+.summaryHeader .diff {
+  font-weight: normal;
+  flex: 1;
+}
+
+.yearTable td {
+  vertical-align: top;  
+}
+
+.stickyHeaderContainer {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--background-color);
+}
+
+.stickyHeader {
+  font-weight: normal;
+  text-align: center;
+}
+
+.summaryContent {
+  width: 100%;
+}
+
+.summaryHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: bold;
+}
+
+.position, .actual, .target, .diff {
+  text-align: right;
+  padding: 4px 8px;
+}
+
+.position {
+  text-align: left;
+}
+
+.deadMoneyRow {
+  background-color: rgba(255, 0, 0, 0.05); /* subtle red tint */
+  border-bottom: 1px solid #ddd;
+}

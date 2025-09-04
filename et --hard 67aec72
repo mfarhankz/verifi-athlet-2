@@ -1,0 +1,5 @@
+[33m11dbc45[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fixed so that when you sort ascending starts with nulls
+[33m67aec72[m created a formula column function for stat tables
+[33m6a50aa9[m added isPercentage to the datatypecofigmap so we can display formulas correctly
+[33m3b0ee87[m fixed k and bb pct decimals
+[33meb7e639[m remove logs

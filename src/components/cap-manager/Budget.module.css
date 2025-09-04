@@ -1,0 +1,692 @@
+.budgetContainer {
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    max-width: calc(590px + var(--num-budget-columns) * 150px);
+    margin: 50px auto 0;
+    background-color: #f9f9f9;
+    width: 100%;
+    transition: width 0.3s ease;
+}
+
+.budgetContainer.expanded {
+    width: auto;
+    min-width: 100%;
+}
+
+.budgetContainer h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-size: 30px;
+}
+
+.budgetContainer label {
+    display: block;
+    margin: 10px 0 5px;
+}
+
+.inputGroup {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.budgetContainer input[type="number"],
+.budgetContainer input[type="text"] {
+    padding: 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    width: 90%;
+    min-width: 0;
+}
+
+.budgetContainer input[type="text"]::placeholder {
+    color: gray;
+    font-style: italic;
+}
+
+.budgetContainer .saveButton,
+.budgetContainer .undoButton {
+    display: inline-block;
+    padding: 10px;
+    margin-top: 20px;
+    border: none;
+    border-radius: 4px;
+    background-color: #4caf50;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.budgetContainer .saveButton:hover,
+.budgetContainer .undoButton:hover {
+    background-color: #45a049;
+}
+
+.budgetContainer .savingButton {
+    display: inline-block;
+    padding: 10px;
+    margin-top: 20px;
+    border: none;
+    border-radius: 4px;
+    background-color: #143515;
+    color: white;
+    font-size: 16px;
+    cursor: not-allowed;
+}
+
+.budgetContainer .undoButton {
+    background-color: rgb(51, 105, 206);
+    margin-left: 10px;
+}
+
+.budgetContainer .undoButton:hover {
+    background-color: blue;
+}
+
+.treeContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: 100%;
+}
+
+.categoryWrapper,
+.positionWrapper,
+.slot {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.categoryContent,
+.positionContent,
+.slotContent {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    width: calc(100% - 40px); /* Adjust based on the width of your control buttons */
+}
+
+.controlButtons {
+    position: absolute;
+    left: -130px;
+    top: 5px;
+    display: flex;
+    flex-direction: row;
+    gap: 5px;
+    z-index: 10;
+}
+
+.controlButton {
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: background-color 0.3s, color 0.3s;
+    background-color: transparent;
+    border: none;
+    color: #333;
+}
+
+.categoryWrapper > .controlButtons {
+    left: 98px;
+}
+
+.removeButton {
+    background-color: lightcoral;
+    color: white;
+}
+
+.removeButton:hover {
+    background-color: red;
+}
+
+.moveButton {
+    background-color: lightblue;
+    color: white;
+}
+
+.moveButton:hover {
+    background-color: blue;
+}
+
+.addButton {
+    background-color: rgb(138, 182, 138);
+    color: white;
+}
+
+.addButton:hover {
+    background-color: green;
+}
+
+.category,
+.position,
+.slot {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+    position: relative;
+    margin-bottom: -5px;
+}
+
+.inputFields input[placeholder="Slot Number"] {
+    background-color: rgb(182, 182, 182);
+    width: 100px !important;
+    justify-self: end;
+}
+
+.inputGroup input[placeholder="Position"] {
+    width: 120px !important;
+    justify-self: end;
+}
+
+.inputFields {
+    display: grid;
+    grid-template-columns: 140px 150px 100px 100px 100px;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Remove or update any position-specific styles */
+.position .inputGroup {
+    display: grid;
+    grid-template-columns: 140px 150px 100px 100px 100px;
+    align-items: center;
+    gap: 10px;
+  }
+
+.dollarInput {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 120px;
+}
+
+.dollarInput span {
+    margin-right: 4px;
+}
+
+.dollarInput input {
+    width: 90px !important; 
+}
+
+.slotDollarInput {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-grow: 1; /* Added to allow the dollar input to take up remaining space */
+    margin-right: 156px;
+}
+
+/* Adjust input widths as needed */
+/* .inputFields input[type="text"],
+.inputFields input[type="number"] {
+    width: 150px; } */
+
+.addFirst {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 20px;
+}
+
+.addFirst:hover {
+    background-color: #45a049;
+}
+
+.categoryLabels {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-weight: bold;
+    padding-left: 425px;
+    padding-top: 20px
+}
+
+.categoryNameLabel {
+    flex: 2;
+}
+
+.budgetLabel, .scholarshipsLabel {
+    flex: 1;
+    text-align: center;
+}
+
+.overallLabel {
+    font-weight: bold;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rosterSpotsInput {
+    display: flex;
+    align-items: center;
+    margin-left: 10px;
+    width: 100px; /* Fixed width */
+}
+
+.rosterSpotsInput input {
+    width: 100px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: right;
+    padding-right: 8px;
+}
+
+.amountGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.percentageInput {
+  display: flex;
+  align-items: center;
+  width: 100px; /* Fixed width */
+}
+
+.percentageInput input {
+  width: 60px;
+  text-align: right;
+  padding-right: 4px;
+}
+
+.percentageInput span {
+  margin-left: 2px;
+}
+
+/* Make sure inputs within these containers take full width */
+.dollarInput input,
+.percentageInput input,
+.scholarshipsInput input,
+.rosterSpotsInput input {
+  width: 100%;
+}
+
+
+
+/* Remove any special handling for amountGroup */
+.amountGroup {
+  display: contents; /* This will make its children participate in the parent grid */
+}
+
+
+/* Add spacing between category rows */
+.categoryWrapper {
+  margin-bottom: 30px;
+}
+
+/* Add spacing between position rows */
+.positionWrapper {
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+
+/* Add spacing between slot rows */
+.slot {
+  margin-top: 10px;
+}
+
+/* If you want to remove margin from the last items in each group */
+.categoryWrapper:last-child,
+.positionWrapper:last-child,
+.slot:last-child {
+  margin-bottom: 0;
+}
+
+.warningOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  z-index: 1000;
+  padding-top: 100px;
+}
+
+.warningBox {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 90%;
+}
+
+.warningBox h3 {
+  margin-top: 0;
+  color: #d32f2f;
+}
+
+.warningButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.confirmButton {
+  background-color: #d32f2f;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.confirmButton:hover {
+  background-color: #b71c1c;
+}
+
+.cancelButton {
+  background-color: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cancelButton:hover {
+  background-color: #bdbdbd;
+}
+
+.labelWithIcon {
+  display: flex;
+  align-items: center;
+}
+
+.addBudgetIcon {
+  cursor: pointer;
+  font-size: 14px;
+  margin-left: 8px;
+  margin-bottom: 4px;
+  color: #4CAF50;
+  transition: color 0.2s;
+  display: inline-block;
+}
+
+.addBudgetIcon:hover {
+  color: #45a049;
+}
+
+.budgetInputsRow {
+  display: flex;
+  gap: 16px;
+  align-items: flex-end; /* Align inputs at the bottom */
+}
+
+.budgetColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.budgetColumn label {
+  font-size: 0.9em;
+  color: #666;
+}
+
+.totalBudget input {
+  background: transparent;
+  border: none;
+  color: #666;
+  font-weight: 600;
+}
+
+.budgetNameInput {
+  margin: 16px 0;
+}
+
+.budgetNameInput label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.budgetNameInput input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.gridContainer {
+  display: grid;
+  /* Dynamic columns: budget$, [additional budgets], total$, budget%, scholarships, roster */
+  grid-template-columns: 150px repeat(var(--num-budget-columns), 140px) 100px 120px 25px 25px 25px 40px;
+  column-gap: 8px;
+  width: 100%;
+  padding: 0px;
+}
+
+.gridRow {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  padding: 1px 8px;
+}
+
+.categoryLabel {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.positionLabel {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #4b5563;
+  padding-left: 2rem;
+  width: 150px;
+}
+
+.positionLabel input {
+  width: 120px;
+}
+
+.slotLabel {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.categoryLabel, .positionLabel, .slotLabel {
+    text-align: right;
+    padding-right: 8px; /* Optional: adds some space between the text and the next column */
+  }
+  
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid #ccc;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 0.9rem;
+}
+
+.iconButton.green {
+  background-color: #4caf50;
+  color: white;
+}
+
+.iconButton.green:hover {
+  background-color: #45a049;
+}
+
+.iconButton.red {
+  background-color: #f44336;
+}
+
+.iconButton.red:hover {
+  background-color: #d32f2f;
+}
+
+.iconButton.neutral {
+  background-color: #2196f3;
+}
+
+.iconButton.neutral:hover {
+  background-color: #1976d2;
+}
+
+.overallRow {
+  background-color: #e5e6e7;  /* Light gray background */
+  border-bottom: 1px solid #e2e8f0;  /* Light border */
+  margin-bottom: 16px;  /* Space below the row */
+  padding: 8px 0;  /* Vertical padding */
+}
+
+.headerCell {
+  text-align: center;
+  font-weight: 500;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.addBudgetIcon {
+  cursor: pointer;
+  color: #4caf50;
+}
+
+.addBudgetIcon:hover {
+  color: #45a049;
+}
+
+.labelInput {
+  border: 1px solid transparent;
+  background-color: transparent;
+  font-weight: bold;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.labelInput:focus {
+  border-color: #2196f3;
+  background-color: white;
+  outline: none;
+}
+
+/* Update existing label styles to accommodate input */
+.categoryLabel, .positionLabel {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.createButtonContainer {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  padding: 0.25rem;
+  margin: 0.25rem 0;
+}
+
+.createButton {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  background-color: white;
+  color: #4b5563;
+  transition: background-color 0.2s ease;
+  width: 100%;
+}
+
+.createButton:hover {
+  background-color: #f8fafc;
+}
+
+.categoryButton {
+  background-color: #4a90e2;
+  color: white;
+}
+
+.categoryButton:hover {
+  background-color: #357abd;
+}
+
+.positionButton {
+  background-color: #50c878;
+  color: white;
+}
+
+.positionButton:hover {
+  background-color: #3da05c;
+}
+
+.slotButton {
+  background-color: #ffa500;
+  color: white;
+}
+
+.slotButton:hover {
+  background-color: #cc8400;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+
+.actionButtons .iconButton {
+  flex-shrink: 0;
+}
+
+.createSlotButton {
+  font-size: 0.75rem;
+  padding: 0 4px;
+  min-width: 20px;
+  height: 20px;
+  color: #22c55e;
+  border-color: #22c55e;
+}
+
+.createSlotButton:hover {
+  background-color: #f0fdf4;
+}
+
+.scholarshipsInput {
+    display: flex;
+    align-items: center;
+    width: 100px; /* Fixed width */
+}
+
+.scholarshipsInput input {
+    width: 100px;
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    text-align: right;
+    padding-right: 8px;
+}

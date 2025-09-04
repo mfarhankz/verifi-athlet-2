@@ -1,0 +1,83 @@
+@use "scss/sidebar" as *;
+@use "scss/navbar" as *;
+@use "scss/table" as *;
+@use "scss/commentModal" as *;
+@use "scss/profileModal" as *;
+@use "scss/playerDeatils" as *;
+@use "scss/playerInformationTab" as *;
+@use "scss/tabs" as *;
+@use "scss/setting";
+@use "scss/servey";
+@use "scss/athleteCompare";
+@use "scss/profile";
+@use "scss/common";
+@use "scss/filterScreen";
+@use "scss/tableView";
+@use "scss/coachInvite";
+@use "scss/header" as *;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,100..900;1,100..900&display=swap");
+
+
+@tailwind components;
+@tailwind utilities;
+
+/* Default Theme */
+:root {
+  --background: #f3f3f3;
+  --foreground: #000000;
+  --bg-primary: #1c1d4d;
+  --white-background: #ffffff;
+  --antd-font-family: "Inter Tight", serif;
+  --primary: #1c1d4d;
+  --secondary: #ccc;
+  --success: #2bb650;
+  --error: #c00e1e;
+  --warning: #ffd000;
+  --info: #ccc;
+  --text-white: #fff;
+  --bg-white: #fff;
+}
+
+/* Light Theme */
+:root[data-theme="light"] {
+  --background: #ebeaea; /* Light background */
+  --foreground: #000000; /* Dark text for contrast */
+  --bg-primary: #e0e0e0; /* Soft light gray for primary background */
+  --white-background: #f9f9f9; /* Slightly off-white */
+  --antd-font-family: "Inter Tight", serif;
+  --primary: #1c1d4d; /* Keep same for branding */
+  --secondary: #a0a0a0; /* Lighter gray */
+  --success: #2bb650; /* Same green for success */
+  --error: #c00e1e; /* Same red for error */
+  --warning: #ffd000; /* Same yellow for warning */
+  --info: #aaa; /* Neutral info color */
+  --text-white: #000; /* Black text on lighter backgrounds */
+  --bg-white: #fff; /* White */
+}
+
+/* Dark Theme */
+:root[data-theme="dark"] {
+  --background: #3f4072; /* Dark background */
+  --foreground: #ffffff; /* White text for contrast */
+  --bg-primary: #1c1d4d; /* Keep primary consistent */
+  --white-background: #4e4f84; /* Slightly lighter than the main background */
+  --antd-font-family: "Inter Tight", serif;
+  --primary: #1c1d4d; /* White primary text for visibility */
+  --secondary: #555555; /* Darker gray for secondary text */
+  --success: #2bb650; /* Same green for success */
+  --error: #c00e1e; /* Same red for error */
+  --warning: #ffd000; /* Same yellow for warning */
+  --info: #888; /* Softer gray for info */
+  --text-white: #fff; /* White text for headers or accents */
+  --bg-white: #333; /* Dark gray background for white elements */
+}
+
+body,
+* {
+  font-family: var(--antd-font-family);
+  color: var(--primary);
+  letter-spacing: 0.3px;
+}
+
+

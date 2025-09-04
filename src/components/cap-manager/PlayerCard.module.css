@@ -1,0 +1,446 @@
+.playerCard {
+    border-radius: 8px;
+    padding: 10px;
+    padding-top: 2px;
+    /* padding-bottom: 30px; */
+    margin: 10px 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    min-height: 105px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden; /* This will ensure the band doesn't overflow */
+    text-align: left; /* Explicitly set text alignment to left */
+}
+
+/* New styles for the tier bands */
+.tierOne::before,
+.tierTwo::before,
+.tierThree::before,
+.tierFour::before,
+.tierFive::before,
+.tierSix::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px; /* Width of the band */
+  z-index: 1; /* Ensure the band is above the background but below the content */
+}
+
+.tierOne::before {
+  background-color: rgb(149, 179, 215)
+}
+
+.tierTwo::before {
+  background-color: rgb(196, 215, 155)
+}
+
+.tierThree::before {
+  background-color: rgb(255, 255, 153)
+}
+
+.tierFour::before {
+  background-color: rgb(218, 150, 148);
+}
+
+.tierFive::before {
+  background-color: rgb(192, 80, 77);
+}
+.tierSix::before {
+  background-color: rgb(255, 0, 0);
+}
+
+/* Adjust the main content container to make room for the band */
+.playerCard > * {
+  position: relative;
+  z-index: 2; /* Ensure content stays above the band */
+  margin-left: 4px; /* Add a small margin to prevent content from touching the band */
+}
+
+/* Adjust other existing styles as needed */
+.playerName,
+.playerInfo,
+.compensation {
+  padding-left: 2px; /* Add a small padding to align text with the new layout */
+}
+
+.compensation {
+  left: 14px; /* Adjust this value to account for the band width and desired spacing */
+}
+
+.playerName {
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(0.8em, var(--font-size, 1.2em), 1.2em);
+    position: relative; /* Ensure it's above the side color */
+    z-index: 2;
+}
+
+.playerInfo {
+    font-size: 0.7em;
+    position: relative; /* Ensure it's above the side color */
+    z-index: 2;
+}
+
+.playerImageContainer {
+    position: relative;
+    z-index: 2; /* Ensure it's above the side color */
+}
+
+.playerImage {
+    position: absolute;
+    bottom: -10px;
+    right: -10px;
+    width: auto;
+    object-fit: contain;
+}
+
+.playerCard .playerImage {
+  width: 130px;
+  height: 85px;
+  object-fit: contain;
+}
+
+.playerCard:hover {
+    border-color: gray;
+    background-color: #f0f0f0;
+}
+  
+.playerCard .flex {
+    display: flex;
+    justify-content: flex-start; /* Changed from space-between to flex-start */
+    align-items: center;
+    text-align: left;
+}
+  
+.playerCard a {
+    margin-left: 8px;
+}
+  
+.playerCard.elig-1 {
+    background-color: #75686069;
+}
+  
+.playerCard.elig-2 {
+    background-color: #b3746580; 
+}
+  
+.playerCard.elig-3 {
+    background-color: #edb3806c; 
+}
+  
+.playerCard.elig-4 {
+    background-color: #f7d38081;
+}
+  
+.playerCard.elig-5 {
+    background-color: #faf5d681; 
+}
+  
+.playerCard.recruit {
+    background-color: #a8d0ff;  /* Light blue for non-committed recruits */
+}
+  
+.playerCard.committedRecruit {
+    background-color: #4a90e2; /* Darker blue */
+}
+
+.playerCard.transferRecruit {
+  background-color: #a8ffb9; /* Light green, matching the light blue style */
+}
+
+.playerCard.committedTransferRecruit {
+  background-color: #4bb964; /* Darker green, matching the darker blue style */
+}
+
+/* Ensure recruit backgrounds are preserved when custom styling is applied */
+.playerCard.recruit:hover,
+.playerCard.committedRecruit:hover,
+.playerCard.transferRecruit:hover,
+.playerCard.committedTransferRecruit:hover {
+  background-color: inherit; /* Keep the recruit background color on hover */
+  opacity: 0.9; /* Slightly dim to show hover state */
+}
+
+.playerCard.recruit .compensationAmount,
+.playerCard.committedRecruit .compensationAmount {
+    color: black; /* Corrected from text-color to color */
+}
+
+.playerCard.recruit .compensation,
+.playerCard.committedRecruit .compensation {
+    padding-bottom: 20px;
+}
+
+.compensation {
+    position: relative;
+    z-index: 2; /* Ensure it's above the side color */
+}
+
+.compensation .amount {
+  font-weight: normal;
+}
+
+.compensationAmount.positive {
+  color: rgb(165, 2, 2);
+}
+
+.compensationAmount.negative {
+  color: green;
+}
+
+.budgetDifference.positive {
+  color: rgb(165, 2, 2);
+}
+
+.budgetDifference.negative {
+  color: green;
+}
+
+.neutral {
+    color: black;
+}
+
+.compensationDetails {
+    margin-top: 10px;
+    width: 100%;
+}
+
+.compensationRow {
+    display: flex;
+    align-items: baseline;
+}
+
+.compensationAmount {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.budgetDifference {
+    font-size: 14px;
+    margin-left: 5px;
+}
+
+.percentageRow {
+    display: flex;
+    justify-content: flex-start; /* Changed from space-between to flex-start */
+    font-size: 16px;
+    margin-top: 5px;
+}
+
+.playerCard.GR {
+    background-color:#75686069;
+}
+  
+.playerCard.SR {
+    background-color: #b3746580;
+}
+  
+.playerCard.JR {
+    background-color: rgba(237, 179, 128, 0.4);
+}
+  
+.playerCard.SO {
+    background-color: rgba(247, 212, 128, 0.4);
+}
+  
+.playerCard.FR {
+    background-color: rgba(250, 245, 214, 0.4);
+}
+
+.noCompAccess {
+  height: 80px; /* Adjust the height as needed */
+  min-height: 80px;
+}
+
+.largeImage img {
+  width: 70px !important; /* Adjust the size as needed */
+  height: 70px !important; /* Adjust the size as needed */
+}
+
+.walkOn,
+.fullScholarship {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px; /* Adds space after the year */
+  transform: translateY(3px);
+}
+
+.injuryIcon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px; /* Adds space after the year */
+}
+
+.iconImage {
+  width: 16px;
+  height: 16px;
+}
+
+.compInfoIcon {
+    margin-left: 4px;
+    color: #666;
+    cursor: help;
+    display: inline-flex;
+    align-items: center;
+}
+
+.compensationAmount {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Add these rules to override react-beautiful-dnd default styles */
+.playerCard[data-rbd-draggable-context-id] {
+  transform: none !important;
+  transition: none !important;
+}
+
+.playerCard[data-rbd-draggable-context-id]:hover {
+  transform: none !important;
+  transition: none !important;
+}
+
+/* If you want to remove the "lifting" shadow effect */
+.playerCard[data-rbd-draggable-context-id][data-rbd-dragging="true"] {
+  box-shadow: none !important;
+  background: inherit !important;
+}
+
+.rankButtons {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 3;
+}
+
+.rankButton {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  padding: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+  font-size: 12px;
+}
+
+.rankButton:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+.rankButton:active {
+  background: #eee;
+}
+
+.lastNameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pffLink {
+  margin-left: 4px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.pffLink:hover {
+  opacity: 0.8;
+}
+
+.emojiSelect {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  width: 100%;
+}
+
+.emojiSelect__control {
+  border-color: #ddd;
+}
+
+.emojiSelect__control:hover {
+  border-color: #999;
+}
+
+.emojiSelect__menu {
+  font-size: 0.75rem;
+}
+
+.scenarioIndicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: #ffd700;
+  cursor: help;
+}
+
+.scenarioIndicator:hover {
+  color: #ffed4a;
+}
+
+/* One-line card styles */
+.oneLineCard {
+  min-height: auto;
+  height: 40px;
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.oneLineCard .playerName {
+  margin: 0;
+  padding-left: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.oneLineCard::before {
+  width: 6px; /* Slightly narrower band for the compact view */
+}
+
+.oneLineCard .injuryIcon {
+  margin-left: 5px;
+}
+
+.playerCard h1,
+.playerCard h2,
+.playerCard h3,
+.playerCard h4,
+.playerCard h5,
+.playerCard h6,
+.PlayerCard p,
+.compensation .amount,
+.compensation .percentages {
+  margin-bottom: 0px !important;
+}
+
+/* Ensure all text elements inside playerCard are left-aligned */
+.playerCard * {
+    text-align: left;
+}
+
+/* Specifically target compensation elements to ensure they're left-aligned */
+.compensation, 
+.compensationAmount, 
+.compensationDetails,
+.compensationRow,
+.percentageRow {
+    text-align: left;
+}

@@ -1,0 +1,526 @@
+.fullPageDetails {
+  width: 100%;
+  height: 100vh;
+  max-width: 1200px;
+  background-color: #f9f9f9;
+  padding: 40px;
+  overflow-y: auto;
+  font-family: 'Arial', sans-serif;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  cursor: pointer;
+  color: #333;
+}
+
+.fullPageDetails h3 {
+  color: #000000;
+  text-align: center;
+  font-size: 2em;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.fullPageDetails div {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+}
+
+.fullPageDetails label {
+  margin-bottom: 5px;
+  margin-right: 15px;
+  flex: 1;
+  font-size: 1.1em;
+}
+
+.fullPageDetails input[type="text"],
+.fullPageDetails input[type="number"],
+.fullPageDetails textarea,
+.fullPageDetails select {
+  width: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  flex: 2;
+  font-size: 1em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.fullPageDetails select {
+  background-color: white;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url('data:image/svg+xml;charset=US-ASCII,<svg width="14" height="8" viewBox="0 0 14 8" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 1L7 7L13 1" stroke="%23333" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 10px top 50%;
+  background-size: 14px auto;
+}
+
+.fullPageDetails select::-ms-expand {
+  display: none;
+}
+
+.fullPageDetails select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.fullPageDetails input[type="file"] {
+  display: block;
+  margin-top: 10px;
+}
+
+.fullPageDetails input[type="checkbox"] {
+  margin: 0;
+  transform: scale(1.5);
+}
+
+.saveButton,
+.archiveButton,
+.removeButton {
+  margin-top: 20px;
+  padding: 12px 24px;
+  color: white;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+  font-size: 1.1em;
+  transition: background-color 0.3s ease-in-out;
+}
+
+.saveButton {
+  background-color: #007bff;
+}
+
+.saveButton:hover {
+  background-color: #0056b3;
+}
+
+.archiveButton {
+  background-color: #dc3545;
+  margin-left: 20px;
+}
+
+.archiveButton:hover {
+  background-color: #c82333;
+}
+
+.removeButton {
+  background-color: #dc3545;
+  padding: 8px 16px;
+  font-size: 0.9em;
+}
+
+.removeButton:hover {
+  background-color: #c82333;
+}
+
+.imageContainer {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.image {
+  max-width: 200px;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.imageUpload {
+  display: flex;
+  flex-direction: column;
+}
+
+.fullPageDetails .compensationContainer input[type="text"] {
+  padding-left: 25px;
+  box-sizing: border-box;
+}
+
+.nameInputs {
+  display: flex;
+  gap: 20px;
+}
+
+.nameInputs input {
+  flex: 1;
+}
+
+.fullPageDetails textarea {
+  font-size: 0.9em;
+  min-height: 100px;
+}
+
+.fileInput {
+  margin-top: 10px;
+}
+
+.loadingContainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+  }
+  
+  .loadingSpinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .errorMessage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    font-size: 1.2em;
+    color: #721c24;
+    background-color: #f8d7da;
+    height: 40px; /* Match the height of the save button */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    border: 1px solid #ef9a9a;
+  }
+
+  
+  .errorMessageContainer {
+    margin-top: 10px;
+    transition: opacity 0.5s ease-in-out;
+  }
+
+  .visible {
+    opacity: 1;
+  }
+  
+  .hidden {
+    opacity: 0;
+  }
+
+  .successMessage {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #d4edda;
+    color: #155724;
+    padding: 15px 20px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    z-index: 1000;
+    animation: fadeIn 0.5s, fadeOut 0.5s 4.5s;
+  }
+
+  .compensationContainer {
+    display: flex;
+    align-items: center;
+    flex: 2;
+  }
+
+  .compensationDetailButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+    padding: 5px;
+    margin-right: 10px;
+  }
+
+  .inputWrapper {
+    position: relative;
+    flex-grow: 1;
+    margin-bottom: 5px !important;
+  }
+
+  .dollarSign {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .inputWrapper input {
+    width: 100%;
+    padding: 5px 5px 5px 25px;
+    box-sizing: border-box;
+  }
+
+  .compensationDetailsWrapper {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .compensationDetails {
+    width: auto; /* Allow table to shrink to content */
+  }
+
+  .compensationDetails th,
+  .compensationDetails td {
+    padding: 8px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    vertical-align: middle;
+  }
+
+  /* Make additional budget columns wider */
+  .compensationDetails th.additionalBudgetColumn,
+  .compensationDetails td.additionalBudgetColumn {
+    min-width: 150px;
+    width: auto;
+  }
+
+  .compensationDetails th {
+    background-color: #f2f2f2;
+    font-weight: bold;
+  }
+
+  .compensationDetails th:first-child,
+  .compensationDetails td:first-child {
+    width: 40px;
+  }
+
+  .compensationDetails th:nth-child(4),
+  .compensationDetails td:nth-child(4) {
+    width: 150px; /* Increase width of main budget/compensation column */
+    min-width: 150px;
+  }
+
+  .compensationDetails th:nth-child(2),
+  .compensationDetails th:nth-child(3),
+  .compensationDetails th:nth-child(6),
+  .compensationDetails td:nth-child(2),
+  .compensationDetails td:nth-child(3),
+  .compensationDetails td:nth-child(6) {
+    width: 50px;
+  }
+  .compensationDetails th:nth-child(5),
+  .compensationDetails td:nth-child(5)  {
+    width: 75px;
+  }
+
+  .compensationDetails input[type="text"] {
+    width: 90%;
+    border: none;
+    background: transparent;
+    text-align: right;
+    padding: 0 12px 0 0;
+    height: 18px; /* Align input height with other elements */
+  }
+
+  .compensationDetails .inputWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+
+  .compensationDetails .dollarSign {
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.9em;
+  }
+
+  .compensationDetails input[type="checkbox"] {
+    margin: 0;
+    vertical-align: middle;
+  }
+
+  /* Add styles for the scholarship column */
+  .compensationDetails th:nth-child(5) {
+    cursor:help;
+  }
+  
+
+
+  .yearlyAmountContainer {
+    display: flex;
+    align-items: center;
+  }
+  
+  .errorInput input,
+  .errorInput .dollarSign {
+    color: red;
+    border-color: red;
+  }
+  
+  .errorIcon {
+    margin-left: -1px;
+    cursor: help;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  .selectedYear {
+    text-align: center;
+    font-size: 1.5em;
+  }
+
+.warningMessageContainer {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  transition: opacity 0.3s ease-in-out;
+  padding: 15px;
+  border-radius: 5px;
+  background-color: #fff3cd;
+  border: 1px solid #ffeeba;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.warningMessage {
+  color: #856404;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.warningModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.warningModalContent {
+  background-color: white;
+  padding: 32px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 90%;
+  display: block !important;
+}
+
+.warningModalHeader {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #ffeeba;
+}
+
+.warningModalHeader svg {
+  color: #856404;
+  margin-right: 12px;
+  font-size: 24px;
+}
+
+.warningModalHeader h3 {
+  color: #856404;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.warningModalMessage {
+  color: #333;
+  margin-bottom: 32px;
+  white-space: pre-line;
+  line-height: 1.5;
+  font-size: 15px;
+}
+
+.warningModalButtons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 24px;
+}
+
+.cancelButton {
+  background-color: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.saveAnywayButton {
+  background-color: #ffc107;
+  color: #333;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.updateTotalsButton {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.addYearButton {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px auto;
+}
+
+.addYearButton:hover {
+  background-color: #218838;
+}
+
+.addYearButton svg {
+  font-size: 0.9rem;
+}

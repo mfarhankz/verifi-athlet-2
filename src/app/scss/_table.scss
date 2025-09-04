@@ -1,0 +1,250 @@
+.page-heading {
+  font-size: 24px !important;
+  font-style: italic;
+  margin-bottom: 0 !important;
+  color: var(--primary) !important;
+}
+
+table{
+  border:1px solid rgba(18, 109, 184, 0.2);
+  // border-radius: 0;
+}
+:where(.css-dev-only-do-not-override-7t2xvq).ant-table-wrapper table{
+  border-radius: 0 !important;
+}
+.with-footer {
+  .ant-table-tbody {
+    tr.ant-table-row {
+      &:last-child {
+        td {
+          font-weight: 500;
+          border-top: 1px #8d8ea6 solid;
+          border-bottom: 1px #8d8ea6 solid;
+          &:first-child {
+            border-left: 1px #8d8ea6 solid;
+          }
+          &:last-child {
+            border-right: 1px #8d8ea6 solid;
+          }
+        }
+      }
+    }
+  }
+}
+.ant-table-container {
+  border-start-start-radius: 0 !important;
+  border-start-end-radius: 0 !important;
+
+ 
+
+  .ant-table-thead {
+    th {
+      overflow-wrap: normal !important;
+      padding: 8px 12px !important;
+      background: rgba(18, 109, 184, 0.1) !important;
+      border-radius: 0 !important;
+      font-size: 14px;
+      font-weight: 500 !important;
+      color: var(--primary);
+    }
+  }
+
+  .ant-table-tbody {
+    .ant-table-row.ant-table-row-selected > .ant-table-cell {
+      background: #fbffee !important;
+    }
+    tr.ant-table-row {
+      td {
+        padding: 10px 12px !important;
+        font-size: 14px;
+        color: var(--primary);
+        background: white !important;
+      }
+    }
+  }
+
+  .ant-table-header {
+    border-radius: 0 !important;
+  }
+
+  .ant-checkbox-inner {
+    border: 1px solid rgba(28, 29, 77, 0.3);
+  }
+
+  .action-icons {
+    a {
+      width: 24px;
+      height: 24px;
+      font-size: 22px;
+      margin: 10px 0;
+      position: relative;
+
+      span {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50px;
+        font-size: 14px;
+        background: var(--warning);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: var(--primary);
+      }
+    }
+  }
+
+  .profile-list {
+    display: flex;
+    width: 342px;
+    align-items: center;
+
+    .pro-detail {
+      font-size: 14px;
+      font-weight: 400;
+      margin-left: 7px;
+      width: calc(100% - 90px);
+      p{
+      line-height: 18px;
+      }
+
+      h6 {
+        font-size: 26px;
+        font-style: italic;
+        font-weight: 600;
+        line-height: 20px;
+        span {
+          font-size: 18px;
+        }
+      }
+
+      .school {
+        background: url(/player-arrow.svg) no-repeat right;
+        display: flex;
+        justify-content: start;
+        height: 28px;
+        padding-right: 15px;
+        margin: 6px 0;
+        width: fit-content;
+
+        span {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 200px;
+        }
+
+        img {
+          margin-right: 7px;
+          height: 20px;
+          position: relative;
+          top: 4px;
+          left: 3px;
+        }
+      }
+
+      .academy {
+        background: url(/player-arrow-green.svg) no-repeat;
+        display: flex;
+        justify-content: start;
+        height: 28px;
+        padding-left: 35px;
+        span {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 200px;
+        }
+
+        img {
+          margin-right: 7px;
+          height: 20px;
+          position: relative;
+          top: 4px;
+          left: 3px;
+        }
+      }
+    }
+  }
+}
+
+.selectbox-ui {
+  position: relative;
+  height: 40px;
+  display: flex;
+
+  // i {
+  //   position: absolute;
+  //   z-index: 9;
+  //   top: 0;
+  //   bottom: 0;
+  //   margin: auto 0;
+  //   display: flex;
+  //   align-items: center;
+  //   left: 10px;
+  //   &::before {
+  //     font-weight: bolder !important;
+  //   }
+  // }
+  .ant-select-single, .ant-select-single:not(.ant-select-customize-input) .ant-select-selector .ant-select-selection-search-input {
+    min-height: 42px !important;
+  }
+ 
+  .ant-select {
+    .ant-select-selector {
+      background: var(--bg-white);
+      min-height: 42px !important;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      font-size: 16px;
+    }
+    .ant-select-selection-item {
+      font-weight: 600;
+      padding: 0 22px 0 30px;
+      text-align: left;
+    }
+
+    .ant-select-arrow {
+      position: absolute;
+      right: -10px;
+      z-index: 9;
+      width: 12px;
+      right: 12px;
+      top: -1px;
+      bottom: 0;
+      margin: auto 0;
+      display: flex;
+      height: 40px;
+      color: var(--primary);
+      opacity: 1;
+      font-size: 15px;
+
+      i {
+        left: 0 !important;
+        top: 2px;
+        &::before {
+          font-weight: bolder !important;
+        }
+      }
+    }
+  }
+}
+ .ant-select-selector{
+  min-height: 42px !important;
+  }
+ .ant-select-selection-wrap{
+    align-items: center !important;
+  }
+  .ant-select-multiple .ant-select-selection-item {
+    height: 32px;
+    line-height: 22px;
+    align-items: center;
+    border-radius: 0 !important;
+    position: relative;
+    top:-4px;
+
+}

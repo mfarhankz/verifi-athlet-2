@@ -1,0 +1,279 @@
+/* KanbanBoard.module.css */
+@import '../../styles/SummaryBox.module.css';
+
+.kanbanBoard, .columns, .column {
+  height: 100%;
+  overflow: visible !important;
+}
+
+.kanbanBoard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 20px;
+  min-width: fit-content;
+  min-height: 100%;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.columnsContainer {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.columns {
+  display: flex;
+  width: 100%;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  min-width: 250px;
+  margin-right: 20px;
+}
+
+.playerCards {
+  flex: 1;
+}
+
+.summariesRow {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 20px;
+}
+
+.addPlayerButtonContainer {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.addPlayerButton {
+  margin-top: 10px;
+  padding: 8px 15px;
+  background-color: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: -10px;
+  font-weight: 500;
+}
+
+.addPlayerButton:hover {
+  background-color: #3d94f6;
+}
+
+.playerInfo {
+  font-size: 0.7em;
+  display: flex;
+  align-items: center;
+}
+
+.positionHeader {
+  background-color: #ddd;
+  padding: 10px 15px;
+  font-weight: bold;
+  font-size: 1.1em;
+}
+
+.green {
+  color: green;
+}
+
+.red {
+  color: red;
+}
+
+.percentage {
+  font-size: 0.8em;
+  opacity: 0.8;
+}
+
+.summaryHeader {
+    display: flex;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 10px;
+    font-size: 0.7em;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.black {
+  color: #000000;
+}
+
+.extendedSummariesContainer {
+  gap: 20px;
+}
+
+.dragPreview {
+  transform-origin: top left;
+}
+
+.kanbanBoard {
+  transform-origin: top left;
+  transform: scale(var(--zoom-level, 1));
+}
+
+.draggableItem.dragging {
+  opacity: 0;
+}
+
+/* Optional: Change the cursor for all items when dragging */
+.dragging .draggableItem {
+  cursor: grabbing;
+}
+
+.kanbanBoardContainer {
+  display: flex;
+  height: 100%;
+  transition: all 0.3s ease;
+}
+
+.leftSidebar {
+  width: fit-content;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-right: 1px solid #ddd;
+}
+
+.kanbanBoard {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.kanbanBoard {
+  flex-grow: 1;
+  transition: margin-left 0.3s ease;
+}
+/* 
+.kanbanBoard.expanded {
+  margin-left: 0;
+} */
+
+/* Adjust the main content when summaries are hidden */
+.kanbanBoard {
+  transition: margin-left 0.3s ease-in-out;
+}
+
+.summariesHidden .kanbanBoard {
+  margin-left: 20px; /* Match the width of the visible portion */
+}
+ 
+.noPositionsWarning {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+  padding: 2rem;
+}
+
+.noPositionsWarning h2 {
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.noPositionsWarning p {
+  font-size: 1.1rem;
+  color: #666;
+  max-width: 500px;
+  margin-bottom: 2rem;
+}
+
+.warningButtons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.setupButton {
+  padding: 0.8rem 1.5rem;
+  font-size: 1.1rem;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.setupButton:hover {
+  background-color: #45a049;
+}
+
+.proceedButton {
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.proceedButton:hover {
+  background-color: #cc0000;
+}
+
+/* Add a base class and combine it with the data attributes */
+.dragDropContainer [data-rbd-draggable-context-id] {
+  transform: none !important;
+  transition: none !important;
+}
+
+.dragDropContainer [data-rbd-draggable-context-id]:hover {
+  transform: none !important;
+  transition: none !important;
+}
+
+.dragDropContainer [data-rbd-draggable-context-id][data-rbd-dragging="true"] {
+  box-shadow: none !important;
+  background: inherit !important;
+}
+
+/* Disable the drop target animation */
+.dragDropContainer [data-rbd-droppable-context-id] {
+  transition: none !important;
+}
+
+/* Remove the placeholder animation */
+.dragDropContainer [data-rbd-placeholder-context-id] {
+  transition: none !important;
+  opacity: 0 !important;
+}
+
+/* Ensure dragged items don't change appearance */
+.draggableItem {
+  transition: none !important;
+  transform: none !important;
+}
+
+.draggableItem[data-rbd-dragging="true"] {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Add these to your existing styles */
+.dragDropContainer [data-rbd-drag-animate] {
+  transition: none !important;
+}
+
+.dragDropContainer [data-rbd-drop-animation] {
+  transition: none !important;
+}

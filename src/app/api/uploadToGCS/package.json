@@ -1,0 +1,13 @@
+{
+  "name": "pdf-upload-function",
+  "version": "1.0.0",
+  "description": "Cloud function for uploading PDFs to Google Cloud Storage",
+  "main": "gcs-upload-function.js",
+  "type": "module",
+  "dependencies": {
+    "@google-cloud/storage": "^6.10.1"
+  },
+  "engines": {
+    "node": "18"
+  }
+}

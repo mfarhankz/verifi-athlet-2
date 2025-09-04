@@ -1,0 +1,269 @@
+@import '../../styles/SummaryBox.module.css';
+
+.listView {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    width: 100%;
+    position: relative;
+  }
+  
+  .filterInput {
+    margin-bottom: 10px;
+    padding: 8px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .table th,
+  .table td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: left;
+    cursor: pointer;
+  }
+  
+  .table th {
+    background-color: #f2f2f2;
+  }
+  
+  .table th:hover {
+    background-color: #f1f1f1;
+  }
+  
+  .table tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+  .columnHeader {
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+
+  .columnHeader span {
+    cursor: pointer;
+    margin-right: 5px;
+  }
+
+  .filterDropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+    padding: 10px;
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    width: 200px; 
+  }
+
+  .filterOption {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+  }
+
+  .filterOption input {
+    margin-right: 5px;
+    flex-shrink: 0;
+  }
+
+  .filterOptionText {
+    font-size: 0.9em;
+    font-weight: normal;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+  }
+
+  .inactiveFilter {
+    color: #999;
+    cursor: pointer;
+  }
+
+  .activeFilter {
+    color: #000;
+    cursor: pointer;
+  }
+
+  .clickable {
+    cursor: pointer;
+  }
+
+  .clickable:hover {
+    text-decoration: underline;
+  }
+
+  .detailsSidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 300px;
+    background-color: white;
+    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+    z-index: 1000;
+  }
+
+  .playerName {
+    cursor: pointer;
+    color: #bb2c00;
+    font-weight: bold;
+    text-decoration: none;
+    transition: text-decoration 0.3s ease;
+  }
+
+  .playerName:hover {
+    text-decoration: underline;
+  }
+
+  .positivebudget {
+    color: red;
+  }
+
+  .negativebudget {
+    color: green;
+  }
+
+  .summaryRow {
+    font-weight: bold;
+    background-color: #f0f0f0;
+  }
+
+  .summaryRow td {
+    border-top: 2px solid #333;
+  }
+
+  .positionGroup {
+    margin-bottom: 2rem;
+  }
+
+  .positionGroup table {
+    width: 100%;
+  }
+
+  .positionGroup th[colspan="10"] {
+    background-color: #f0f0f0;
+    font-size: 1.2em;
+    padding: 0.5rem;
+  }
+
+  .groupContainer {
+    width: 100%;
+  }
+
+  .groupContainer table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .groupContainer th[colspan="10"] {
+    background-color: #f0f0f0;
+    font-size: 1.2em;
+    padding: 0.5rem;
+    text-align: left;
+  }
+
+  .groupContainer + .groupContainer {
+    margin-top: 2rem;
+  }
+
+  .toggleButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 5px;
+  }
+
+  /* Add responsive design for the expanded table */
+  @media (max-width: 1200px) {
+    .table {
+      display: block;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+  }
+
+  .filterActions {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .filterActionButton {
+    padding: 4px 8px;
+    font-size: 12px;
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  .filterActionButton:hover {
+    background-color: #e0e0e0;
+  }
+
+  .editingCell {
+    display: flex;
+    align-items: center;
+  }
+
+  .editDropdown {
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: #fff;
+    font-size: 14px;
+  }
+
+  .editButton {
+    padding: 5px 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+  }
+
+  .editButton:hover {
+    background-color: #45a049;
+  }
+
+  .cancelButton {
+    padding: 5px 10px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+  }
+  
+  .cancelButton:hover {
+    background-color: #d32f2f;
+  }
+
+  .smallEditInput {
+    width: 60px;
+    padding: 2px 4px;
+    font-size: 12px;
+  }
+
+  .smallButton {
+    padding: 2px 4px;
+    font-size: 12px;
+    margin-left: 2px;
+  }

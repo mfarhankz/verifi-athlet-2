@@ -1,0 +1,151 @@
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modalContent {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.closeButton {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.modalSection {
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modalSection label {
+  min-width: 140px;
+  padding-right: 6px;
+}
+
+.modalSection label input[type="checkbox"] {
+  margin-right: 6px;
+}
+
+.modalButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.saveButton,
+.cancelButton {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+}
+
+.saveButton {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.cancelButton {
+  background-color: #f44336;
+  color: white;
+}
+
+.deadMoneyTable {
+  margin-top: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.deadMoneyTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.deadMoneyTable th,
+.deadMoneyTable td {
+  padding: 2px;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.deadMoneyTable th {
+  background-color: #f5f5f5;
+}
+
+.inputWrapper {
+  width: 90px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.inputWrapper input {
+  width: 100%;
+}
+
+.yearInput {
+  -moz-appearance: textfield; /* Firefox */
+  appearance: textfield;
+  width: 120px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Remove spinner for Chrome, Safari, Edge, Opera */
+.yearInput::-webkit-outer-spin-button,
+.yearInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.yearInput:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.modalSection select {
+  padding: 8px;
+  margin-right: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.modalSection button {
+  padding: 8px 16px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.modalSection button:hover {
+  background-color: #45a049;
+} 

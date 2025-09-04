@@ -1,0 +1,459 @@
+.details {
+  position: absolute;
+  background-color: #f9f9f9;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  max-height: 80vh;
+  overflow-y: auto;
+  width: 320px; /* Reduced from 420px */
+  padding: 15px; /* Reduced from 20px */
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+  font-family: 'Arial', sans-serif;
+  z-index: 1000;
+  top: 60px;
+}
+  
+  .details .closeButton {
+    background: none;
+    border: none;
+    font-size: 18px;
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    margin-top: 0px;
+    cursor: pointer;
+    color: #333;
+  }
+  
+  .details h3 {
+    margin-top: 0;
+    color: #000000;
+    text-align: center;
+    font-size: 1.3em; /* Reduced from 1.5em */
+    font-weight: bold;
+    margin-bottom: 5px; /* Reduced from 20px */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    line-height: 1.2;
+  }
+  
+  .details div {
+    margin-bottom: 10px; /* Reduced from 15px */
+    display: flex;
+    align-items: center;
+  }
+  
+  .details label {
+    margin-bottom: 5px;
+    margin-right: 10px;
+    flex: 2; /* Increased from 1 */
+  }
+  
+  .details input[type="text"],
+  .details input[type="number"],
+  .details textarea,
+  .details select {
+    width: 100%;
+    padding: 6px; /* Reduced from 8px */
+    box-sizing: border-box;
+    flex: 3; /* Reduced from 2 */
+  }
+  
+  .details input[type="file"] {
+    display: block;
+    transform: scale(0.75);
+    margin-top: 5px;
+  }
+  
+  .details input[type="checkbox"] {
+    margin: 0;
+    transform: scale(1.5);
+  }
+  
+  .details button {
+    margin-top: 15px; /* Reduced from 20px */
+    padding: 8px 16px; /* Reduced from 10px 20px */
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 1em;
+    transition: background-color 0.3s ease-in-out;
+  }
+  
+  .details button:hover {
+    background-color: #0056b3;
+  }
+
+  .image {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 5px;
+  }
+  
+  .details .removeButton {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 0.8em;
+    border-radius: 5px;
+  }
+  
+  .details .removeButton:hover {
+    background-color: #c82333;
+  }
+  
+  .imageUpload {
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .details .archiveButton {
+    margin-top: 10px;
+    margin-left: 20px;
+    padding: 10px 20px;
+    background-color: #dc3545; 
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 1em;
+    transition: background-color 0.3s ease-in-out;
+  }
+  
+  .details .archiveButton:hover {
+    background-color: #c82333; 
+  }
+
+  .details textarea {
+    font-size: 0.6em;
+  }
+
+  .details .compensationContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  
+  .details .compensationContainer input[type="text"] {
+    padding-left: 25px;
+    box-sizing: border-box;
+  }
+  
+  .details .compensationContainer::before {
+    content: '$';
+    position: absolute;
+    left: 10px;
+    color: #555;
+  }
+  
+  .nameInputs {
+    display: flex;
+    gap: 20px; 
+  }
+
+  /* New styles for the expand icon */
+  .expandIcon {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    font-size: 18px;
+    cursor: pointer;
+    color: #333;
+  }
+
+  /* Remove the full page link styles */
+  .fullPageLink {
+    display: none;
+  }
+
+  /* Ensure eligibility remaining fits on one row */
+  .eligibilityRemaining {
+    white-space: nowrap;
+  }
+  
+  .selectedYear {
+    text-align: center;
+    padding: 0; /* Reduce padding above and below */
+  }
+
+  .injuryContainer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .injuryContainer label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+  }
+  
+  .injuryContainer input[type="checkbox"] {
+    margin-left: 100px;
+  }
+
+  .endingSeasonContainer {
+    margin-top: 10px;
+  }
+
+  .endingSeasonToggle {
+    color: #0066cc;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .endingSeasonToggle:hover {
+    text-decoration: underline;
+  }
+
+  .endingSeasonContainer input[type="number"] {
+    width: 100%;
+    padding: 5px;
+    margin-top: 5px;
+  }
+
+  .imageSection {
+    /* display: flex; */
+    /* align-items: flex-start; */
+    margin-bottom: 0px !important; /* Reduced from 20px */
+  }
+
+  .imageContainer {
+    width: 80px;
+    height: 80px;
+    justify-content: right;
+  }
+
+  .athleteImage,
+  .placeholderImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .placeholderImage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #f0f0f0;
+    color: #888;
+  }
+
+  .imageControls {
+    display: flex;
+    flex-direction: column;
+    max-width: 200px;
+  }
+
+  .fileInput {
+    margin-left: 80px;
+  }
+
+  .commitContainer {
+    margin: 10px 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .commitContainer input[type="checkbox"] {
+    margin-left: 10px;
+  }
+
+  .editNameButton {
+    background: none;
+    border: none;
+    font-size: 0.5em;  /* Reduced from 0.8em to 0.5em (about half) */
+    cursor: pointer;
+    padding: 0;
+    color: #505050 !important;
+    transition: color 0.2s ease;
+    margin: 0;
+    margin-left: 2px;
+    background-color: transparent !important;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 14px;  /* Set a fixed small width */
+    height: 14px; /* Set a fixed small height */
+  }
+
+  .details .editNameButton:hover {
+    color: #2196f3 !important;
+    background-color: transparent !important;
+  }
+
+  .nameFields {
+    margin: 1rem 0;
+  }
+
+  .nameFields input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1.17em; /* matches h3 size */
+    font-weight: bold;
+  }
+
+  .name {
+    margin-left: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: 2px;
+    width: calc(100% - 40px);
+    position: relative;
+    max-width: 100%;
+    height: 1.8em; /* Set a consistent height */
+  }
+
+  .name span {
+    white-space: nowrap;
+    overflow: hidden;
+    display: inline-block;
+    transition: font-size 0.2s ease;
+    min-width: 0; /* Allow shrinking below content size */
+    padding-right: 1px; /* Small padding between text and icon */
+    max-width: calc(100% - 40px); /* Make room for the button */
+    font-size: 0.7em !important; /* Smaller default font size */
+    line-height: 1.1;
+    padding-top: 2px; /* Slight adjustment for vertical alignment */
+  }
+
+  .totalCompensation {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #ddd;
+  }
+
+  .compensationValue {
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #333;
+    padding: 0.5rem;
+    background: #f5f5f5;
+    border-radius: 4px;
+  }
+
+  .compensationSection {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  .compensationField {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 28px;
+    margin-bottom: 4px !important;
+  }
+
+  .smallLabel {
+    font-size: 0.9em;
+    color: #666;
+    min-width: 140px;
+  }
+
+  .smallCompensationContainer {
+    position: relative;
+    width: 120px;
+  }
+
+  .smallCompensationInput {
+    width: 100%;
+    padding: 2px 6px;
+    font-size: 0.9em;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    text-align: right;
+    height: 24px;
+  }
+
+  .totalCompensation {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: -10px;
+    height: 28px;
+  }
+
+  .totalLabel {
+    font-size: 1em;
+    min-width: 130px;
+    font-weight: bold;
+  }
+
+  .totalValue {
+    width: 120px;
+    padding: 2px 6px;
+    font-size: 1em;
+    font-weight: bold;
+    text-align: right;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+    height: 24px;
+    line-height: 20px;
+  }
+
+  /* Optional: Add some hover effects */
+  .smallCompensationInput:hover,
+  .smallCompensationInput:focus {
+    border-color: #999;
+    outline: none;
+  }
+
+  /* Optional: Add a subtle transition */
+  .smallCompensationInput {
+    transition: border-color 0.2s ease;
+  }
+
+  .pffLinkSection {
+    margin: 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pffLinkDisplay {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .pffLinkInput {
+    flex: 1;
+    font-size: 0.75rem;
+    color: #666;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 300px !important;
+    min-height: 2.5em;
+    resize: vertical;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+
+  .emojiSelect {
+    width: 100%;
+    font-size: 0.75rem;
+  }
+
+  .pffLinkInput:focus {
+    outline: none;
+    border-color: #999;
+  }

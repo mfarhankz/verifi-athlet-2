@@ -1,0 +1,102 @@
+.ant-table-thead{
+  td, th, tr {
+    font-size: 14px;
+  
+    color: var(--primary) !important;
+  }
+}
+.table-view {
+  background-color: var(--bg-white);
+  box-shadow: 0px 30px 30px rgba(17, 31, 44, 0.25);
+  width: 360px;
+  height: 650px;
+  overflow: auto;
+  border: 1px solid rgba(28, 29, 77, 0.2);
+  padding: 15px;
+  .input-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+    input {
+        padding-left: 35px;
+        width: 100%;
+    }
+    i {
+      position: absolute;
+      left: 10px;
+      color: var(--primary);
+    }
+  }
+
+  input {
+    font-size: 14px;
+    font-style: normal;
+    font-weight: 400 !important;
+    padding: 6px 10px 6px 10px;
+    position: relative;
+    border: none;
+    height: 42px;
+    color: var(--primary);
+    font-family: var(--antd-font-family) !important;
+    border: 1px solid rgba(28, 29, 77, 0.20);
+    border-radius: 0;
+    width: 90%;
+  }
+      .radio-group {
+        width: 100%;
+
+        .radio-item {
+    align-items: center;
+    height: 55px;
+    justify-content: start;
+    border: 1px solid #1c1d4d33;
+    font-size: 18px;
+    font-weight: 400;
+    margin-bottom: 10px;
+    margin-right: 0;
+    padding: 0 0 0 10px;
+    span{
+      width: 100%;
+    }
+.ant-radio {
+  height: 14px;
+  width: 16px !important;
+}
+            &.ant-radio-wrapper-checked {
+              background: linear-gradient(90deg, #6AFFAB 0%, #C8FF24 100%);
+                .ant-radio-inner {
+                    background-color: var(--success);
+                    border: none;
+                }
+                h6{
+                  font-weight: 600 !important;
+                }
+            }
+        }
+    }
+
+    .survey-radio-group {
+        .radio-item {
+            width: 100% !important;
+        }
+    }
+
+}
+
+table {
+
+  tr{
+    background:white;
+    &:hover {
+      background: rgba(204, 255, 226, 0.2) !important;
+    }
+    td{
+      background: transparent !important;
+    }
+  }
+}
+.year-display {
+ color:#df822f;
+ font-weight: 700;
+}

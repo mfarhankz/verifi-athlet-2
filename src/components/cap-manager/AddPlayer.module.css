@@ -1,0 +1,237 @@
+.modalOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContent {
+  position: relative;
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 400px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  line-height: 1;
+}
+
+.closeButton:hover {
+  color: #000;
+}
+
+.modalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  font-size: 14px;
+}
+
+.modalBody label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.formField input,
+.formField select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  height: 30px;
+  line-height: 1.2;
+}
+
+/* Adjust the height for select elements in some browsers */
+.formField select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='black' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>");
+  background-repeat: no-repeat;
+  background-position-x: 98%;
+  background-position-y: 50%;
+  padding-right: 24px;
+}
+
+/* Adjust label margin to compensate for smaller inputs */
+.formField label {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+/* Adjust overall form row spacing */
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Make sure file input doesn't get affected by height setting */
+.formField input[type="file"] {
+  height: auto;
+  padding: 4px 8px;
+}
+
+.formField input:focus,
+.formField select:focus {
+  border-color: #0070f3;
+  outline: none;
+}
+
+.submitButton {
+  margin-top: 20px;
+  padding: 10px 20px;
+  background-color: #0070f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.2s;
+}
+
+.submitButton:hover {
+  background-color: #005bb5;
+}
+
+.smallText {
+  font-size: 0.8em;
+  color: #666;
+}
+
+.recruitToggle {
+  padding: 5px 10px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  width: auto;
+}
+
+.recruitToggle:hover {
+  background-color: #0056b3;
+}
+
+.recruitToggle.activeRecruit {
+  background-color: red;
+}
+
+.recruitToggle.activeRecruit:hover {
+  background-color: red;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #e5e5e5;
+  margin-bottom: 15px;
+}
+
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.formField {
+  flex: 1 1 calc(50% - 5px);
+  min-width: 120px;
+}
+
+.formField input[type="checkbox"]#is_committed {
+  margin-top: 5px;
+}
+
+.formField:last-child {
+  margin-right: 0;
+}
+
+.formField label {
+  display: flex;
+  align-items: center;
+}
+
+.formField input[type="checkbox"] {
+  margin-left: 10px;
+  width: 20px;
+  height: 20px;
+}
+
+.inlineLabel {
+  display: flex;
+  align-items: center;
+}
+
+.inlineLabel input[type="checkbox"] {
+  margin-right: 5px;
+}
+
+.submitButton {
+  width: 100%;
+  padding: 10px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  margin-top: 10px;
+}
+
+.submitButton:hover {
+  background-color: #45a049;
+}
+
+.submitButton:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
