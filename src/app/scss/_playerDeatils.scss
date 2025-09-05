@@ -450,3 +450,9 @@ button::after {
 -ms-transform: skew(-30deg);
 }
 }
+
+@media (min-width: 451px) {
+  .mobile-survey {
+    max-width: 950px;
+  }
+}

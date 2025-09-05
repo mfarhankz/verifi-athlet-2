@@ -112,6 +112,9 @@ body,
   //   flex-shrink: 0;
   //   aspect-ratio: 1/1;
   // }
+  .ant-btn {
+    border:none !important;
+  }
   .text-4xl {
     font-size: 36px !important;
     font-weight: 800 !important;
@@ -151,8 +154,32 @@ line-height: normal;
     font-weight: 700 !important;
     
   }
+  .score-heading {
+    font-size: 16px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .text-size {
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: #1C1D4D !important;
+    margin: 0 !important;
+    
+  }
+  .score-number {
+    font-size: 16px !important;
+    font-style: italic !important;
+    font-weight: 800 !important;
+  }
+  .clip-progress .ant-progress-bg,
+  .clip-progress .ant-progress-outer {
+    clip-path: polygon(0 0, 80% 0, 100% 100%, 0% 100%);
+  }
 }
-
+.ant-card-body {
+  padding: 0 !important;
+}
 .new-style-table {
   border: none !important;
   thead {
@@ -161,6 +188,9 @@ line-height: normal;
       border-radius: 0 !important;
       text-align: center;
       padding: 10px 12px !important;
+      font-size: 18px !important;
+      font-weight: 500 !important;
+      color: #1C1D4D !important;
       &:first-child {
         text-align: left;
       }

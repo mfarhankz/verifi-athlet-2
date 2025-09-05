@@ -102,8 +102,9 @@ export default function Step3({ athlete, surveyData, onComplete, onBack }: Step3
           </Typography.Text>
         </Flex>
       </Flex>
-      <Flex vertical className="items-center">
-        {/* Sport-specific questions */}
+      <div className="flex flex-col lg:flex-row gap-5">
+        <Flex vertical className="w-full">
+          {/* Sport-specific questions */}
         {/* Baseball/Softball - sport_id 6,7 */}
         {(athlete?.sport_id === 6 || athlete?.sport_id === 7) && (
           <Flex vertical className="mb-5 survey-textarea">
@@ -228,8 +229,9 @@ export default function Step3({ athlete, surveyData, onComplete, onBack }: Step3
             </Flex>
           </>
         )}
-
-        {/* Wrestling-specific profile links - sport_id 20 only */}
+        </Flex>
+        <Flex vertical className="w-full">
+          {/* Wrestling-specific profile links - sport_id 20 only */}
         {athlete?.sport_id === 20 && (
           <>
             <Flex vertical className="mb-5 survey-textarea">
@@ -316,7 +318,11 @@ export default function Step3({ athlete, surveyData, onComplete, onBack }: Step3
             placeholder="List any awards, honors, or recognitions you've received..."
           />
         </Flex>
-      </Flex>
+        </Flex>
+        
+
+        
+      </div>
       <Flex justify="space-between">
         <Button onClick={onBack} className="back-servey" disabled={isSubmitting}>
           Back

@@ -108,7 +108,8 @@ export default function Step2({ athlete, surveyData, onComplete, onBack }: Step2
           </Typography.Text>
         </Flex>
       </Flex>
-      <Flex vertical className="items-center">
+      <div className="flex flex-col lg:flex-row gap-5">
+        <Flex vertical className="w-full">
         <Flex vertical className="mb-5 survey-textarea">
           <Typography.Title level={4}>In a few words tell us why you are transferring</Typography.Title>
           <TextArea 
@@ -159,6 +160,9 @@ export default function Step2({ athlete, surveyData, onComplete, onBack }: Step2
           />
         </Flex>
 
+        
+        </Flex>
+        <Flex vertical className="w-full">
         {athlete?.sport_id === 6 && (
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>Are you playing summer league ball? If so, where?</Typography.Title>
@@ -170,7 +174,6 @@ export default function Step2({ athlete, surveyData, onComplete, onBack }: Step2
             />
           </Flex>
         )}
-
         <Flex vertical className="mb-5 survey-textarea">
           <Typography.Title level={4}>Are you open to walking on at a top program?</Typography.Title>
           <Select
@@ -219,7 +222,11 @@ export default function Step2({ athlete, surveyData, onComplete, onBack }: Step2
             placeholder="Select importance level..."
           />
         </Flex>
-      </Flex>
+        </Flex>
+        
+
+        
+      </div>
       <Flex justify="space-between">
         <Button onClick={onBack} className="back-servey" disabled={isSubmitting}>
           Back

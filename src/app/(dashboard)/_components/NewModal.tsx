@@ -164,10 +164,10 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
           <Space>
             <Button
               icon={
-                <i className="icon-edit-2 text-2xl flex items-center justify-center"></i>
+                <i className="icon-edit-2 text-2xl flex items-center justify-center border-none"></i>
               }
               type="text"
-              className="border-none"
+              className=""
             />
             <div className="vertical-border"></div>
             <Button
@@ -217,8 +217,8 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
                 <p className="text-[#C8FF24] text-xl mb-0 py-1">
                   @justineWiley
                 </p>
-                <button className="bg-white border border-black text-black px-3 py-1 text-xs font-medium rounded hover:bg-gray-50 transform -skew-x-12">
-                  FOLLOW
+                <button className="bg-transparent border-none">
+                  <img src="/follow.svg" alt="" width={95} />
                 </button>
               </div>
             </div>
@@ -252,101 +252,187 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
         </div>
 
         {/* Score Cards */}
-        <Card className="mb-6">
-          <Title level={4} className="mb-4">
-            School Performance Metrics
-          </Title>
-          <Row gutter={16}>
-            <Col span={4}>
-              <div className="text-center">
-                <Title level={3} className="m-0 text-green-500">
-                  7
-                </Title>
-                <Text type="secondary" className="text-xs">
-                  # of Prospects Score
-                </Text>
-                <Progress
-                  percent={30}
-                  size={["100%", 26]}
-                  strokeLinecap="butt"
-                  showInfo={false}
-                  className="success"
-                />
+
+        <Card className="mb-6  !p-0 ">
+          <Row gutter={24} align="top" className="py-6">
+            {/* LEFT SIDE */}
+            <Col span={8}>
+              <div className="mx-5">
+                {/* Row 1 → 3 columns */}
+                <div className="grid grid-cols-3 ">
+                  <div>
+                    <p className="text-gray-800 font-medium text-sm mb-0">
+                      2024 Record
+                    </p>
+                    <p className="text-size">8W - 4L</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-800 font-medium text-sm mb-0">
+                      2023 Record
+                    </p>
+                    <p className="text-size">5W - 6L</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-800 font-medium text-sm mb-0">
+                      Schedule
+                    </p>
+                    <p className="text-[#126DB8] !font-medium cursor-pointer">
+                      Make
+                    </p>
+                  </div>
+                </div>
+
+                {/* Row 2 → 2 columns */}
+                <div className="grid grid-cols-2 ">
+                  <div>
+                    <p className="text-gray-800 font-medium text-sm mb-0">
+                      Conference
+                    </p>
+                    <p className="text-size">3A - 2Region | District 4</p>
+                  </div>
+                  <div className="ml-16">
+                    <p className="text-gray-800 font-medium text-sm mb-0">
+                      State Classification
+                    </p>
+                    <p className="text-size">Division 2A-2</p>
+                  </div>
+                </div>
               </div>
             </Col>
-            <Col span={4}>
-              <div className="text-center">
-                <Title level={3} className="m-0 text-orange-500">
-                  5
-                </Title>
-                <Text type="secondary" className="text-xs">
-                  # of D1 Prospects Score
-                </Text>
-                <Progress
-                  percent={20}
-                  size={["100%", 26]}
-                  strokeLinecap="butt"
-                  showInfo={false}
-                  className="success"
-                />
-              </div>
-            </Col>
-            <Col span={4}>
-              <div className="text-center">
-                <Title level={3} className="m-0 text-red-500">
-                  2
-                </Title>
-                <Text type="secondary" className="text-xs">
-                  Team Quality Score
-                </Text>
-                <Progress
-                  percent={20}
-                  size={["100%", 26]}
-                  strokeLinecap="butt"
-                  showInfo={false}
-                  className="success"
-                />
-              </div>
-            </Col>
-            <Col span={4}>
-              <div className="text-center">
-                <Title level={3} className="m-0 text-green-500">
-                  8
-                </Title>
-                <Text type="secondary" className="text-xs">
-                  Athlete Income Score
-                </Text>
-                <Progress
-                  percent={20}
-                  size={["100%", 26]}
-                  strokeLinecap="butt"
-                  showInfo={false}
-                  className="warning"
-                />
-              </div>
-            </Col>
-            <Col span={4}>
-              <div className="text-center">
-                <Title level={3} className="m-0 text-green-500">
-                  7
-                </Title>
-                <Text type="secondary" className="text-xs">
-                  Academics Score
-                </Text>
-                <Progress
-                  percent={20}
-                  size={["100%", 26]}
-                  strokeLinecap="butt"
-                  showInfo={false}
-                  className="error"
-                />
-              </div>
+
+            {/* RIGHT SIDE */}
+            <Col span={16} className="mt-6">
+              <Row gutter={16} className="gap-7">
+                {/* # of Prospects Score */}
+                <Col span={4}>
+                  <div className="flex flex-col items-start">
+                    <Text type="secondary" className="score-heading mb-1">
+                      # of Prospects Score
+                    </Text>
+                    <div className="flex items-center w-full">
+                      <span className="bg-[#1C1D4D] text-white w-8 h-10 flex items-center justify-center font-bold score-number">
+                        7
+                      </span>
+                      <div className="relative flex-1 h-10 clip-progress">
+                        <Progress
+                          percent={70}
+                          size={["100%", 40]}
+                          strokeColor="#22C55E"
+                          trailColor="#DCFCE7"
+                          strokeLinecap="butt"
+                          showInfo={false}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Col>
+
+                {/* # of D1 Prospects Score */}
+                <Col span={4}>
+                  <div className="flex flex-col items-start">
+                    <Text type="secondary" className="score-heading mb-1">
+                      # of D1 Prospects Score
+                    </Text>
+                    <div className="flex items-center w-full">
+                      <span className="bg-[#1C1D4D] text-white w-8 h-10 flex items-center justify-center font-bold score-number">
+                        5
+                      </span>
+                      <div className="relative flex-1 h-10 clip-progress">
+                        <Progress
+                          percent={50}
+                          size={["100%", 40]}
+                          strokeColor="#F97316"
+                          trailColor="#FFEDD5"
+                          strokeLinecap="butt"
+                          showInfo={false}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Col>
+
+                {/* Team Quality Score */}
+                <Col span={4}>
+                  <div className="flex flex-col items-start">
+                    <Text type="secondary" className="score-heading mb-1">
+                      Team Quality Score
+                    </Text>
+                    <div className="flex items-center w-full">
+                      <span className="bg-[#1C1D4D] text-white w-8 h-10 flex items-center justify-center font-bold score-number">
+                        2
+                      </span>
+                      <div className="relative flex-1 h-10 clip-progress">
+                        <Progress
+                          percent={20}
+                          size={["100%", 40]}
+                          strokeColor="#EF4444"
+                          trailColor="#FEE2E2"
+                          strokeLinecap="butt"
+                          showInfo={false}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Col>
+
+                {/* Athlete Income Score */}
+                <Col span={4}>
+                  <div className="flex flex-col items-start">
+                    <Text type="secondary" className="score-heading mb-1">
+                      Athlete Income Score
+                    </Text>
+                    <div className="flex items-center w-full">
+                      <span className="bg-[#1C1D4D] text-white w-8 h-10 flex items-center justify-center font-bold score-number">
+                        8
+                      </span>
+                      <div className="relative flex-1 h-10 clip-progress">
+                        <Progress
+                          percent={80}
+                          size={["100%", 40]}
+                          strokeColor="#22C55E"
+                          trailColor="#DCFCE7"
+                          strokeLinecap="butt"
+                          showInfo={false}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Col>
+
+                {/* Academics Score */}
+                <Col span={4}>
+                  <div className="flex flex-col items-start">
+                    <Text type="secondary" className="score-heading mb-1">
+                      Academics Score
+                    </Text>
+                    <div className="flex items-center w-full">
+                      <span className="bg-[#1C1D4D] text-white w-8 h-10 flex items-center justify-center font-bold score-number">
+                        7
+                      </span>
+                      <div className="relative flex-1 h-10 clip-progress">
+                        <Progress
+                          percent={70}
+                          size={["100%", 40]}
+                          strokeColor="#22C55E"
+                          trailColor="#DCFCE7"
+                          strokeLinecap="butt"
+                          showInfo={false}
+                          className="h-10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Col>
+              </Row>
             </Col>
           </Row>
         </Card>
 
         {/* College Prospects */}
-        
 
         <Flex justify="space-between" align="center">
           <Title level={2} className="page-heading">
@@ -355,9 +441,11 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
 
           <Space>
             <Button type="default" size="large" className="default">
+              <i className="icon-filter-1"></i>
               Filters
             </Button>
             <Button type="primary" size="large" className="primary">
+              <i className="icon-user text-white"></i>
               Add Athlete
             </Button>
           </Space>
@@ -407,7 +495,7 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
                             height={18}
                             className="mr-1"
                           />
-                          {5.0}
+                          5.0
                         </small>
                       </h4>
                     </div>
