@@ -165,6 +165,16 @@ color: var(--success);
       height: 28px;
     }
   }
+  &.extra-small {
+    span {
+      font-size: 12px;
+      font-style: normal;
+      font-weight: 600;
+      width: 36px;
+      height: 18px;
+      padding-top: 1px;
+    }
+  }
 
   span {
     position: absolute;

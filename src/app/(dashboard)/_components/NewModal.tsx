@@ -1,8 +1,19 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Modal, Typography, Space, Button, Table, Tag, Progress, Flex, Divider, Card, Row, Col, Statistic } from 'antd';
-import Image from 'next/image';
+import React, { useState } from "react";
+import {
+  Modal,
+  Typography,
+  Space,
+  Button,
+  Progress,
+  Card,
+  Row,
+  Col,
+} from "antd";
+import Image from "next/image";
+import { Flex } from "antd";
+import Filters from "../_components/Filters";
 
 interface NewModalProps {
   isVisible: boolean;
@@ -18,14 +29,14 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
     setIsSubmitting(true);
     try {
       // Add your submission logic here
-      console.log('Submitting school profile...');
-      
+      console.log("Submitting school profile...");
+
       // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       onClose();
     } catch (error) {
-      console.error('Error submitting:', error);
+      console.error("Error submitting:", error);
     } finally {
       setIsSubmitting(false);
     }
@@ -35,369 +46,389 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
     onClose();
   };
 
-  // Sample data for the school profile
-  const schoolData = {
-    name: "ABERNATHY HS",
-    state: "Texas",
-    county: "Hale",
-    headCoach: {
-      name: "Justine Wiley",
-      email: "jwiley@abernathysid.com",
-      timestamp: "8/12/2024 3:45",
-      address: "505 7th St Abernathy, Tx 79311",
-      phone: "(805) 289 4940",
-      homePhone: "(830) 229 9483",
-      cellPhone: "(325) 977 2346",
-      officePhone: "(806) 298 4910"
-    },
-    athleticDirector: {
-      name: "Justin Wiley",
-      email: "jwiley@abernathysid.com"
-    },
-    schoolInfo: {
-      enrollment: 254,
-      religiousAffiliation: "None",
-      schoolType: "Public"
-    },
-    records: {
-      current: "8W - 4L",
-      previous: "5W - 6L"
-    },
-    conference: "3A - 2Region | District 4",
-    stateClassification: "Division 2A-2",
-    scores: [
-      { name: "# of Prospects Score", value: 7, color: "#52c41a" },
-      { name: "# of D1 Prospects Score", value: 5, color: "#fa8c16" },
-      { name: "Team Quality Score", value: 2, color: "#f5222d" },
-      { name: "Athlete Income Score", value: 8, color: "#52c41a" },
-      { name: "Academics Score", value: 7, color: "#52c41a" }
-    ]
-  };
-
+  // Static college prospects data for ABERNATHY HS - matching the image exactly
   const prospectsData = [
     {
-      key: '1',
-      name: 'Jerome Bell',
-      gradYear: '2027',
-      projection: 'D3 - Top half',
-      bestOffer: '$2,203',
-      gpa: '3.22',
-      position: 'WR',
-      height: '5100',
-      weight: '135',
-      score: 58.9
+      key: "1",
+      name: "Jerome Bell",
+      gradYear: "2027",
+      projection: "D3 - Top half",
+      bestOffer: "$2,203",
+      gpa: "3.22",
+      position: "WR",
+      height: "5100",
+      weight: "135",
+      score: 58.9,
+      hasStar: true,
+      initials: "JB",
     },
     {
-      key: '2',
-      name: 'Darrell Steward',
-      gradYear: '2027',
-      projection: 'D3 - Top half',
-      bestOffer: '$114',
-      gpa: '3.22',
-      position: 'WR',
-      height: '5090',
-      weight: '135',
-      score: 45.2
+      key: "2",
+      name: "Darrell Steward",
+      gradYear: "2027",
+      projection: "D3 - Top half",
+      bestOffer: "$114",
+      gpa: "3.22",
+      position: "WR",
+      height: "5090",
+      weight: "135",
+      score: 58.9,
+      hasStar: true,
+      initials: "DS",
     },
     {
-      key: '3',
-      name: 'Wade Warren',
-      gradYear: '2027',
-      projection: 'D3 - Top half',
-      bestOffer: '$296',
-      gpa: '3.22',
-      position: 'DB',
-      height: '5100',
-      weight: '180',
-      score: 52.1
+      key: "3",
+      name: "Wade Warren",
+      gradYear: "2027",
+      projection: "D3 - Top half",
+      bestOffer: "$296",
+      gpa: "3.22",
+      position: "DB",
+      height: "5100",
+      weight: "180",
+      score: 58.9,
+      hasStar: true,
+      initials: "WW",
     },
     {
-      key: '4',
-      name: 'Devon Lane',
-      gradYear: '2027',
-      projection: 'D3 - Top half',
-      bestOffer: '$1,900',
-      gpa: '3.22',
-      position: 'QB',
-      height: '6000',
-      weight: '160',
-      score: 67.8
+      key: "4",
+      name: "Devon Lane",
+      gradYear: "2027",
+      projection: "D3 - Top half",
+      bestOffer: "$1,900",
+      gpa: "3.22",
+      position: "QB",
+      height: "6000",
+      weight: "160",
+      score: 58.9,
+      hasStar: true,
+      initials: "DL",
     },
     {
-      key: '5',
-      name: 'Ronald Richards',
-      gradYear: '2028',
-      projection: 'D3',
-      bestOffer: '$1,705',
-      gpa: '3.55',
-      position: 'OLB',
-      height: '5020',
-      weight: '220',
-      score: 61.3
+      key: "1",
+      name: "Ronald Richards",
+      gradYear: "2028",
+      projection: "D3",
+      bestOffer: "$1,705",
+      gpa: "3.55",
+      position: "OLB",
+      height: "5020",
+      weight: "220",
+      score: 58.9,
+      hasStar: true,
+      initials: "RR",
     },
     {
-      key: '6',
-      name: 'Darlene Robertson',
-      gradYear: '2026',
-      projection: 'D3 - Top half',
-      bestOffer: '$207',
-      gpa: '3.55',
-      position: 'LB',
-      height: '5100',
-      weight: '135',
-      score: 49.7
-    }
-  ];
-
-  const columns = [
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string, record: any) => (
-        <Space>
-          <div style={{ 
-            width: 40, 
-            height: 40, 
-            borderRadius: '50%', 
-            backgroundColor: '#f0f0f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginRight: 8
-          }}>
-            <Text strong>{text.charAt(0)}</Text>
-          </div>
-          <div>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 8 
-            }}>
-              <div style={{
-                width: 24,
-                height: 24,
-                borderRadius: '50%',
-                backgroundColor: record.score > 60 ? '#52c41a' : record.score > 40 ? '#fa8c16' : '#f5222d',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '12px',
-                fontWeight: 'bold'
-              }}>
-                {record.score}
-              </div>
-              <Text strong>{text}</Text>
-              <span style={{ color: '#52c41a' }}>★</span>
-            </div>
-          </div>
-        </Space>
-      ),
-    },
-    {
-      title: 'Grad Year',
-      dataIndex: 'gradYear',
-      key: 'gradYear',
-    },
-    {
-      title: 'Athletic Projection',
-      dataIndex: 'projection',
-      key: 'projection',
-      render: (text: string) => <Tag color="blue">{text}</Tag>
-    },
-    {
-      title: 'Best Offer',
-      dataIndex: 'bestOffer',
-      key: 'bestOffer',
-      render: (text: string) => <Text strong style={{ color: '#52c41a' }}>{text}</Text>
-    },
-    {
-      title: 'GPA',
-      dataIndex: 'gpa',
-      key: 'gpa',
-    },
-    {
-      title: 'Position',
-      dataIndex: 'position',
-      key: 'position',
-    },
-    {
-      title: 'Height',
-      dataIndex: 'height',
-      key: 'height',
-    },
-    {
-      title: 'Weight',
-      dataIndex: 'weight',
-      key: 'weight',
-    },
-    {
-      title: 'Highlight',
-      key: 'highlight',
-      render: () => <Button type="link" size="small">Link</Button>
+      key: "2",
+      name: "Darlene Robertson",
+      gradYear: "2026",
+      projection: "D3 - Top half",
+      bestOffer: "$207",
+      gpa: "3.55",
+      position: "LB",
+      height: "5100",
+      weight: "135",
+      score: 58.9,
+      hasStar: true,
+      initials: "DR",
     },
   ];
 
   return (
     <Modal
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <i className="icon-school" style={{ fontSize: '18px' }}></i>
-            <span>School Profile</span>
-          </div>
-          <Space>
-            <Button icon={<i className="icon-close"></i>} type="text" onClick={handleCancel} />
-            <Button icon={<i className="icon-edit"></i>} type="text" />
-            <Button icon={<i className="icon-printer"></i>} type="text" />
-          </Space>
-        </div>
-      }
       open={isVisible}
       onCancel={handleCancel}
-      width={'90%'}
+      width={"90%"}
       centered
       footer={null}
-      style={{ top: 20 }}
+      className="new-modal"
     >
-      <div style={{ padding: '0', maxHeight: '80vh', overflowY: 'auto' }}>
+      <button className="close" onClick={handleCancel}></button>
+      <div className="p-0 max-h-[80vh] gap-4 flex flex-col overflow-y-auto">
         {/* Header Section */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Title level={1} style={{ margin: 0, color: '#1890ff' }}>{schoolData.name}</Title>
-            <Text type="secondary">State: {schoolData.state} / County: {schoolData.county}</Text>
+        <div className="flex justify-between items-center bg-white p-4 max-h-14">
+          <div className="flex-1 flex items-center text-center gap-5">
+            <Title
+              level={2}
+              className="m-0 italic text-blue-500 text-4xl font-extrabold drop-shadow-sm"
+            >
+              ABERNATHY HS
+            </Title>
+            <Text type="secondary" className="leading-[25px] tracking-[0.16px]">
+              <div className="gap-4 flex">
+                <span>State: Texas </span> <span>/</span>{" "}
+                <span>County: Hale</span>
+              </div>
+            </Text>
           </div>
+          <Space>
+            <Button
+              icon={
+                <i className="icon-edit-2 text-2xl flex items-center justify-center"></i>
+              }
+              type="text"
+              className="border-none"
+            />
+            <div className="vertical-border"></div>
+            <Button
+              icon={
+                <i className="icon-printer text-2xl flex items-center justify-center"></i>
+              }
+              type="text"
+            />
+          </Space>
         </div>
 
         {/* Head Coach Section */}
-        <Card style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', gap: 24 }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ 
-                width: 80, 
-                height: 80, 
-                backgroundColor: '#000', 
-                borderRadius: 8,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: 8
-              }}>
-                <Text style={{ color: 'white', fontSize: '24px' }}>X</Text>
+        <div className="">
+          <div className="flex gap-4">
+            {/* Left Column - Head Coach Information + Social Box */}
+            <div className="w-[60%] bg-white p-4 flex-shrink-0 flex">
+              {/* Left: Head Coach Info */}
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className=" font-semibold text-gray-800  h3">
+                    Head Coach - Justine Wiley
+                  </h3>
+                  <span className="text-xs text-gray-500">8/12/2024 3:45</span>
+                </div>
+                <p className="paragraph-text mb-10">jwiley@abernathysid.com</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-sm-p text-black mb-0">Home (Best)</p>
+                    <p className="text-sm-p text-black mb-0">(830) 229 9483</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-black mb-0">Cell</p>
+                    <p className="text-sm font-semibold text-gray-800 mb-0">
+                      (325) 977 2346
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-black mb-0">Office</p>
+                    <p className="text-sm text-black mb-0">(806) 298 4910</p>
+                  </div>
+                </div>
               </div>
-              <Text strong>@justineWiley</Text>
-              <br />
-              <Button type="primary" size="small" style={{ marginTop: 8 }}>FOLLOW</Button>
+
+              {/* Right: Social Box */}
+              <div className="text-center w-[134px] h-[149px] bg-black py-6 px-4 !mb-0 ">
+                <img src="/twitter.png" alt="" className="w-12" />
+                <p className="text-[#C8FF24] text-xl mb-0 py-1">
+                  @justineWiley
+                </p>
+                <button className="bg-white border border-black text-black px-3 py-1 text-xs font-medium rounded hover:bg-gray-50 transform -skew-x-12">
+                  FOLLOW
+                </button>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <Title level={4} style={{ margin: '0 0 8px 0' }}>
-                Head Coach - {schoolData.headCoach.name}
-                <Text type="secondary" style={{ fontSize: '14px', marginLeft: 8 }}>
-                  {schoolData.headCoach.timestamp}
-                </Text>
-              </Title>
-              <Text>{schoolData.headCoach.email}</Text>
-              <br />
-              <Text>{schoolData.headCoach.address}</Text>
-              <br />
-              <Text>{schoolData.headCoach.phone}</Text>
-              
-              <Divider />
-              
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Text strong>Athletic Director: {schoolData.athleticDirector.name}</Text>
-                  <br />
-                  <Text>{schoolData.athleticDirector.email}</Text>
-                  <br />
-                  <br />
-                  <Text strong>Contact Numbers:</Text>
-                  <br />
-                  <Text>Home (Best): {schoolData.headCoach.homePhone}</Text>
-                  <br />
-                  <Text>Cell: {schoolData.headCoach.cellPhone}</Text>
-                  <br />
-                  <Text>Office: {schoolData.headCoach.officePhone}</Text>
-                </Col>
-                <Col span={12}>
-                  <Text strong>Enrollment Size: {schoolData.schoolInfo.enrollment}</Text>
-                  <br />
-                  <Text>Religious Affiliation: {schoolData.schoolInfo.religiousAffiliation}</Text>
-                  <br />
-                  <Text>School Type: {schoolData.schoolInfo.schoolType}</Text>
-                </Col>
-              </Row>
+
+            {/* Right Column - School Information */}
+            <div className="flex-1 bg-white p-4">
+              <p className="text-sm text-gray-800 mb-0">
+                505 7th St Abernathy, Tx 79311
+              </p>
+              <p className="text-sm text-gray-800 mb-0">(805) 289 4940</p>
+              <p className="text-sm text-gray-800 mb-8">
+                AD's Name - Justin Wiley -{" "}
+                <span className="text-blue-500">jwiley@abernathysid.com</span>
+              </p>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="mb-0">Enrollment Size</p>
+                  <p className="mb-0">254</p>
+                </div>
+                <div>
+                  <p className="mb-0">Religious Affiliation</p>
+                  <p className="mb-0">None</p>
+                </div>
+                <div>
+                  <p className="mb-0">School Type</p>
+                  <p className="mb-0">Public</p>
+                </div>
+              </div>
             </div>
           </div>
-        </Card>
-
-        {/* School Performance */}
-        <Card style={{ marginBottom: 24 }}>
-          <Row gutter={16}>
-            <Col span={6}>
-              <Statistic title="2024 Record" value={schoolData.records.current} />
-            </Col>
-            <Col span={6}>
-              <Statistic title="2023 Record" value={schoolData.records.previous} />
-            </Col>
-            <Col span={6}>
-              <Button type="primary">Make Schedule</Button>
-            </Col>
-            <Col span={6}>
-              <div>
-                <Text strong>Conference: {schoolData.conference}</Text>
-                <br />
-                <Text>State Classification: {schoolData.stateClassification}</Text>
-              </div>
-            </Col>
-          </Row>
-        </Card>
+        </div>
 
         {/* Score Cards */}
-        <Card style={{ marginBottom: 24 }}>
-          <Title level={4} style={{ marginBottom: 16 }}>School Performance Metrics</Title>
+        <Card className="mb-6">
+          <Title level={4} className="mb-4">
+            School Performance Metrics
+          </Title>
           <Row gutter={16}>
-            {schoolData.scores.map((score, index) => (
-              <Col span={4} key={index}>
-                <div style={{ textAlign: 'center' }}>
-                  <Title level={3} style={{ margin: 0, color: score.color }}>
-                    {score.value}
-                  </Title>
-                  <Text type="secondary" style={{ fontSize: '12px' }}>
-                    {score.name}
-                  </Text>
-                  <Progress 
-                    percent={score.value * 10} 
-                    strokeColor={score.color}
-                    showInfo={false}
-                    size="small"
-                    style={{ marginTop: 8 }}
-                  />
-                </div>
-              </Col>
-            ))}
+            <Col span={4}>
+              <div className="text-center">
+                <Title level={3} className="m-0 text-green-500">
+                  7
+                </Title>
+                <Text type="secondary" className="text-xs">
+                  # of Prospects Score
+                </Text>
+                <Progress
+                  percent={30}
+                  size={["100%", 26]}
+                  strokeLinecap="butt"
+                  showInfo={false}
+                  className="success"
+                />
+              </div>
+            </Col>
+            <Col span={4}>
+              <div className="text-center">
+                <Title level={3} className="m-0 text-orange-500">
+                  5
+                </Title>
+                <Text type="secondary" className="text-xs">
+                  # of D1 Prospects Score
+                </Text>
+                <Progress
+                  percent={20}
+                  size={["100%", 26]}
+                  strokeLinecap="butt"
+                  showInfo={false}
+                  className="success"
+                />
+              </div>
+            </Col>
+            <Col span={4}>
+              <div className="text-center">
+                <Title level={3} className="m-0 text-red-500">
+                  2
+                </Title>
+                <Text type="secondary" className="text-xs">
+                  Team Quality Score
+                </Text>
+                <Progress
+                  percent={20}
+                  size={["100%", 26]}
+                  strokeLinecap="butt"
+                  showInfo={false}
+                  className="success"
+                />
+              </div>
+            </Col>
+            <Col span={4}>
+              <div className="text-center">
+                <Title level={3} className="m-0 text-green-500">
+                  8
+                </Title>
+                <Text type="secondary" className="text-xs">
+                  Athlete Income Score
+                </Text>
+                <Progress
+                  percent={20}
+                  size={["100%", 26]}
+                  strokeLinecap="butt"
+                  showInfo={false}
+                  className="warning"
+                />
+              </div>
+            </Col>
+            <Col span={4}>
+              <div className="text-center">
+                <Title level={3} className="m-0 text-green-500">
+                  7
+                </Title>
+                <Text type="secondary" className="text-xs">
+                  Academics Score
+                </Text>
+                <Progress
+                  percent={20}
+                  size={["100%", 26]}
+                  strokeLinecap="butt"
+                  showInfo={false}
+                  className="error"
+                />
+              </div>
+            </Col>
           </Row>
         </Card>
 
         {/* College Prospects */}
-        <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Title level={3} style={{ margin: 0, color: '#1890ff' }}>College Prospect</Title>
-            <Space>
-              <Button>Filters ▼</Button>
-              <Button type="primary">Add Athlete</Button>
-            </Space>
-          </div>
-          
-          <Table
-            dataSource={prospectsData}
-            columns={columns}
-            pagination={false}
-            size="small"
-            scroll={{ x: 800 }}
-          />
-        </Card>
+        
+
+        <Flex justify="space-between" align="center">
+          <Title level={2} className="page-heading">
+            College Prospect
+          </Title>
+
+          <Space>
+            <Button type="default" size="large" className="default">
+              Filters
+            </Button>
+            <Button type="primary" size="large" className="primary">
+              Add Athlete
+            </Button>
+          </Space>
+        </Flex>
+
+        <table className="new-style-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Grad Year</th>
+              <th>Athletic Projection</th>
+              <th>Best Offer</th>
+              <th>GPA</th>
+              <th>Position</th>
+              <th>Height</th>
+              <th>Weight</th>
+              <th>Highlight</th>
+            </tr>
+          </thead>
+          <tbody>
+            {prospectsData.map((athlete, index) => (
+              <tr key={athlete.key}>
+                <td>
+                  <div className="flex items-center justify-start gap-2">
+                    <Flex
+                      className="user-image extra-small"
+                      style={{ width: "48px", margin: 0 }}
+                    >
+                      <Flex className="gray-scale">
+                        <Image
+                          src={`/player${athlete.key}.png`}
+                          alt={athlete.name}
+                          width={48}
+                          height={48}
+                        />
+                        <span className="yellow">{5.0}</span>
+                      </Flex>
+                    </Flex>
+                    <div className="pro-detail ml-1">
+                      <h4 className="flex mb-0">
+                        {athlete.name}
+                        <small className="flex ml-2 items-center justify-center">
+                          <Image
+                            src={"/success-star.svg"}
+                            alt={athlete.name}
+                            width={18}
+                            height={18}
+                            className="mr-1"
+                          />
+                          {5.0}
+                        </small>
+                      </h4>
+                    </div>
+                  </div>
+                </td>
+                <td>{athlete.gradYear}</td>
+                <td>{athlete.projection}</td>
+                <td>{athlete.bestOffer}</td>
+                <td>{athlete.gpa}</td>
+                <td>{athlete.position}</td>
+                <td>{athlete.height}</td>
+                <td>{athlete.weight}</td>
+                <td>
+                  <span className="text-blue-500 text-sm font-medium">
+                    Link
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </Modal>
   );

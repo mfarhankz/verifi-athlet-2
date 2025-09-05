@@ -81,3 +81,101 @@ body,
 }
 
 
+.new-modal {
+  .ant-modal-content {
+    background-color: #F2F2F2 !important;
+    padding: 25px !important;
+    border-radius: 0;
+    .ant-modal-close {
+      display: none !important;
+    }
+    .close {
+      position: absolute;
+      top:0;
+      right: 0;
+             background: url('/model-close.svg') no-repeat center center;
+      width: 25px;
+      height: 25px;
+      display: block !important;
+      border: 0;
+      top: -6px;
+    }
+  }
+  .ant-typography {
+    margin: 0 !important;
+  }
+ 
+  // .ant-btn {
+  //   border:none !important;
+  //   width: 24px;
+  //   height: 24px;
+  //   flex-shrink: 0;
+  //   aspect-ratio: 1/1;
+  // }
+  .text-4xl {
+    font-size: 36px !important;
+    font-weight: 800 !important;
+  }
+  .icon-edit {
+    font-size: 24px !important;
+  }
+  .icon-printer {
+    font-size: 24px !important;
+  }
+  .vertical-border {
+    width: 1px !important;
+    height: 27.571px !important;
+    opacity: 0.32 !important;
+    background: #1C1D4D !important;
+  }
+  .ant-space {
+    gap: 15px !important;
+  }
+  .h3 {
+    font-size: 22px !important;
+    margin: 0 !important;
+    color: #1C1D4D;
+    font-family: "Inter Tight";
+    font-style: italic !important;
+font-weight: 600 !important;
+line-height: normal;
+  }
+  .paragraph-text {
+    font-size: 16px !important;
+    color: #126DB8;
+    font-family: "Inter Tight";
+    font-weight: 400 !important;
+  }
+  .text-sm-p {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    
+  }
+}
+
+.new-style-table {
+  border: none !important;
+  thead {
+    th {
+      background: #e9e9eb !important;
+      border-radius: 0 !important;
+      text-align: center;
+      padding: 10px 12px !important;
+      &:first-child {
+        text-align: left;
+      }
+    }
+  }
+  tbody {
+    tr {
+      td {
+        background: white !important;
+        text-align: center;
+        padding: 10px 12px !important;
+        border-bottom: #F2F2F2 6px solid;
+        border-left: 1px #F2F2F2 solid;
+      }
+  }
+}
+
+}
