@@ -440,11 +440,11 @@ export default function NewModal({ isVisible, onClose }: NewModalProps) {
           </Title>
 
           <Space>
-            <Button type="default" size="large" className="default">
+            <Button size="large" className="default">
               <i className="icon-filter-1"></i>
               Filters
             </Button>
-            <Button type="primary" size="large" className="primary">
+            <Button type="primary" size="large" className="bg-primary">
               <i className="icon-user text-white"></i>
               Add Athlete
             </Button>

@@ -172,8 +172,7 @@ line-height: normal;
     font-style: italic !important;
     font-weight: 800 !important;
   }
-  .clip-progress .ant-progress-bg,
-  .clip-progress .ant-progress-outer {
+  .clip-progress .ant-progress-bg {
     clip-path: polygon(0 0, 80% 0, 100% 100%, 0% 100%);
   }
 }
@@ -208,4 +207,9 @@ line-height: normal;
   }
 }
 
+}
+
+.ant-btn-variant-solid{
+  background-color: #1C1D4D !important;
+  color: var(--text-white) !important;
 }
