@@ -163,6 +163,157 @@
   min-height: 100px;
 }
 
+.commentsSection {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 8px;
+}
+
+.commentsRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.mostRecentComment {
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  flex: 1;
+}
+
+.commentItem {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.commentHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8em;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.commentAuthor {
+  font-weight: bold;
+  color: #333;
+}
+
+.commentDate {
+  color: #666;
+  font-size: 0.75em;
+}
+
+.commentContent {
+  color: #333;
+  line-height: 1.2;
+  white-space: pre-wrap;
+  font-size: 0.85em;
+  max-height: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deleteCommentButton {
+  background: none;
+  border: none;
+  color: #dc3545;
+  font-size: 1em;
+  cursor: pointer;
+  padding: 0 3px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.deleteCommentButton:hover {
+  opacity: 1;
+  color: #c82333;
+}
+
+.addCommentSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+  flex: 1;
+}
+
+.commentInput {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.85em;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.commentInput:focus {
+  border-color: #007bff;
+  outline: none;
+}
+
+.addCommentButton {
+  align-self: flex-end;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8em;
+  transition: background-color 0.2s;
+}
+
+.addCommentButton:hover {
+  background-color: #0056b3;
+}
+
+.addCommentButton:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.commentHistorySection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commentHistoryToggle {
+  background: none;
+  border: none;
+  color: #007bff;
+  font-size: 0.8em;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+  transition: color 0.2s;
+}
+
+.commentHistoryToggle:hover {
+  color: #0056b3;
+  text-decoration: underline;
+}
+
+.commentHistory {
+  padding-top: 4px;
+  border-top: 1px solid #e0e0e0;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .fileInput {
   margin-top: 10px;
 }

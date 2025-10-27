@@ -1,10 +1,10 @@
 "use client";
 
-import { Flex, Typography, Button, Select } from "antd";
+import { Flex, Typography, Button, Select, Input } from "antd";
 import Image from "next/image";
 import { useState, useEffect } from "react";
 import type { AthleteData } from "@/types/database";
-import { supabase } from "@/lib/supabaseClient";
+import { fetchSchoolsBySingleDivision } from "@/utils/schoolUtils";
 import ProgressPieChart from "./ProgressPieChart";
 
 interface Step5Props {
@@ -67,6 +67,20 @@ export default function Step5({
     "68": surveyData["68"] || "",
     // data_type_id: 69 - Preferred NAIA school
     "69": surveyData["69"] || "",
+    // data_type_id: 366 - How important is an NIL deal
+    "366": surveyData["366"] || "",
+    // data_type_id: 365 - How much money are you expecting your NIL deal to be worth per year
+    "365": surveyData["365"] || "",
+    // data_type_id: 682 - Recent team winning vs winning tradition
+    "682": surveyData["682"] || "",
+    // data_type_id: 681 - Produce NFL players vs facilities
+    "681": surveyData["681"] || "",
+    // data_type_id: 679 - Facilities vs winning a championship
+    "679": surveyData["679"] || "",
+    // data_type_id: 680 - Winning a championship vs highest level
+    "680": surveyData["680"] || "",
+    // data_type_id: 72 - Open to military schools
+    "72": surveyData["72"] || "",
   });
 
   const [d1Schools, setD1Schools] = useState<any[]>([]);
@@ -79,81 +93,18 @@ export default function Step5({
   useEffect(() => {
     const fetchSchools = async () => {
       try {
-        // Fetch D1 schools
-        const { data: d1SchoolIds } = await supabase
-          .from("school_fact")
-          .select("school_id")
-          .eq("data_type_id", 119)
-          .eq("value", "D1");
+        // Fetch schools by division using the new utility
+        const [d1Data, d2Data, d3Data, naiaData] = await Promise.all([
+          fetchSchoolsBySingleDivision('D1'),
+          fetchSchoolsBySingleDivision('D2'),
+          fetchSchoolsBySingleDivision('D3'),
+          fetchSchoolsBySingleDivision('NAIA')
+        ]);
 
-        if (d1SchoolIds && d1SchoolIds.length > 0) {
-          const d1Ids = d1SchoolIds.map(
-            (item: { school_id: string }) => item.school_id
-          );
-          const { data: d1Data } = await supabase
-            .from("school")
-            .select("id, name")
-            .in("id", d1Ids)
-            .order("name");
-          setD1Schools(d1Data || []);
-        }
-
-        // Fetch D2 schools
-        const { data: d2SchoolIds } = await supabase
-          .from("school_fact")
-          .select("school_id")
-          .eq("data_type_id", 119)
-          .eq("value", "D2");
-
-        if (d2SchoolIds && d2SchoolIds.length > 0) {
-          const d2Ids = d2SchoolIds.map(
-            (item: { school_id: string }) => item.school_id
-          );
-          const { data: d2Data } = await supabase
-            .from("school")
-            .select("id, name")
-            .in("id", d2Ids)
-            .order("name");
-          setD2Schools(d2Data || []);
-        }
-
-        // Fetch D3 schools
-        const { data: d3SchoolIds } = await supabase
-          .from("school_fact")
-          .select("school_id")
-          .eq("data_type_id", 119)
-          .eq("value", "D3");
-
-        if (d3SchoolIds && d3SchoolIds.length > 0) {
-          const d3Ids = d3SchoolIds.map(
-            (item: { school_id: string }) => item.school_id
-          );
-          const { data: d3Data } = await supabase
-            .from("school")
-            .select("id, name")
-            .in("id", d3Ids)
-            .order("name");
-          setD3Schools(d3Data || []);
-        }
-
-        // Fetch NAIA schools
-        const { data: naiaSchoolIds } = await supabase
-          .from("school_fact")
-          .select("school_id")
-          .eq("data_type_id", 118)
-          .eq("value", "NAIA");
-
-        if (naiaSchoolIds && naiaSchoolIds.length > 0) {
-          const naiaIds = naiaSchoolIds.map(
-            (item: { school_id: string }) => item.school_id
-          );
-          const { data: naiaData } = await supabase
-            .from("school")
-            .select("id, name")
-            .in("id", naiaIds)
-            .order("name");
-          setNaiaSchools(naiaData || []);
-        }
+        setD1Schools(d1Data);
+        setD2Schools(d2Data);
+        setD3Schools(d3Data);
+        setNaiaSchools(naiaData);
       } catch (error) {
         console.error("Error fetching schools:", error);
       } finally {
@@ -219,8 +170,8 @@ export default function Step5({
         </Flex>
       </Flex>
 
-      <div className="flex flex-col lg:flex-row gap-5">
-        <Flex vertical className="lg:w-[424px]">
+      <div className="flex flex-col gap-5 max-w-3xl mx-auto">
+        <Flex vertical className="w-full">
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>Ideal Division</Typography.Title>
             <Select
@@ -426,6 +377,85 @@ export default function Step5({
               placeholder="Select campus location type..."
             />
           </Flex>
+
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                How important is an NIL deal in your college decision?
+              </Typography.Title>
+              <Select
+                className="w-full"
+                value={formData["366"]}
+                onChange={(value) => handleChange("366", value)}
+                options={[
+                  { value: "Very Important", label: "Very Important" },
+                  { value: "Somewhat Important", label: "Somewhat Important" },
+                  { value: "Not Important", label: "Not Important" }
+                ]}
+                placeholder="Select importance level..."
+              />
+            </Flex>
+          )}
+
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                How much money are you expecting your NIL deal to be worth per year?
+              </Typography.Title>
+              <Input
+                value={formData["365"]}
+                onChange={(e) => handleChange("365", e.target.value)}
+                placeholder="Enter expected NIL deal amount..."
+              />
+            </Flex>
+          )}
+
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                Recent team winning vs winning tradition
+              </Typography.Title>
+              <Select
+                className="w-full"
+                value={formData["682"]}
+                onChange={(value) => handleChange("682", value)}
+                options={[
+                  {
+                    value: "Recent winning is way more important than winning tradition",
+                    label: "Recent winning is way more important than winning tradition"
+                  },
+                  {
+                    value: "Recent winning is more important than winning tradition",
+                    label: "Recent winning is more important than winning tradition"
+                  },
+                  {
+                    value: "Recent winning is a little more important than winning tradition",
+                    label: "Recent winning is a little more important than winning tradition"
+                  },
+                  {
+                    value: "Recent winning and winning tradition are equally important",
+                    label: "Recent winning and winning tradition are equally important"
+                  },
+                  {
+                    value: "Winning tradition is a little more important than recent winning",
+                    label: "Winning tradition is a little more important than recent winning"
+                  },
+                  {
+                    value: "Winning tradition is more important than recent winning",
+                    label: "Winning tradition is more important than recent winning"
+                  },
+                  {
+                    value: "Winning tradition is way more important than recent winning",
+                    label: "Winning tradition is way more important than recent winning"
+                  }
+                ]}
+                placeholder="Select preference..."
+              />
+            </Flex>
+          )}
 
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
@@ -671,6 +701,51 @@ export default function Step5({
             />
           </Flex>
 
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                Produce NFL players vs facilities
+              </Typography.Title>
+              <Select
+                className="w-full"
+                value={formData["681"]}
+                onChange={(value) => handleChange("681", value)}
+                options={[
+                  {
+                    value: "Producing NFL talent is way more important than facilities",
+                    label: "Producing NFL talent is way more important than facilities"
+                  },
+                  {
+                    value: "Producing NFL talent is more important than facilities",
+                    label: "Producing NFL talent is more important than facilities"
+                  },
+                  {
+                    value: "Producing NFL talent is a little more important than facilities",
+                    label: "Producing NFL talent is a little more important than facilities"
+                  },
+                  {
+                    value: "Producing NFL talent and facilities are equally important",
+                    label: "Producing NFL talent and facilities are equally important"
+                  },
+                  {
+                    value: "Facilities are a little more important than producing NFL talent",
+                    label: "Facilities are a little more important than producing NFL talent"
+                  },
+                  {
+                    value: "Facilities are more important than producing NFL talent",
+                    label: "Facilities are more important than producing NFL talent"
+                  },
+                  {
+                    value: "Facilities are way more important than producing NFL talent",
+                    label: "Facilities are way more important than producing NFL talent"
+                  }
+                ]}
+                placeholder="Select preference..."
+              />
+            </Flex>
+          )}
+
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>Winning vs academics</Typography.Title>
             <Select
@@ -724,6 +799,51 @@ export default function Step5({
               placeholder="Select preference..."
             />
           </Flex>
+
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                Facilities vs winning a championship
+              </Typography.Title>
+              <Select
+                className="w-full"
+                value={formData["679"]}
+                onChange={(value) => handleChange("679", value)}
+                options={[
+                  {
+                    value: "Facilities are way more important than team competing for the national championship",
+                    label: "Facilities are way more important than team competing for the national championship"
+                  },
+                  {
+                    value: "Facilities are more important than team competing for the national championship",
+                    label: "Facilities are more important than team competing for the national championship"
+                  },
+                  {
+                    value: "Facilities are a little more important than team competing for the national championship",
+                    label: "Facilities are a little more important than team competing for the national championship"
+                  },
+                  {
+                    value: "Facilities and the team competing for the national championship are equally important",
+                    label: "Facilities and the team competing for the national championship are equally important"
+                  },
+                  {
+                    value: "Team competing for the national championship is a little more important than facilities",
+                    label: "Team competing for the national championship is a little more important than facilities"
+                  },
+                  {
+                    value: "Team competing for the national championship is more important than facilities",
+                    label: "Team competing for the national championship is more important than facilities"
+                  },
+                  {
+                    value: "Team competing for the national championship is way more important than facilities",
+                    label: "Team competing for the national championship is way more important than facilities"
+                  }
+                ]}
+                placeholder="Select preference..."
+              />
+            </Flex>
+          )}
         </Flex>
         <Flex vertical className="lg:w-[424px]">
           <Flex vertical className="mb-5 survey-textarea">
@@ -890,6 +1010,51 @@ export default function Step5({
             />
           </Flex>
 
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                Winning a championship vs highest level
+              </Typography.Title>
+              <Select
+                className="w-full"
+                value={formData["680"]}
+                onChange={(value) => handleChange("680", value)}
+                options={[
+                  {
+                    value: "Team's chance to compete for a national championship is way more important than playing at the highest level",
+                    label: "Team's chance to compete for a national championship is way more important than playing at the highest level"
+                  },
+                  {
+                    value: "Team's chance to compete for a national championship is more important than playing at the highest level",
+                    label: "Team's chance to compete for a national championship is more important than playing at the highest level"
+                  },
+                  {
+                    value: "Team's chance to compete for a national championship is a little more important than playing at the highest level",
+                    label: "Team's chance to compete for a national championship is a little more important than playing at the highest level"
+                  },
+                  {
+                    value: "Team's chance to compete for a national championship and playing at the highest level are equally important",
+                    label: "Team's chance to compete for a national championship and playing at the highest level are equally important"
+                  },
+                  {
+                    value: "Playing at the highest level is a little more important than team's chance to compete for a national championship",
+                    label: "Playing at the highest level is a little more important than team's chance to compete for a national championship"
+                  },
+                  {
+                    value: "Playing at the highest level is more important than team's chance to compete for a national championship",
+                    label: "Playing at the highest level is more important than team's chance to compete for a national championship"
+                  },
+                  {
+                    value: "Playing at the highest level is way more important than team's chance to compete for a national championship",
+                    label: "Playing at the highest level is way more important than team's chance to compete for a national championship"
+                  }
+                ]}
+                placeholder="Select preference..."
+              />
+            </Flex>
+          )}
+
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
               Type of discipline from staff preferred
@@ -1007,6 +1172,25 @@ export default function Step5({
             />
           </Flex>
 
+          {/* Questions only visible for sport_id 21 */}
+          {athlete?.sport_id === 21 && (
+            <Flex vertical className="mb-5 survey-textarea">
+              <Typography.Title level={4}>
+                Open to military schools
+              </Typography.Title>
+              <Select
+                className="w-full"
+                value={formData["72"]}
+                onChange={(value) => handleChange("72", value)}
+                options={[
+                  { value: "Yes", label: "Yes" },
+                  { value: "No", label: "No" }
+                ]}
+                placeholder="Select Yes or No..."
+              />
+            </Flex>
+          )}
+
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
               Do you have a preferred D1 school? If so list here:
@@ -1112,6 +1296,8 @@ export default function Step5({
         <Button
           onClick={handleSubmit}
           className="next-servey"
+          type="primary"
+          style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
           loading={isSubmitting}
           disabled={isSubmitting}
         >

@@ -1,12 +1,13 @@
 "use client";
 
 import type { MenuProps } from "antd";
-import { Menu, Spin } from "antd";
+import { Menu, Spin, Button } from "antd";
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { useSidebar } from './SidebarContext';
 import { menuRoutes, unclickableMenuRoutes, hasPackageAccess } from '@/utils/navigationUtils';
+import { CloseOutlined } from '@ant-design/icons';
 
 type MenuItem = Required<MenuProps>["items"][number];
 
@@ -27,15 +28,27 @@ const getItem = (
 };
 
 // Custom link component with visible styling
-const StyledLink = ({ href, children }: { href: string, children: React.ReactNode }) => (
-  <Link href={href} style={{ color: '#fff', fontWeight: '500' }}>
-    {children}
-  </Link>
-);
+const StyledLink = ({ href, children }: { href: string, children: React.ReactNode }) => {
+  const { setMobileOpen } = useSidebar();
+  
+  const handleClick = () => {
+    setMobileOpen(false);
+  };
+  
+  return (
+    <Link href={href} style={{ color: '#fff', fontWeight: '500' }} onClick={handleClick}>
+      {children}
+    </Link>
+  );
+};
 
 // Custom component for submenu items with proper styling
 const SubMenuItem = ({ href, children }: { href: string, children: React.ReactNode }) => {
-  const { collapsed } = useSidebar();
+  const { collapsed, setMobileOpen } = useSidebar();
+  
+  const handleClick = () => {
+    setMobileOpen(false);
+  };
   
   return (
     <Link href={href} style={{ 
@@ -45,7 +58,7 @@ const SubMenuItem = ({ href, children }: { href: string, children: React.ReactNo
       opacity: '0.9',
       display: 'block',
       paddingLeft: collapsed ? '15px' : '32px',
-    }}>
+    }} onClick={handleClick}>
       {children}
     </Link>
   );
@@ -94,7 +107,22 @@ function SidebarContent() {
   const [openKeys, setOpenKeys] = useState<string[]>(['6']);
   const [selectedKey, setSelectedKey] = useState<string>('1');
   const [isCapManagerSelected, setIsCapManagerSelected] = useState(false);
-  const { collapsed, setCurrentMenuTitle, userPackages, isLoading } = useSidebar();
+  const { collapsed, setCurrentMenuTitle, userPackages, isLoading, setMobileOpen } = useSidebar();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+  
+  // Ensure userPackages is always an array to prevent runtime errors
+  const safeUserPackages = userPackages || [];
 
   // Set the selected key based on pathname
   useEffect(() => {
@@ -102,10 +130,16 @@ function SidebarContent() {
     let newOpenKeys = [...openKeys];
     let newSelectedKey = selectedKey;
 
-    if (pathname === '/transfers') {
+    if (pathname === '/high-school') {
+      newSelectedKey = '16';
+    } else if (pathname === '/hs-athlete') {
+      newSelectedKey = '17';
+    } else if (pathname === '/transfers') {
       newSelectedKey = '1';
     } else if (pathname === '/settings/alerts') {
       newSelectedKey = '2';
+    } else if (pathname === '/juco') {
+      newSelectedKey = '14';
     } else if (pathname === '/pre-portal-search') {
       newSelectedKey = '3';
     } else if (pathname === '/recruiting-board') {
@@ -116,6 +150,8 @@ function SidebarContent() {
       newSelectedKey = '6';
     } else if (pathname === '/admin') {
       newSelectedKey = '13';
+    } else if (pathname === '/new-pages') {
+      newSelectedKey = '14';
     } else if (pathname === '/cap-manager') {
       newIsCapManagerSelected = true;
       // Handle Cap Manager and its submenus
@@ -216,7 +252,7 @@ function SidebarContent() {
   // Only add Cap Manager submenu items if conditions are met
   if (isCapManagerSelected && !collapsed) {
     // Positional Ranking
-    if (hasPackageAccess(userPackages, menuPackageMap['7-1'])) {
+    if (hasPackageAccess(safeUserPackages, menuPackageMap['7-1'])) {
       capManagerItems.push({
         key: '7-1',
         label: <SubMenuItem href="/cap-manager?view=positional-ranking">Positional Ranking</SubMenuItem>,
@@ -224,7 +260,7 @@ function SidebarContent() {
     }
     
     // By Year
-    if (hasPackageAccess(userPackages, menuPackageMap['7-2'])) {
+    if (hasPackageAccess(safeUserPackages, menuPackageMap['7-2'])) {
       capManagerItems.push({
         key: '7-2',
         label: <SubMenuItem href="/cap-manager?view=by-year">By Year</SubMenuItem>,
@@ -232,7 +268,7 @@ function SidebarContent() {
     }
     
     // List
-    if (hasPackageAccess(userPackages, menuPackageMap['7-3'])) {
+    if (hasPackageAccess(safeUserPackages, menuPackageMap['7-3'])) {
       capManagerItems.push({
         key: '7-3',
         label: <SubMenuItem href="/cap-manager?view=list">List</SubMenuItem>,
@@ -240,7 +276,7 @@ function SidebarContent() {
     }
     
     // Budget
-    if (hasPackageAccess(userPackages, menuPackageMap['7-4'])) {
+    if (hasPackageAccess(safeUserPackages, menuPackageMap['7-4'])) {
       capManagerItems.push({
         key: '7-4',
         label: <SubMenuItem href="/cap-manager?view=budget">Budget</SubMenuItem>,
@@ -248,7 +284,7 @@ function SidebarContent() {
     }
     
     // Reports
-    if (hasPackageAccess(userPackages, menuPackageMap['7-5'])) {
+    if (hasPackageAccess(safeUserPackages, menuPackageMap['7-5'])) {
       capManagerItems.push({
         key: '7-5',
         label: <SubMenuItem href="/cap-manager?view=reports">Reports</SubMenuItem>,
@@ -256,7 +292,7 @@ function SidebarContent() {
     }
     
     // Depth Chart
-    if (hasPackageAccess(userPackages, menuPackageMap['7-6'])) {
+    if (hasPackageAccess(safeUserPackages, menuPackageMap['7-6'])) {
       capManagerItems.push({
         key: '7-6',
         label: <SubMenuItem href="/cap-manager?view=depth-chart">Depth Chart</SubMenuItem>,
@@ -267,6 +303,16 @@ function SidebarContent() {
   // Define all potential menu items
   const allMenuItems: MenuItem[] = [
     {
+      key: "16",
+      icon: <i className="icon-teacher"></i>,
+      label: <StyledLink href="/high-school">High Schools</StyledLink>,
+    },
+    {
+      key: "17",
+      icon: <i className="icon-user"></i>,
+      label: <StyledLink href="/hs-athlete">HS Athlete</StyledLink>,
+    },
+    {
       key: "1",
       icon: <i className="icon-cup"></i>,
       label: <StyledLink href="/transfers">Transfers</StyledLink>,
@@ -275,6 +321,11 @@ function SidebarContent() {
       key: "2",
       icon: <i className="icon-alarm" />,
       label: <StyledLink href="/settings?tab=alerts">Alerts</StyledLink>,
+    },
+    {
+      key: "14",
+      icon: <i className="icon-data" />,
+      label: <StyledLink href="/juco">JUCO</StyledLink>,
     },
     {
       key: "3",
@@ -305,6 +356,11 @@ function SidebarContent() {
       key: "13",
       icon: <i className="icon-setting-2" />,
       label: <StyledLink href="/admin">Admin</StyledLink>,
+    },
+    {
+      key: "14",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-pages">New Pages</StyledLink>,
     },
   ];
 
@@ -344,7 +400,7 @@ function SidebarContent() {
   allMenuItems.forEach(item => {
     if (item && typeof item.key === 'string') {
       const requiredPackages = menuPackageMap[item.key];
-      if (hasPackageAccess(userPackages, requiredPackages)) {
+      if (hasPackageAccess(safeUserPackages, requiredPackages)) {
         filteredItems.push(item);
       }
     }
@@ -358,7 +414,7 @@ function SidebarContent() {
     unclickableMenuItems.forEach(item => {
       if (item && typeof item.key === 'string') {
         const requiredPackages = menuPackageMap[item.key];
-        if (hasPackageAccess(userPackages, requiredPackages)) {
+        if (hasPackageAccess(safeUserPackages, requiredPackages)) {
           unclickableItems.push(item);
         }
       }
@@ -381,15 +437,17 @@ function SidebarContent() {
   }
 
   return (
-    <Menu
-      onClick={onClick}
-      style={{ width: "100%" }}
-      selectedKeys={[selectedKey]}
-      mode="inline"
-      items={items}
-      className="sidebar-menu"
-      inlineCollapsed={collapsed}
-    />
+    <div>
+      <Menu
+        onClick={onClick}
+        style={{ width: "100%" }}
+        selectedKeys={[selectedKey]}
+        mode="inline"
+        items={items}
+        className="sidebar-menu"
+        inlineCollapsed={collapsed}
+      />
+    </div>
   );
 }
 // Main sidebar component that wraps the content in Suspense

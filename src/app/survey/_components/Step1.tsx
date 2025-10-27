@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import type { AthleteData } from "@/types/database";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchPositionsBySportId } from "@/lib/queries";
+import { fetchSchoolsByMultipleDivisions } from "@/utils/schoolUtils";
 import ProgressPieChart from "./ProgressPieChart";
 
 interface Step1Props {
@@ -19,25 +20,17 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
   const [formData, setFormData] = useState({
     // Basic Information
     1: surveyData[1] || "", // What year in school are you?
-    25: surveyData[25] || "", // Eligibility remaining
-    251: surveyData[251] || "", // Are you on scholarship?
     2: surveyData[2] || "", // Primary Position
     3: surveyData[3] || "", // Secondary Position
-    570: surveyData[570] || "", // Are you a grad transfer?
     26: surveyData[26] || "", // Preferred contact method
     571: surveyData[571] || "", // Email
     27: surveyData[27] || "", // Cell
     364: surveyData[364] || "", // International Phone Number
     14: surveyData[14] || "", // Instagram
+    37: surveyData[37] || "", // Link to highlight tape (or best game)
+    31: surveyData[31] || "", // In a few words tell us why you are transferring
     13: surveyData[13] || "", // Twitter
-    28: surveyData[28] || "", // When are you looking to transfer?
-    29: surveyData[29] || "", // Who will be helping you with your decision?
-    30: surveyData[30] || "", // Contact Info for anyone helping with your decision
-    8: surveyData[8] || "", // List any colleges you have attended prior to your current college
-    246: surveyData[246] || "", // Home address - Street
-    247: surveyData[247] || "", // Home address - City
-    24: surveyData[24] || "", // Home address - State
-    248: surveyData[248] || "", // Home address - Zip
+    688: surveyData[688] || "", // Agent Contact Information
     committed_school: surveyData.committed_school || "", // Committed to Transfer to (special handling)
     // data_type_id: 70 - Consent checkbox
     "70": surveyData["70"] || "TRUE",
@@ -56,25 +49,17 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
       const newData = {
         // Basic Information
         1: surveyData[1] || "", // What year in school are you?
-        25: surveyData[25] || "", // Eligibility remaining
-        251: surveyData[251] || "", // Are you on scholarship?
         2: surveyData[2] || "", // Primary Position
         3: surveyData[3] || "", // Secondary Position
-        570: surveyData[570] || "", // Are you a grad transfer?
         26: surveyData[26] || "", // Preferred contact method
         571: surveyData[571] || "", // Email
         27: surveyData[27] || "", // Cell
         364: surveyData[364] || "", // International Phone Number
         14: surveyData[14] || "", // Instagram
+        37: surveyData[37] || "", // Link to highlight tape (or best game)
+        31: surveyData[31] || "", // In a few words tell us why you are transferring
         13: surveyData[13] || "", // Twitter
-        28: surveyData[28] || "", // When are you looking to transfer?
-        29: surveyData[29] || "", // Who will be helping you with your decision?
-        30: surveyData[30] || "", // Contact Info for anyone helping with your decision
-        8: surveyData[8] || "", // List any colleges you have attended prior to your current college
-        246: surveyData[246] || "", // Home address - Street
-        247: surveyData[247] || "", // Home address - City
-        24: surveyData[24] || "", // Home address - State
-        248: surveyData[248] || "", // Home address - Zip
+        688: surveyData[688] || "", // Agent Contact Information
         committed_school: surveyData.committed_school || "", // Committed to Transfer to (special handling)
         // data_type_id: 70 - Consent checkbox
         "70": surveyData["70"] || "TRUE",
@@ -102,16 +87,13 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
           console.warn("No sport_id found for athlete:", athlete);
         }
 
-        // Fetch schools
-        const { data: schoolData, error: schoolError } = await supabase
-          .from("school")
-          .select("id, name")
-          .order("name");
-
-        if (schoolError) {
-          console.error("Error fetching schools:", schoolError);
-        } else {
+        // Fetch schools filtered by division (D1, D2, D3, NAIA)
+        try {
+          const schoolData = await fetchSchoolsByMultipleDivisions(['D1', 'D2', 'D3', 'NAIA']);
           setSchools(schoolData || []);
+        } catch (error) {
+          console.error("Error fetching schools by division:", error);
+          setSchools([]);
         }
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -192,10 +174,10 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
         />
         <Flex vertical justify="center" align="center" className="text-center">
           <Typography.Title level={4} className="italic margin-0">
-            Basic Information
+          The Most Important Information
           </Typography.Title>
           <Typography.Text>
-            Give us some basic information about yourself
+          Here&apos;s what coaches most want to know about you
           </Typography.Text>
         </Flex>
       </Flex>
@@ -221,7 +203,7 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
             <p>Loading form data...</p>
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-5">
+          <div className="flex flex-col gap-5 max-w-3xl mx-auto">
             <Flex vertical className="w-full">
               {/* What year in school are you? */}
               <Flex vertical className="mb-5 survey-textarea">
@@ -246,48 +228,7 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
                 />
               </Flex>
 
-              {/* Eligibility remaining */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  Eligibility remaining (in years)?
-                </Typography.Title>
-                <Select
-                  className="w-full"
-                  value={formData[25]}
-                  onChange={(value) => handleChange("25", value)}
-                  options={[
-                    { value: "1", label: "1" },
-                    { value: "2", label: "2" },
-                    { value: "3", label: "3" },
-                    { value: "4", label: "4" },
-                    { value: "5", label: "5" },
-                  ]}
-                />
-              </Flex>
 
-              {/* Are you on scholarship? */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  Are you on scholarship?
-                </Typography.Title>
-                <Select
-                  className="w-full"
-                  value={formData[251]}
-                  onChange={(value) => handleChange("251", value)}
-                  options={[
-                    { value: "Yes", label: "Yes" },
-                    {
-                      value: "Partial (50% or more)",
-                      label: "Partial (50% or more)",
-                    },
-                    {
-                      value: "Partial (less than 50%)",
-                      label: "Partial (less than 50%)",
-                    },
-                    { value: "None", label: "None" },
-                  ]}
-                />
-              </Flex>
 
               {/* Primary Position */}
               <Flex vertical className="mb-5 survey-textarea">
@@ -314,7 +255,7 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
               </Flex>
 
               {/* Secondary Position */}
-              <Flex vertical className="mb-5 survey-textarea">
+              {/* <Flex vertical className="mb-5 survey-textarea">
                 <Typography.Title level={4}>
                   Secondary Position (if applicable)
                 </Typography.Title>
@@ -332,23 +273,8 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
                       : "Select position"
                   }
                 />
-              </Flex>
+              </Flex> */}
 
-              {/* Are you a grad transfer? */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  Are you a grad transfer?
-                </Typography.Title>
-                <Select
-                  className="w-full"
-                  value={formData[570]}
-                  onChange={(value) => handleChange("570", value)}
-                  options={[
-                    { value: "TRUE", label: "Yes" },
-                    { value: "FALSE", label: "No" },
-                  ]}
-                />
-              </Flex>
 
               {/* Preferred contact method */}
               <Flex vertical className="mb-5 survey-textarea">
@@ -449,14 +375,48 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
                   />
                 </Flex>
               )}
-               {/* Instagram */}
-               <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>Instagram</Typography.Title>
+
+              {/* Twitter */}
+              <Flex vertical className="mb-5 survey-textarea">
+                <Typography.Title level={4}>X / Twitter</Typography.Title>
                 <Input
-                  value={formData[14]}
-                  onChange={(e) => handleChange("14", e.target.value)}
+                  value={formData[13]}
+                  onChange={(e) => handleChange("13", e.target.value)}
                 />
               </Flex>
+
+               {/* Instagram */}
+               <Flex vertical className="mb-5 survey-textarea">
+                 <Typography.Title level={4}>Instagram</Typography.Title>
+                 <Input
+                   value={formData[14]}
+                   onChange={(e) => handleChange("14", e.target.value)}
+                 />
+               </Flex>
+
+               {/* Link to highlight tape (or best game) */}
+               <Flex vertical className="mb-5 survey-textarea">
+                 <Typography.Title level={4}>Link to game film or highlight tape</Typography.Title>
+                 <Typography.Text type="secondary" style={{ marginBottom: '8px' }}>
+                   The #1 thing a coach wants, next to cell phone, is film on you
+                 </Typography.Text>
+                 <Input
+                   value={formData[37]}
+                   onChange={(e) => handleChange("37", e.target.value)}
+                   placeholder="Enter link to your highlight tape or best game..."
+                 />
+               </Flex>
+
+               {/* In a few words tell us why you are transferring */}
+               <Flex vertical className="mb-5 survey-textarea">
+                 <Typography.Title level={4}>In a few words tell us why you are transferring</Typography.Title>
+                 <TextArea 
+                   rows={3} 
+                   value={formData[31]}
+                   onChange={(e) => handleChange("31", e.target.value)}
+                   placeholder="Please explain your reason for transferring..."
+                 />
+               </Flex>
             </Flex>
 
             <Flex vertical className="w-full">
@@ -464,182 +424,34 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
 
              
 
-              {/* Twitter */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>Twitter</Typography.Title>
-                <Input
-                  value={formData[13]}
-                  onChange={(e) => handleChange("13", e.target.value)}
-                />
-              </Flex>
+   
 
-              {/* When are you looking to transfer? */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  When are you looking to transfer?
-                </Typography.Title>
-                <Select
-                  className="w-full"
-                  value={formData[28]}
-                  onChange={(value) => handleChange("28", value)}
-                  options={[
-                    {
-                      value: "I want to transfer and play immediately",
-                      label: "I want to transfer and play immediately",
-                    },
-                    {
-                      value:
-                        "I want to transfer asap but for the right situation I would wait to play",
-                      label:
-                        "I want to transfer asap but for the right situation I would wait to play",
-                    },
-                    {
-                      value:
-                        "I'm waiting until the end of the school year and then will want to transfer",
-                      label:
-                        "I'm waiting until the end of the school year and then will want to transfer",
-                    },
-                    {
-                      value:
-                        "I'm waiting until I graduate and then will want to transfer",
-                      label:
-                        "I'm waiting until I graduate and then will want to transfer",
-                    },
-                  ]}
-                />
-              </Flex>
 
-              {/* Who will be helping you with your decision? */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  Who will be helping you with your decision?
-                </Typography.Title>
-                <Select
-                  className="w-full"
-                  mode="multiple"
-                  value={
-                    formData[29]
-                      ? formData[29]
-                          .split(", ")
-                          .filter((v: string) => v.trim() !== "")
-                      : []
-                  }
-                  onChange={(value) => handleChange("29", value)}
-                  placeholder="Select one or more people"
-                  style={{
-                    minHeight: "32px",
-                    maxHeight: "80px",
-                    overflow: "auto",
-                  }}
-                  maxTagCount="responsive"
-                  maxTagPlaceholder={(omittedValues) =>
-                    `+${omittedValues.length} more`
-                  }
-                  tagRender={(props) => {
-                    const { label, onClose } = props;
-                    return (
-                      <span
-                        style={{
-                          display: "inline-block",
-                          backgroundColor: "#f0f0f0",
-                          border: "1px solid #d9d9d9",
-                          borderRadius: "4px",
-                          padding: "1px 6px",
-                          margin: "1px",
-                          fontSize: "11px",
-                          maxWidth: "110px",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          lineHeight: "20px",
-                          height: "22px",
-                        }}
-                      >
-                        {label}
-                        <span
-                          onClick={onClose}
-                          style={{
-                            marginLeft: "4px",
-                            cursor: "pointer",
-                            color: "#999",
-                            fontSize: "12px",
-                          }}
-                        >
-                          ×
-                        </span>
-                      </span>
-                    );
-                  }}
-                  options={[
-                    { value: "Parent", label: "Parent" },
-                    { value: "Coach", label: "Coach" },
-                    { value: "Family Friend", label: "Family Friend" },
-                    { value: "Other", label: "Other" },
-                    { value: "Just Me", label: "Just Me" },
-                  ]}
-                />
-              </Flex>
 
-              {/* Contact Info for anyone helping with your decision */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  Contact Info for anyone helping with your decision
-                </Typography.Title>
-                <Input
-                  value={formData[30]}
-                  onChange={(e) => handleChange("30", e.target.value)}
-                />
-              </Flex>
 
-              {/* List any colleges you have attended prior to your current college */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  List any colleges you have attended prior to your current
-                  college
-                </Typography.Title>
-                <TextArea
-                  rows={4}
-                  value={formData[8]}
-                  onChange={(e) => handleChange("8", e.target.value)}
-                />
-              </Flex>
-
-              {/* Home address */}
-              <Flex vertical className="mb-5 survey-textarea">
-                <Typography.Title level={4}>
-                  Home address (parents)
-                </Typography.Title>
-                <Input
-                  placeholder="Street"
-                  value={formData[246]}
-                  onChange={(e) => handleChange("246", e.target.value)}
-                  className="mb-2"
-                />
-                <div className="grid grid-cols-3 gap-2">
+              {/* Agent Contact Information - Only visible for sport_id 21 */}
+              {athlete.sport_id === 21 && (
+                <Flex vertical className="mb-5 survey-textarea">
+                  <Typography.Title level={4}>
+                    Agent Contact Information
+                  </Typography.Title>
                   <Input
-                    placeholder="City"
-                    value={formData[247]}
-                    onChange={(e) => handleChange("247", e.target.value)}
+                    value={formData[688]}
+                    onChange={(e) => handleChange("688", e.target.value)}
                   />
-                  <Input
-                    placeholder="State"
-                    value={formData[24]}
-                    onChange={(e) => handleChange("24", e.target.value)}
-                  />
-                  <Input
-                    placeholder="Zip"
-                    value={formData[248]}
-                    onChange={(e) => handleChange("248", e.target.value)}
-                  />
-                </div>
-              </Flex>
+                </Flex>
+              )}
+
+
 
               {/* Committed to Transfer to */}
               <Flex vertical className="mb-5 survey-textarea">
                 <Typography.Title level={4}>
-                  Committed to Transfer to ... (If you have committed to
-                  transfer already, enter the school here.)
+                  Committed to Transfer to ... 
                 </Typography.Title>
+                <Typography.Text type="secondary" style={{ marginBottom: '8px' }}>
+                 If you have committed to transfer already, enter the school here.
+                 </Typography.Text>
                 {loading ? (
                   <div>Loading schools...</div>
                 ) : (

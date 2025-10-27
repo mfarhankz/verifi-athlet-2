@@ -1,6 +1,7 @@
 import React from "react";
 import { Flex } from "antd";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
 interface ImageWithAverageProps {
   src?: string;
@@ -11,6 +12,8 @@ interface ImageWithAverageProps {
   containerWidth?: string;
   average?: number;
 }
+
+import { isValidImageUrl } from '@/utils/imageUtils';
 
 export default function ImageWithAverage({
   src="",
@@ -31,8 +34,25 @@ export default function ImageWithAverage({
     return "green";
   };
 
-  // Use default image if no src provided or if src is empty
-  const imageSrc = src || "/blank-user";
+  const [imageSrc, setImageSrc] = useState<string>("/blank-user.svg");
+  const [isSupabaseImage, setIsSupabaseImage] = useState(false);
+
+  useEffect(() => {
+    if (!isValidImageUrl(src)) {
+      setImageSrc("/blank-user.svg");
+      setIsSupabaseImage(false);
+      return;
+    }
+
+    // Check if it's a Supabase storage URL
+    if (src.includes('supabase.co/storage')) {
+      setImageSrc(src);
+      setIsSupabaseImage(true);
+    } else {
+      setImageSrc(src);
+      setIsSupabaseImage(false);
+    }
+  }, [src]);
   
   // Determine if we should show the score
   const shouldShowScore = average !== null && average !== undefined && average > 0;
@@ -41,27 +61,49 @@ export default function ImageWithAverage({
   return (
     <Flex className={`user-image ${size}`} align="center" style={{width:containerWidth}}>
       <Flex className="gray-scale">
-        <Image 
-          src={imageSrc} 
-          alt={alt} 
-          height={height} 
-          width={width}
-          style={{
-            objectFit: 'cover',
-            objectPosition: 'top center',
-            width: `${width}px`,
-            height: `${height}px`,
-            minWidth: `${width}px`,
-            minHeight: `${height}px`,
-            maxWidth: `${width}px`,
-            maxHeight: `${height}px`
-          }}
-          onError={(e) => {
-            // Fallback to default image if the provided image fails to load
-            const target = e.target as HTMLImageElement;
-            target.src = "/blank-user.svg";
-          }}
-        />
+        {isSupabaseImage ? (
+          // Use regular img tag for Supabase images to bypass Next.js Image optimization
+          <img 
+            src={imageSrc}
+            alt={alt || ''}
+            style={{
+              objectFit: 'cover',
+              objectPosition: 'top center',
+              width: `${width}px`,
+              height: `${height}px`,
+              minWidth: `${width}px`,
+              minHeight: `${height}px`,
+              maxWidth: `${width}px`,
+              maxHeight: `${height}px`
+            }}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = "/blank-user.svg";
+            }}
+          />
+        ) : (
+          // Use Next.js Image component for other images
+          <Image 
+            src={imageSrc}
+            alt={alt || ''}
+            height={height}
+            width={width}
+            style={{
+              objectFit: 'cover',
+              objectPosition: 'top center',
+              width: `${width}px`,
+              height: `${height}px`,
+              minWidth: `${width}px`,
+              minHeight: `${height}px`,
+              maxWidth: `${width}px`,
+              maxHeight: `${height}px`
+            }}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.src = "/blank-user.svg";
+            }}
+          />
+        )}
         <span className={getClassByAvg(average)}>{scoreDisplay}</span>
       </Flex>
     </Flex>

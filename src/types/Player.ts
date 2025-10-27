@@ -18,7 +18,6 @@ export interface Player {
   starting_season: number;
   commit: number;
   injury: number;
-  notes: string;
   monthlyCompensation?: number[];
   positionCategory?: string;
   hide?: number;
@@ -47,4 +46,5 @@ export interface Player {
   scholarship_dollars_books?: number;
   scholarship_dollars_meals?: number;
   scholarship_dollars_cost_attendance?: number;
+  notes?: string;
 }

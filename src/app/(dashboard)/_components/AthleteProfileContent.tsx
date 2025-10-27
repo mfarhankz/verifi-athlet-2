@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import type { AthleteData } from "@/types/database";
 import {
   Button,
@@ -20,7 +19,9 @@ import PlayerInformation from "./PlayerInformation";
 import Link from "next/link";
 import ImageWithAverage from "./ImageWithAverage";
 import AchievementList from "./AchievementList";
+import AthleteHonors from "./AthleteHonors";
 import TwitterEmbed from "./TwitterEmbed";
+import SchoolInfo from "./SchoolInfo";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchCustomerRatings, type CustomerRating } from "@/utils/utils";
 import {
@@ -30,6 +31,8 @@ import {
 } from "@/contexts/CustomerContext";
 import { StarFilled, CopyOutlined } from "@ant-design/icons";
 import { useZoom } from "@/contexts/ZoomContext";
+import { useState, useEffect } from 'react';
+import MobileAthleteProfileContent from './MobileAthleteProfileContent';
 
 const formatDate = (dateInput: string | Date | null | undefined) => {
   if (!dateInput) return "-- na --";
@@ -48,14 +51,28 @@ interface AthleteProfileContentProps {
   mainTpPageId?: string;
   onAddToBoard?: () => void;
   isInModal?: boolean;
+  dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null;
 }
 
 export default function AthleteProfileContent({ 
   athleteId, 
   mainTpPageId,
   onAddToBoard,
-  isInModal = false 
+  isInModal = false,
+  dataSource = null
 }: AthleteProfileContentProps) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [athlete, setAthlete] = useState<AthleteData | null>(null);
   const [actualAthleteId, setActualAthleteId] = useState<string | null>(null);
   const [rating, setRating] = useState<string | null>(null);
@@ -102,13 +119,12 @@ export default function AthleteProfileContent({
   }, [athleteId, mainTpPageId]);
 
   useEffect(() => {
-    if (actualAthleteId) {
+    if (actualAthleteId && userDetails?.packages) {
       const loadAthleteData = async () => {
         try {
           const { fetchAthleteById } = await import("@/lib/queries");
-          const data = await fetchAthleteById(actualAthleteId, userDetails?.packages);
+          const data = await fetchAthleteById(actualAthleteId, userDetails.packages, dataSource === 'high_schools' ? null : dataSource);
           if (data) {
-            console.log("Athlete data:", data);
             setAthlete(data);
 
             // Fetch the latest rating for this athlete
@@ -142,7 +158,7 @@ export default function AthleteProfileContent({
 
       loadAthleteData();
     }
-  }, [actualAthleteId, userDetails?.packages]);
+  }, [actualAthleteId, userDetails?.packages, dataSource]);
 
   useEffect(() => {
     const getSession = async () => {
@@ -186,14 +202,17 @@ export default function AthleteProfileContent({
 
   // Add this function to fetch athletes already in the user's recruiting board
   const fetchRecruitingBoardAthletes = async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.id || !userDetails?.customer_id) return;
 
     try {
+      setIsLoadingRecruitingBoard(true);
       const { data, error } = await supabase
         .from("recruiting_board")
-        .select("athlete_id");
+        .select("athlete_id")
+        .eq("customer_id", userDetails.customer_id);
 
       if (error) {
+        console.error("Error fetching recruiting board athletes:", error);
         return;
       }
 
@@ -202,6 +221,7 @@ export default function AthleteProfileContent({
       );
       setRecruitingBoardAthletes(athleteIds);
     } catch (error) {
+      console.error("Error in fetchRecruitingBoardAthletes:", error);
     } finally {
       setIsLoadingRecruitingBoard(false);
     }
@@ -209,65 +229,55 @@ export default function AthleteProfileContent({
 
   // Call this function when the component mounts and when the session changes
   useEffect(() => {
-    if (session?.user?.id) {
+    if (session?.user?.id && userDetails?.customer_id) {
       fetchRecruitingBoardAthletes();
     }
-  }, [session]);
+  }, [session, userDetails]);
 
   const handleAddToRecruitingBoard = async () => {
-    if (onAddToBoard) {
-      onAddToBoard();
-      return;
-    }
-
     if (!athlete) {
       alert("No athlete selected.");
       return;
     }
 
     setIsAddingToRecruitingBoard(true);
-
+    
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
+      if (!userDetails) {
         alert("You must be logged in to add athletes to the recruiting board.");
         return;
       }
-
-      const userId = session.user.id;
-
-      if (!userDetails) {
-        console.error("No user details found for user ID:", userId);
-        alert(
-          "No user details found. Please make sure your account is properly set up."
-        );
+      if (!activeCustomerId) {
+        alert("No active customer ID found. Please make sure your account is properly set up.");
         return;
       }
+      const userId = userDetails.id;
 
+      // Prepare the data for insertion
+      const recruitingBoardEntry = {
+        athlete_id: athlete.id,
+        user_id: userId,
+        customer_id: activeCustomerId,
+        position: 'Unassigned',
+        source: dataSource === 'transfer_portal' ? 'portal' : 
+                dataSource === 'juco' ? 'juco' : 
+                dataSource === 'all_athletes' ? 'pre-portal' : null
+      };
+
+      // Insert the data into the recruiting_board table
       const { data: insertData, error: insertError } = await supabase
-        .from("recruiting_board")
-        .insert({
-          athlete_id: athlete.id,
-          user_id: userId,
-          customer_id: userDetails.customer_id,
-          position: athlete?.primary_position || "Unassigned",
-        })
+        .from('recruiting_board')
+        .insert(recruitingBoardEntry)
         .select();
 
       if (insertError) {
         console.error("Error adding athlete to recruiting board:", insertError);
-        alert(
-          `Error adding athlete to recruiting board: ${
-            insertError.message || "Unknown error"
-          }`
-        );
+        alert(`Error adding athlete to recruiting board: ${insertError.message || 'Unknown error'}`);
         return;
       }
 
-      alert("Successfully added athlete to your recruiting board.");
-      setRecruitingBoardAthletes((prev) => [...prev, athlete.id]);
+      alert(`Successfully added athlete to your recruiting board.`);
+      setRecruitingBoardAthletes(prev => [...prev, athlete.id]);
     } catch (error) {
       console.error("Error in handleAddToRecruitingBoard:", error);
       if (error instanceof Error) {
@@ -290,8 +300,7 @@ export default function AthleteProfileContent({
     if (actualAthleteId) {
       try {
         await navigator.clipboard.writeText(actualAthleteId);
-        // You could add a toast notification here if desired
-        console.log('Athlete ID copied to clipboard:', actualAthleteId);
+        // Successfully copied
       } catch (error) {
         console.error('Failed to copy athlete ID:', error);
         // Fallback for older browsers
@@ -359,8 +368,15 @@ export default function AthleteProfileContent({
     loadRatings();
   }, [activeCustomerId]);
 
-  return (
-    <div className="w-full h-full overflow-auto">
+  return isMobile ? (
+    <MobileAthleteProfileContent
+      athleteId={athleteId}
+      mainTpPageId={mainTpPageId}
+      onAddToBoard={onAddToBoard}
+      dataSource={dataSource}
+    />
+  ) : (
+    <div className="w-full h-full">
       <div
         style={{
           transform: isInModal ? 'none' : `scale(${zoom / 100})`,
@@ -393,16 +409,20 @@ export default function AthleteProfileContent({
                       />
                     )}
                     <ul>
-                      <li>
-                        <i className="icon-profile-2user"></i>{" "}
-                        {!athlete ? (
+                      {/* Always show position and year */}
+                      {!athlete ? (
+                        <li>
+                          <i className="icon-profile-2user"></i>{" "}
                           <Skeleton.Input
                             active
                             size="small"
                             style={{ width: 100 }}
                           />
-                        ) : (
-                          `${athlete?.primary_position || "-- na --"}${
+                        </li>
+                      ) : (athlete?.primary_position || athlete?.secondary_position || athlete?.hand) && (
+                        <li>
+                          <i className="icon-profile-2user"></i>{" "}
+                          {`${athlete?.primary_position || ""}${
                             athlete?.secondary_position
                               ? `, ${athlete.secondary_position}`
                               : ""
@@ -413,140 +433,218 @@ export default function AthleteProfileContent({
                                   athlete.hand.slice(1).toLowerCase()
                                 })`
                               : ""
-                          }`
-                        )}
-                      </li>
-                      <li>
-                        <i className="icon-calendar-1"></i>{" "}
-                        {!athlete ? (
+                          }`}
+                        </li>
+                      )}
+                      {!athlete ? (
+                        <li>
+                          <i className="icon-calendar-1"></i>{" "}
                           <Skeleton.Input
                             active
                             size="small"
                             style={{ width: 100 }}
                           />
-                        ) : (
-                          athlete?.year || "-- na --"
-                        )}
-                      </li>
-                      <li>
-                        <i className="icon-receipt-item"></i>{" "}
-                        {!athlete ? (
-                          <Skeleton.Input
-                            active
-                            size="small"
-                            style={{ width: 100 }}
-                          />
-                        ) : athlete?.height_feet ? (
-                          `${athlete.height_feet}'${athlete.height_inch}"${
-                            athlete.weight ? `, ${athlete.weight} lbs` : ""
-                          }`
-                        ) : (
-                          "-- na --"
-                        )}
-                      </li>
-                      <li>
-                        <i className="icon-location"></i>{" "}
-                        {!athlete ? (
-                          <Skeleton.Input
-                            active
-                            size="small"
-                            style={{ width: 100 }}
-                          />
-                        ) : (
-                          [athlete?.hometown, athlete?.hometown_state]
-                            .filter(Boolean)
-                            .join(", ") || "-- na --"
-                        )}
-                      </li>
-                      <li>
-                        <i className="icon-teacher"></i>{" "}
-                        {!athlete ? (
-                          <Skeleton.Input
-                            active
-                            size="small"
-                            style={{ width: 100 }}
-                          />
-                        ) : (
-                          athlete?.high_name || "-- na --"
-                        )}
-                      </li>
+                        </li>
+                      ) : athlete?.year && (
+                        <li>
+                          <i className="icon-calendar-1"></i>{" "}
+                          {athlete.year}
+                        </li>
+                      )}
+                      {/* Hide height/weight, address_city, and high school for JUCO */}
+                      {dataSource !== 'juco' && (
+                        <>
+                          {!athlete ? (
+                            <li>
+                              <i className="icon-receipt-item"></i>{" "}
+                              <Skeleton.Input
+                                active
+                                size="small"
+                                style={{ width: 100 }}
+                              />
+                            </li>
+                          ) : athlete?.height_feet && (
+                            <li>
+                              <i className="icon-receipt-item"></i>{" "}
+                              {`${athlete.height_feet}'${athlete.height_inch}"${
+                                athlete.weight ? `, ${athlete.weight} lbs` : ""
+                              }`}
+                            </li>
+                          )}
+                          {!athlete ? (
+                            <li>
+                              <i className="icon-location"></i>{" "}
+                              <Skeleton.Input
+                                active
+                                size="small"
+                                style={{ width: 100 }}
+                              />
+                            </li>
+                          ) : (athlete?.address_city || athlete?.address_state) && (
+                            <li>
+                              <i className="icon-location"></i>{" "}
+                              {[athlete.address_city, athlete.address_state]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </li>
+                          )}
+                          {!athlete ? (
+                            <li>
+                              <i className="icon-teacher"></i>{" "}
+                              <Skeleton.Input
+                                active
+                                size="small"
+                                style={{ width: 100 }}
+                              />
+                            </li>
+                          ) : athlete?.high_name && (
+                            <li>
+                              <i className="icon-teacher"></i>{" "}
+                              {athlete.high_name}
+                            </li>
+                          )}
+                        </>
+                      )}
                     </ul>
                   </div>
                 </div>
                 
-                <div className="card">
-                  <h4 className="mb-4 !text-[22px]">Profile Links</h4>
-                  <div className="flex flex-col gap-1">
-                    {athlete?.roster_link && (
-                      <a
-                        href={athlete.roster_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
-                      >
-                        <Image
-                          src="/link-01.svg"
-                          alt="tw"
-                          width={20}
-                          height={20}
-                          className="mr-1"
-                        />
-                        Roster Page
-                      </a>
-                    )}
-                    {athlete?.hs_highlight && (
-                      <a
-                        href={athlete.hs_highlight}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
-                      >
-                        <Image
-                          src="/link-01.svg"
-                          alt="tw"
-                          width={20}
-                          height={20}
-                          className="mr-1"
-                        />
-                        HS Highlight Tape
-                      </a>
-                    )}
-                    {athlete?.highlight && (
-                      <a
-                        href={athlete.highlight}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
-                      >
-                        <Image
-                          src="/link-01.svg"
-                          alt="tw"
-                          width={20}
-                          height={20}
-                          className="mr-1"
-                        />
-                        College Highlight Tape
-                      </a>
-                    )}
-                    {athlete?.tfrrs_link && (
-                      <a
-                        href={athlete.tfrrs_link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
-                      >
-                        <Image
-                          src="/link-01.svg"
-                          alt="tw"
-                          width={20}
-                          height={20}
-                          className="mr-1"
-                        />
-                        TFRRS Link
-                      </a>
-                    )}
+                {athlete && (athlete.roster_link || athlete.hs_highlight || athlete.highlight || 
+                  athlete.tfrrs_link || athlete.wtn_link || athlete.utr_link || athlete.stats_link) && (
+                  <div className="card">
+                    <h4 className="mb-4 !text-[22px]">Profile Links</h4>
+                    <div className="flex flex-col gap-1">
+                      {athlete.roster_link && (
+                        <a
+                          href={athlete.roster_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          Roster Page
+                        </a>
+                      )}
+                      {athlete.hs_highlight && (
+                        <a
+                          href={athlete.hs_highlight}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          HS Highlight Tape
+                        </a>
+                      )}
+                      {athlete.highlight && (
+                        <a
+                          href={athlete.highlight}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          College Highlight Tape
+                        </a>
+                      )}
+                      {athlete.tfrrs_link && (
+                        <a
+                          href={athlete.tfrrs_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          TFRRS Link
+                        </a>
+                      )}
+                      {athlete.wtn_link && (
+                        <a
+                          href={athlete.wtn_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          WTN Link
+                        </a>
+                      )}
+                      {athlete.utr_link && (
+                        <a
+                          href={athlete.utr_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          UTR Link
+                        </a>
+                      )}
+                      {athlete.stats_link && (
+                        <a
+                          href={athlete.stats_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          Stats Link
+                        </a>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
+                
+                <SchoolInfo 
+                  athlete={athlete}
+                  dataSource={dataSource} 
+                />
+                
+                <AthleteHonors athlete={athlete} />
+                
+                <AchievementList athlete={athlete} />
                 
                 {athlete?.twitter && (
                   <div className="card !p-0 !bg-black">
@@ -589,35 +687,39 @@ export default function AthleteProfileContent({
                       <div className="detail-box gray-scale">
                         <Flex justify="space-between" align="center">
                           <Flex>
-                            {!athlete ? (
-                              <Skeleton.Input
-                                active
-                                size="small"
-                                style={{ width: 100 }}
-                              />
-                            ) : (
-                              <span
-                                className={`badge ${
-                                  athlete?.main_tp_page?.[0]?.status?.toLowerCase() === "active"
-                                    ? "status-active"
-                                    : "status-inactive"
-                                }`}
-                                style={{
-                                  backgroundColor:
+                            {dataSource !== 'all_athletes' ? (
+                              !athlete ? (
+                                <Skeleton.Input
+                                  active
+                                  size="small"
+                                  style={{ width: 100 }}
+                                />
+                              ) : (
+                                <span
+                                  className={`badge ${
                                     athlete?.main_tp_page?.[0]?.status?.toLowerCase() === "active"
-                                      ? "#52c41a"
-                                      : "#ff4d4f",
-                                }}
-                              >
-                                <i
-                                  className={`icon-${
-                                    athlete?.main_tp_page?.[0]?.status?.toLowerCase() === "active"
-                                      ? "check-2"
-                                      : "close-circle"
+                                      ? "status-active"
+                                      : "status-inactive"
                                   }`}
-                                ></i>
-                                {athlete?.main_tp_page?.[0]?.status}
-                              </span>
+                                  style={{
+                                    backgroundColor:
+                                      athlete?.main_tp_page?.[0]?.status?.toLowerCase() === "active"
+                                        ? "#52c41a"
+                                        : "#ff4d4f",
+                                  }}
+                                >
+                                  <i
+                                    className={`icon-${
+                                      athlete?.main_tp_page?.[0]?.status?.toLowerCase() === "active"
+                                        ? "check-2"
+                                        : "close-circle"
+                                    }`}
+                                  ></i>
+                                  {athlete?.main_tp_page?.[0]?.status}
+                                </span>
+                              )
+                            ) : (
+                              <div></div>
                             )}
                           </Flex>
                           <Flex>
@@ -626,10 +728,12 @@ export default function AthleteProfileContent({
                                 e.preventDefault();
                                 handleAddToRecruitingBoard();
                               }}
+                              type="primary"
                               disabled={recruitingBoardAthletes.includes(athlete?.id || "")}
+                              className={recruitingBoardAthletes.includes(athlete?.id || "") ? 'cursor-not-allowed hover:cursor-not-allowed' : ''}
                             >
-                              <i className="icon-user text-white text-[16px]"></i>{" "}
-                              Add to Board
+                              <i className={`icon-user text-[16px] ${recruitingBoardAthletes.includes(athlete?.id || "") ? 'text-gray-400' : 'text-white'}`}></i>{" "}
+                              {recruitingBoardAthletes.includes(athlete?.id || "") ? 'Already on Board' : 'Add to Board'}
                             </Button>
                           </Flex>
                         </Flex>
@@ -778,91 +882,123 @@ export default function AthleteProfileContent({
                             </>
                           ) : (
                             <>
-                              {formatDate(athlete?.initiated_date) !== "-- na --" && (
+                              {dataSource !== 'all_athletes' && formatDate(athlete?.initiated_date) !== "-- na --" && (
                                 <div>
                                   <h6>Entered Portal On</h6>
                                   <h5>{formatDate(athlete?.initiated_date)}</h5>
                                 </div>
                               )}
 
-                              <div>
-                                <h6>Coming From</h6>
-                                <h5>
-                                  {athlete?.school &&
-                                  [
-                                    athlete.school.division,
-                                    athlete.school.conference,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" - ")
-                                    ? [
+                              {dataSource === 'juco' ? (
+                                <>
+                                  <div>
+                                    <h6>School Region</h6>
+                                    <h5>
+                                      {athlete?.school_region || "-- na --"}
+                                    </h5>
+                                  </div>
+
+                                  <div>
+                                    <h6>School Division</h6>
+                                    <h5>
+                                      {athlete?.school_division || "-- na --"}
+                                    </h5>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div>
+                                    <h6>Coming From</h6>
+                                    <h5>
+                                      {athlete?.school &&
+                                      [
                                         athlete.school.division,
                                         athlete.school.conference,
                                       ]
                                         .filter(Boolean)
                                         .join(" - ")
-                                    : "-- na --"}
-                                </h5>
-                              </div>
+                                        ? [
+                                            athlete.school.division,
+                                            athlete.school.conference,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" - ")
+                                        : ""}
+                                    </h5>
+                                  </div>
 
-                              {athlete?.details_tp_page?.[0]?.expected_grad_date && (
-                                <div>
-                                  <h6>Grad Transfer</h6>
-                                  <h5 className="flex">
-                                    <Image
-                                      className="mr-1"
-                                      src="/tick.svg"
-                                      alt="Tick"
-                                      width={20}
-                                      height={20}
-                                    />
-                                    Yes - {formatDate(athlete.details_tp_page[0].expected_grad_date)}
-                                  </h5>
-                                </div>
-                              )}
-
-                              <div>
-                                <h6>Scholarship</h6>
-                                <h5>
-                                  {athlete?.details_tp_page?.[0]?.is_receiving_athletic_aid
-                                    ? "Yes"
-                                    : athlete?.details_tp_page?.[0]?.is_receiving_athletic_aid
-                                    ? "No"
-                                    : "-- na --"}
-                                </h5>
-                              </div>
-
-                              <div>
-                                <h6>Multiple Transfer</h6>
-                                <h5 className="flex mb-0">
-                                  {athlete?.details_tp_page?.[0]?.is_four_year_transfer ? (
-                                    <>
-                                      <Image
-                                        className="mr-1"
-                                        src={"/tick.svg"}
-                                        alt={"Tick"}
-                                        width={20}
-                                        height={20}
-                                      />
-                                      Yes - {athlete?.details_tp_page?.[0]?.previous_name || "-- na --"}
-                                    </>
-                                  ) : (
-                                    "No"
+                              {dataSource !== 'all_athletes' && (
+                                <>
+                                  {athlete?.details_tp_page?.[0]?.expected_grad_date && (
+                                    <div>
+                                      <h6>Grad Transfer</h6>
+                                      <h5 className="flex">
+                                        <Image
+                                          className="mr-1"
+                                          src="/tick.svg"
+                                          alt="Tick"
+                                          width={20}
+                                          height={20}
+                                        />
+                                        Yes - {formatDate(athlete.details_tp_page[0].expected_grad_date)}
+                                      </h5>
+                                    </div>
                                   )}
-                                </h5>
-                              </div>
-                              
-                              <div>
-                                <h6>Designated Student Athlete</h6>
-                                <h5 className="flex mb-0">
-                                  {(() => {
-                                    const value = athlete?.main_tp_page?.[0]?.designated_student_athlete;
-                                    if (value === "") return "No";
-                                    if (value == null) return "";
-                                    return value;
-                                  })()}
-                                </h5>
-                              </div>
+
+                                  <div>
+                                    <h6>Scholarship</h6>
+                                    <h5>
+                                      {(() => {
+                                        // Prioritize athlete_fact scholarship value over details_tp_page
+                                        const athleteFactScholarship = (athlete?.generic_survey?.[0] as any)?.scholarship_from_fact;
+                                        const detailsTpPageScholarship = athlete?.details_tp_page?.[0]?.is_receiving_athletic_aid;
+                                        
+                                        // If athlete_fact has a value, use it directly without conversion
+                                        if (athleteFactScholarship && athleteFactScholarship.trim() !== "") {
+                                          return athleteFactScholarship;
+                                        }
+                                        
+                                        // Otherwise, use the converted value from details_tp_page
+                                        return detailsTpPageScholarship || "";
+                                      })()}
+                                    </h5>
+                                  </div>
+
+                                  <div>
+                                    <h6>Multiple Transfer</h6>
+                                    <h5 className="flex mb-0">
+                                      {athlete?.details_tp_page?.[0]?.is_four_year_transfer ? (
+                                        <>
+                                          <Image
+                                            className="mr-1"
+                                            src={"/tick.svg"}
+                                            alt={"Tick"}
+                                            width={20}
+                                            height={20}
+                                          />
+                                          Yes{athlete?.details_tp_page?.[0]?.previous_name ? ` - ${athlete.details_tp_page[0].previous_name}` : ""}
+                                        </>
+                                      ) : (
+                                        "No"
+                                      )}
+                                    </h5>
+                                  </div>
+                                  
+                                  <div>
+                                    <h6>Designated Student Athlete</h6>
+                                    <h5 className="flex mb-0">
+                                      {(() => {
+                                        const value = athlete?.main_tp_page?.[0]?.designated_student_athlete;
+                                        if (value === "") return "No";
+                                        if (value == null) return "";
+                                        return value;
+                                      })()}
+                                    </h5>
+                                  </div>
+                                </>
+                              )}
+                                </>
+                              )}
                             </>
                           )}
                         </div>
@@ -913,7 +1049,7 @@ export default function AthleteProfileContent({
                         ) : (
                           <>
                             <div className="flex items-center justify-between mt-2">
-                              <span>Goals</span>
+                              <span>Stat 1</span>
                               <span>25 <small>16TH</small></span>
                             </div>
                             <Progress
@@ -924,7 +1060,7 @@ export default function AthleteProfileContent({
                               className="success"
                             />
                             <div className="flex items-center justify-between mt-2">
-                              <span>GS</span>
+                              <span>Stat 2</span>
                               <span>6 <small>TIED - 21ST</small></span>
                             </div>
                             <Progress
@@ -935,7 +1071,7 @@ export default function AthleteProfileContent({
                               className="error"
                             />
                             <div className="flex items-center justify-between mt-2">
-                              <span>GP</span>
+                              <span>Stat 3</span>
                               <span>8 <small>TIED - 69TH</small></span>
                             </div>
                             <Progress
@@ -946,7 +1082,7 @@ export default function AthleteProfileContent({
                               className="warning"
                             />
                             <div className="flex items-center justify-between mt-2">
-                              <span>PTS</span>
+                              <span>Stat 4</span>
                               <span>61.0 <small>11TH</small></span>
                             </div>
                             <Progress
@@ -962,7 +1098,7 @@ export default function AthleteProfileContent({
                     </div>
                   </div>
                 </div>
-                <PlayerInformation athlete={athlete} />
+                <PlayerInformation athlete={athlete} dataSource={dataSource} />
               </div>
             </div>
           </div>

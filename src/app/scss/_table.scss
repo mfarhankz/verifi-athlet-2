@@ -67,6 +67,17 @@ table{
     border-radius: 0 !important;
   }
 
+  // Minimal fix: just change the background color from semi-transparent to solid
+  .ant-table-thead th.ant-table-cell-fix-left {
+    background: #e6f0ff !important;
+    background-color: #e6f0ff !important;
+  }
+
+  .ant-table-thead th.ant-table-cell-fix-right {
+    background: #e6f0ff !important;
+    background-color: #e6f0ff !important;
+  }
+
   .ant-checkbox-inner {
     border: 1px solid rgba(28, 29, 77, 0.3);
   }

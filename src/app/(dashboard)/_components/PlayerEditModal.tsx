@@ -43,9 +43,10 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
   const [recruitingBoardPosition, setRecruitingBoardPosition] = useState<string | null>(null);
   const { activeCustomerId, userDetails } = useCustomer();
 
-  // Form state for editing - keeping only tier for now
+  // Form state for editing - including tier and source
   const [formData, setFormData] = useState({
-    tier: '1'
+    tier: '1',
+    source: ''
   });
 
   const handleChange = (value: string, field: string) => {
@@ -90,7 +91,7 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
           // Fetch current coach assignment and position from recruiting board
           const { data: recruitingBoardData, error: recruitingBoardError } = await supabase
             .from('recruiting_board')
-            .select('user_id, athlete_tier, position')
+            .select('user_id, athlete_tier, position, source')
             .eq('athlete_id', athleteId)
             .eq('customer_id', activeCustomerId)
             .single();
@@ -99,15 +100,17 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
             setCurrentCoachId(recruitingBoardData.user_id);
             setSelectedCoachId(recruitingBoardData.user_id);
             setRecruitingBoardPosition(recruitingBoardData.position || null);
-            // Initialize form data with athlete data including tier
+            // Initialize form data with athlete data including tier and source
             setFormData({
-              tier: recruitingBoardData.athlete_tier || "" // Use stored tier or empty string for no tier
+              tier: recruitingBoardData.athlete_tier || "", // Use stored tier or empty string for no tier
+              source: recruitingBoardData.source || "" // Use stored source or empty string for no source
             });
           } else {
             setRecruitingBoardPosition(null);
             // Initialize form data with default values if no recruiting board entry found
             setFormData({
-              tier: "" // Default to no tier
+              tier: "", // Default to no tier
+              source: "" // Default to no source
             });
           }
         }
@@ -245,15 +248,19 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
         setCurrentCoachId(selectedCoachId);
       }
 
-      // Save tier if changed
+      // Save tier and source if changed
       const tierValue = formData.tier === "" ? null : formData.tier;
-      const { error: tierError } = await supabase
+      const sourceValue = formData.source === "" ? null : formData.source;
+      const { error: updateError } = await supabase
         .from('recruiting_board')
-        .update({ athlete_tier: tierValue })
+        .update({ 
+          athlete_tier: tierValue,
+          source: sourceValue
+        })
         .eq('athlete_id', athleteId)
         .eq('customer_id', activeCustomerId);
 
-      if (tierError) throw tierError;
+      if (updateError) throw updateError;
 
       // Show success message
       alert('Changes saved successfully!');
@@ -472,6 +479,21 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
                       { value: "1", label: "Tier 1" },
                       { value: "2", label: "Tier 2" },
                       { value: "3", label: "Tier 3" },
+                    ]}
+                  />
+                </Flex>
+                <Flex vertical>
+                  <Typography.Text className="opacity-50 mb-1">
+                    Source
+                  </Typography.Text>
+                  <Select
+                    value={formData.source}
+                    onChange={(value) => handleChange(value, 'source')}
+                    options={[
+                      { value: "", label: "No Source" },
+                      { value: "juco", label: "JUCO" },
+                      { value: "pre-portal", label: "Pre-Portal" },
+                      { value: "portal", label: "Portal" },
                     ]}
                   />
                 </Flex>

@@ -25,6 +25,8 @@ import { supabase } from '@/lib/supabaseClient';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useUser } from "@/contexts/CustomerContext";
+import { formatPhoneNumber } from "@/utils/utils";
+import { getPackageIdsBySport } from '@/lib/queries';
 
 // Helper function to determine score color
 function getScoreColor(score: number | undefined | null): string {
@@ -51,12 +53,14 @@ interface RouteInfo {
   }[];
 }
 
-function SortableItem({ location, index, routeInfo, totalLocations, onRemove }: { 
+function SortableItem({ location, index, routeInfo, totalLocations, onRemove, userDetails, hasFootballPackage }: { 
   location: School; 
   index: number;
   routeInfo?: RouteInfo;
   totalLocations: number;
   onRemove: (index: number) => void;
+  userDetails?: any;
+  hasFootballPackage?: boolean;
 }) {
   const {
     attributes,
@@ -91,7 +95,7 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove }: 
               <div>
                 <div className="flex items-center flex-wrap mb-1">
                   <div className="font-semibold text-lg mr-2">{location.school}</div>
-                  {location.record_2024 && (
+                  {location.record_2024 && hasFootballPackage && (
                     <div className="text-gray-700 bg-blue-100 px-2 py-0.5 rounded text-xs mr-1">
                       {location.record_2024}
                     </div>
@@ -123,38 +127,39 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove }: 
               
               {/* Second column - Coach information */}
               <div className="text-sm">
-                {(location.head_coach_first || location.head_coach_last) && (
+                {(location.head_coach_first || location.head_coach_last) && hasFootballPackage && (
                   <div className="font-medium text-gray-800 mb-1">
                     Coach: {location.head_coach_first} {location.head_coach_last}
                   </div>
                 )}
-                {location.head_coach_email && (
+                {location.head_coach_email && hasFootballPackage && (
                   <div className="text-gray-600">
                     Email: {location.head_coach_email}
                   </div>
                 )}
-                {location.head_coach_cell && (
+                {location.head_coach_cell && hasFootballPackage && (
                   <div className="text-gray-600">
-                    Cell: {location.head_coach_cell} {(location.coach_best_contact === 'cell' || location.best_phone === 'Cell') && <span className="text-blue-600 font-medium">(best)</span>}
+                    Cell: {formatPhoneNumber(location.head_coach_cell)} {(location.coach_best_contact === 'cell' || location.best_phone === 'Cell') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
                   </div>
                 )}
-                {location.head_coach_work_phone && (
+                {location.head_coach_work_phone && hasFootballPackage && (
                   <div className="text-gray-600">
-                    Work: {location.head_coach_work_phone} {(location.coach_best_contact === 'work' || location.best_phone === 'Office') && <span className="text-blue-600 font-medium">(best)</span>}
+                    Work: {formatPhoneNumber(location.head_coach_work_phone)} {(location.coach_best_contact === 'work' || location.best_phone === 'Office') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
                   </div>
                 )}
-                {location.head_coach_home_phone && (
+                {location.head_coach_home_phone && hasFootballPackage && (
                   <div className="text-gray-600">
-                    Home: {location.head_coach_home_phone} {(location.coach_best_contact === 'home' || location.best_phone === 'Home') && <span className="text-blue-600 font-medium">(best)</span>}
+                    Home: {formatPhoneNumber(location.head_coach_home_phone)} {(location.coach_best_contact === 'home' || location.best_phone === 'Home') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
                   </div>
                 )}
-                {location.coach_twitter_handle && (
+                {location.coach_twitter_handle && hasFootballPackage && (
                   <div className="text-gray-600">
                     Twitter: {location.coach_twitter_handle}
                   </div>
                 )}
                 {location.coach_best_contact && location.coach_best_contact !== 'cell' && 
-                 location.coach_best_contact !== 'work' && location.coach_best_contact !== 'home' && (
+                 location.coach_best_contact !== 'work' && location.coach_best_contact !== 'home' && 
+                 hasFootballPackage && (
                   <div className="text-gray-600">
                     Best Contact: {location.coach_best_contact}
                   </div>
@@ -277,6 +282,11 @@ export default function MapPage() {
   const pdfContentRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const userDetails = useUser();
+  
+  // Check if user has any football package to determine if coach info should be shown
+  const footballPackageIds = getPackageIdsBySport('fb');
+  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) => Number(pkg));
+  const hasFootballPackage = footballPackageIds.some(id => userPackageNumbers.includes(id));
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -317,7 +327,7 @@ export default function MapPage() {
           school = schoolInfo?.school || 'Unknown School';
         }
         
-        console.log(`Geocoding ${address}, school: ${school}`);
+        // Debug log removed(`Geocoding ${address}, school: ${school}`);
         
         // Find the corresponding school info for all additional data
         const schoolInfo = storedSchoolData.find(item => item.address === address);
@@ -604,7 +614,7 @@ export default function MapPage() {
       
       if (userDetails.customer_id && pennStateTeamIds.includes(userDetails.customer_id)) {
         requestingCollege = "Penn State University";
-        console.log("Using Penn State override for customer_id:", userDetails.customer_id);
+        // Debug log removed("Using Penn State override for customer_id:", userDetails.customer_id);
       } else {
         try {
           // Query the customers table
@@ -655,7 +665,7 @@ export default function MapPage() {
       // Define the filename here so it's in scope for the entire function
       const coverPageFileName = `${year}-${month}-${day}${userDetails.name_first || ''}${userDetails.name_last || ''}${randomDigits}.pdf`;
       lastPdfFilename = coverPageFileName;
-      console.log('Generated filename:', coverPageFileName);
+      // Debug log removed('Generated filename:', coverPageFileName);
       
       // Create PDF of the map content
       try {
@@ -668,11 +678,11 @@ export default function MapPage() {
 
         try {
           // Delay to ensure the map is fully rendered with all markers
-          console.log('Waiting for map to render fully...');
+          // Debug log removed('Waiting for map to render fully...');
           await new Promise(resolve => setTimeout(resolve, 1000));
 
           // Capture the content container with improved settings for map bubbles
-          console.log('Capturing content with html2canvas...');
+          // Debug log removed('Capturing content with html2canvas...');
           const canvas = await html2canvas(pdfContentRef.current, {
             scale: 1.5, // Maintain good quality
             useCORS: true,
@@ -725,7 +735,7 @@ export default function MapPage() {
             }
           });
           
-          console.log('Creating PDF document...');
+          // Debug log removed('Creating PDF document...');
           // Create PDF with portrait orientation
           const pdf = new jsPDF({
             orientation: 'portrait', // Change to portrait
@@ -767,10 +777,10 @@ export default function MapPage() {
           // Add the captured image to the PDF with proper sizing
           pdf.addImage(imgData, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
           
-          console.log('Converting PDF to blob...');
+          // Debug log removed('Converting PDF to blob...');
           const pdfBlob = pdf.output('blob');
           const blobSizeKB = Math.round(pdfBlob.size / 1024);
-          console.log('PDF blob size:', blobSizeKB, 'KB');
+          // Debug log removed('PDF blob size:', blobSizeKB, 'KB');
           
           // Store the PDF blob for later use
           lastCreatedPdfBlob = pdfBlob;
@@ -782,7 +792,7 @@ export default function MapPage() {
           const isFileTooLarge = blobSizeKB > 9000; // Cloud Functions have a 10MB limit
           
           if (isFileTooLarge) {
-            console.log('File size exceeds recommended limit. Attempting to reduce size...');
+            // Debug log removed('File size exceeds recommended limit. Attempting to reduce size...');
             
             // Try to create a smaller version of the PDF
             const smallerCanvas = await html2canvas(pdfContentRef.current, {
@@ -867,18 +877,18 @@ export default function MapPage() {
             
             const smallerPdfBlob = smallerPdf.output('blob');
             const smallerSizeKB = Math.round(smallerPdfBlob.size / 1024);
-            console.log('Reduced PDF size to:', smallerSizeKB, 'KB');
+            // Debug log removed('Reduced PDF size to:', smallerSizeKB, 'KB');
             
             // Store the smaller PDF blob for later use if it's better
             if (smallerSizeKB < blobSizeKB * 0.7) {
-              console.log('Using smaller PDF version');
+              // Debug log removed('Using smaller PDF version');
               lastCreatedPdfBlob = smallerPdfBlob;
               // Also update state
               setPdfBlob(smallerPdfBlob);
               await uploadPdfToStorage(smallerPdfBlob, coverPageFileName, requestingCollege);
             } else {
               // Still try with the original but warn user
-              console.log('Could not significantly reduce PDF size. Will attempt upload anyway.');
+              // Debug log removed('Could not significantly reduce PDF size. Will attempt upload anyway.');
               await uploadPdfToStorage(pdfBlob, coverPageFileName, requestingCollege);
             }
           } else {
@@ -904,7 +914,7 @@ export default function MapPage() {
           cover_page: coverPageFileName 
         });
 
-        console.log("Sending to Cloud Function:", postData);
+        // Debug log removed("Sending to Cloud Function:", postData);
 
         // Show success message immediately after submitting request
         alert("Print request submitted successfully! You'll receive the PDF shortly.");
@@ -924,7 +934,7 @@ export default function MapPage() {
           return response.json();
         })
         .then(data => {
-          console.log("Print request completed:", data);
+          // Debug log removed("Print request completed:", data);
         })
         .catch(error => {
           console.error("Error with cloud function:", error);
@@ -952,7 +962,7 @@ export default function MapPage() {
     coverPageFileName: string, 
     requestingCollege: string
   ): Promise<void> {
-    console.log('Uploading PDF to Google Cloud Storage bucket: excel-to-pdf-output-bucket...');
+    // Debug log removed('Uploading PDF to Google Cloud Storage bucket: excel-to-pdf-output-bucket...');
     
     // Create a local download URL for the PDF blob immediately
     const localDownloadUrl = URL.createObjectURL(pdfBlob);
@@ -961,7 +971,7 @@ export default function MapPage() {
       // First try the standard upload to Google Cloud Storage
       const pdfUrl = await uploadToGoogleCloudStorage(pdfBlob, coverPageFileName);
       
-      console.log('PDF uploaded successfully to Google Cloud Storage bucket:', pdfUrl);
+      // Debug log removed('PDF uploaded successfully to Google Cloud Storage bucket:', pdfUrl);
       
       // No need to show confirmation dialog, the user now has a download button in the UI
     } catch (uploadError: unknown) {
@@ -969,7 +979,7 @@ export default function MapPage() {
       
       // Log the error but don't show confirmation dialog since there's a download button in the UI
       const errorMessage = uploadError instanceof Error ? uploadError.message : 'Unknown error';
-      console.log(`Error saving PDF to Google Cloud Storage: ${errorMessage}. The PDF is still available for download via the Download Cover button.`);
+      // Debug log removed(`Error saving PDF to Google Cloud Storage: ${errorMessage}. The PDF is still available for download via the Download Cover button.`);
       throw uploadError;
     } finally {
       // Only revoke the URL after the user has had a chance to download it
@@ -1126,92 +1136,94 @@ export default function MapPage() {
           {/* Controls section - moved from fixed header to scrollable content */}
           <div className="mb-6 top-0 z-10 pt-2 pb-4 border-b border-gray-100">
             <div className="flex flex-wrap gap-4 items-start justify-between">
-              {/* Print group with filters in matching color scheme */}
-              <div className="flex items-center flex-wrap gap-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <button
-                  onClick={handlePrint}
-                  disabled={isPrinting || locations.length === 0}
-                  className="px-5 py-2 bg-amber-500 text-white font-semibold rounded-md shadow hover:bg-amber-600 transition duration-200 disabled:bg-amber-300 disabled:cursor-not-allowed flex items-center gap-2"
-                >
-                  {isPrinting ? (
-                    <>
-                      <span className="animate-spin inline-block">⟳</span>
-                      <span className="!text-white">Creating PDF...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>🖨️</span>
-                      <span className="!text-white">Print PDF</span>
-                    </>
-                  )}
-                </button>
+               {/* Print group with filters in matching color scheme - only show if user has football package */}
+               {hasFootballPackage && (
+                 <div className="flex items-center flex-wrap gap-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                   <button
+                     onClick={handlePrint}
+                     disabled={isPrinting || locations.length === 0}
+                     className="px-5 py-2 bg-amber-500 text-white font-semibold rounded-md shadow hover:bg-amber-600 transition duration-200 disabled:bg-amber-300 disabled:cursor-not-allowed flex items-center gap-2"
+                   >
+                     {isPrinting ? (
+                       <>
+                         <span className="animate-spin inline-block">⟳</span>
+                         <span className="!text-white">Creating PDF...</span>
+                       </>
+                     ) : (
+                       <>
+                         <span>🖨️</span>
+                         <span className="!text-white">Print PDF</span>
+                       </>
+                     )}
+                   </button>
+                   
+                   {/* Add download button that's visible when PDF blob is available */}
+                   {pdfBlob && (
+                     <button
+                       onClick={() => {
+                         try {
+                           if (pdfBlob && pdfFilename) {
+                             // Debug log removed('Downloading cover page PDF...');
+                             const url = URL.createObjectURL(pdfBlob);
+                             const a = document.createElement('a');
+                             a.href = url;
+                             a.download = pdfFilename;
+                             document.body.appendChild(a);
+                             a.click();
+                             document.body.removeChild(a);
+                             
+                             // Clean up the URL after a short delay to ensure the download starts
+                             setTimeout(() => {
+                               URL.revokeObjectURL(url);
+                               // Debug log removed('Download link cleaned up');
+                             }, 5000);
+                           } else {
+                             console.error('PDF blob or filename is missing');
+                           }
+                         } catch (error) {
+                           console.error('Error downloading PDF:', error);
+                           alert('There was an error downloading the PDF. Please try again.');
+                         }
+                       }}
+                       className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-md shadow hover:bg-blue-600 transition duration-200 flex items-center gap-2"
+                     >
+                       <span>⬇️</span>
+                       <span className="!text-white">Download Cover</span>
+                     </button>
+                   )}
                 
-                {/* Add download button that's visible when PDF blob is available */}
-                {pdfBlob && (
-                  <button
-                    onClick={() => {
-                      try {
-                        if (pdfBlob && pdfFilename) {
-                          console.log('Downloading cover page PDF...');
-                          const url = URL.createObjectURL(pdfBlob);
-                          const a = document.createElement('a');
-                          a.href = url;
-                          a.download = pdfFilename;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          
-                          // Clean up the URL after a short delay to ensure the download starts
-                          setTimeout(() => {
-                            URL.revokeObjectURL(url);
-                            console.log('Download link cleaned up');
-                          }, 5000);
-                        } else {
-                          console.error('PDF blob or filename is missing');
-                        }
-                      } catch (error) {
-                        console.error('Error downloading PDF:', error);
-                        alert('There was an error downloading the PDF. Please try again.');
-                      }
-                    }}
-                    className="px-5 py-2 bg-blue-500 text-white font-semibold rounded-md shadow hover:bg-blue-600 transition duration-200 flex items-center gap-2"
-                  >
-                    <span>⬇️</span>
-                    <span className="!text-white">Download Cover</span>
-                  </button>
-                )}
-                
-                <div className="flex flex-col">
-                  <label htmlFor="minAthleticLevel" className="text-xs font-medium text-amber-800 mb-1">Min Athletic Level</label>
-                  <select 
-                    id="minAthleticLevel"
-                    value={minAthleticLevel} 
-                    onChange={(e) => setMinAthleticLevel(e.target.value)}
-                    className="border border-amber-300 rounded-md px-2 py-1 bg-white text-amber-800 text-sm h-9 w-36"
-                  >
-                    <option value="D3">D3</option>
-                    <option value="D2">D2</option>
-                    <option value="FCS">FCS</option>
-                    <option value="G5">G5</option>
-                    <option value="P4">P4</option>
-                  </select>
-                </div>
-                
-                <div className="flex flex-col">
-                  <label htmlFor="minGradYear" className="text-xs font-medium text-amber-800 mb-1">Min Grad Year</label>
-                  <select 
-                    id="minGradYear"
-                    value={minGradYear} 
-                    onChange={(e) => setMinGradYear(e.target.value)}
-                    className="border border-amber-300 rounded-md px-2 py-1 bg-white text-amber-800 text-sm h-9 w-36"
-                  >
-                    <option value="2025">2025</option>
-                    <option value="2026">2026</option>
-                    <option value="2027">2027</option>
-                    <option value="2028">2028</option>
-                  </select>
-                </div>
-              </div>
+                   <div className="flex flex-col">
+                     <label htmlFor="minAthleticLevel" className="text-xs font-medium text-amber-800 mb-1">Min Athletic Level</label>
+                     <select 
+                       id="minAthleticLevel"
+                       value={minAthleticLevel} 
+                       onChange={(e) => setMinAthleticLevel(e.target.value)}
+                       className="border border-amber-300 rounded-md px-2 py-1 bg-white text-amber-800 text-sm h-9 w-36"
+                     >
+                       <option value="D3">D3</option>
+                       <option value="D2">D2</option>
+                       <option value="FCS">FCS</option>
+                       <option value="G5">G5</option>
+                       <option value="P4">P4</option>
+                     </select>
+                   </div>
+                   
+                   <div className="flex flex-col">
+                     <label htmlFor="minGradYear" className="text-xs font-medium text-amber-800 mb-1">Min Grad Year</label>
+                     <select 
+                       id="minGradYear"
+                       value={minGradYear} 
+                       onChange={(e) => setMinGradYear(e.target.value)}
+                       className="border border-amber-300 rounded-md px-2 py-1 bg-white text-amber-800 text-sm h-9 w-36"
+                     >
+                       <option value="2025">2025</option>
+                       <option value="2026">2026</option>
+                       <option value="2027">2027</option>
+                       <option value="2028">2028</option>
+                     </select>
+                   </div>
+                 </div>
+               )}
               
               <div className="flex flex-wrap gap-4 items-center">
                 <button
@@ -1336,31 +1348,33 @@ export default function MapPage() {
                   </div>
                 )}
 
-                <div className="mt-6">
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={locations.map((_, index) => index)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <div className="space-y-2">
-                        {locations.map((location, index) => (
-                          <SortableItem
-                            key={index}
-                            location={location}
-                            index={index}
-                            routeInfo={routeInfo || undefined}
-                            totalLocations={locations.length}
-                            onRemove={handleRemoveLocation}
-                          />
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                </div>
+                 <div className="mt-6">
+                   <DndContext
+                     sensors={sensors}
+                     collisionDetection={closestCenter}
+                     onDragEnd={handleDragEnd}
+                   >
+                     <SortableContext
+                       items={locations.map((_, index) => index)}
+                       strategy={verticalListSortingStrategy}
+                     >
+                       <div className="space-y-2">
+                         {locations.map((location, index) => (
+                           <SortableItem
+                             key={index}
+                             location={location}
+                             index={index}
+                             routeInfo={routeInfo || undefined}
+                             totalLocations={locations.length}
+                             onRemove={handleRemoveLocation}
+                             userDetails={userDetails}
+                             hasFootballPackage={hasFootballPackage}
+                           />
+                         ))}
+                       </div>
+                     </SortableContext>
+                   </DndContext>
+                 </div>
               </div>
             )}
 
@@ -1491,14 +1505,14 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
     const shouldBypassCloudUpload = false; // Changed to always try the cloud function even in development
     
     if (shouldBypassCloudUpload) {
-      console.log('Development mode: Bypassing cloud upload, returning direct download URL');
+      // Debug log removed('Development mode: Bypassing cloud upload, returning direct download URL');
       const downloadUrl = URL.createObjectURL(file);
       return downloadUrl;
     }
     
     // Always create a local copy of the PDF as a backup
     const localDownloadUrl = URL.createObjectURL(file);
-    console.log('Created local backup URL:', localDownloadUrl);
+    // Debug log removed('Created local backup URL:', localDownloadUrl);
     
     // Create a download link that users can click if cloud storage fails
     try {
@@ -1507,7 +1521,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
       backupLink.download = coverPageFileName;
       backupLink.style.display = 'none';
       document.body.appendChild(backupLink);
-      console.log('Created backup download link for emergency use');
+      // Debug log removed('Created backup download link for emergency use');
       
       // We'll keep this link in the DOM for emergency use
       // but hidden from view
@@ -1520,7 +1534,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
     
     // Convert Blob to File
     const pdfFile = new File([file], coverPageFileName, { type: 'application/pdf' });
-    console.log(`Preparing to upload file: ${coverPageFileName}, size: ${Math.round(file.size/1024)}KB`);
+    // Debug log removed(`Preparing to upload file: ${coverPageFileName}, size: ${Math.round(file.size/1024)}KB`);
     
     // Create FormData to send the file
     const formData = new FormData();
@@ -1532,7 +1546,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
     // Try direct cloud function upload first instead of API route
     // This is more reliable as it avoids double-handling the file
     try {
-      console.log('Attempting direct upload with JSON payload...');
+      // Debug log removed('Attempting direct upload with JSON payload...');
       
       // Use the production URL even in development mode since localhost isn't running
       const cloudFunctionUrl = 'https://us-central1-verified-312021.cloudfunctions.net/uploadPDF';
@@ -1540,7 +1554,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
       // Convert the file to a base64 string
       const arrayBuffer = await file.arrayBuffer();
       const base64Data = Buffer.from(arrayBuffer).toString('base64');
-      console.log(`File converted to base64 (${Math.round(base64Data.length/1024)}KB encoded size)`);
+      // Debug log removed(`File converted to base64 (${Math.round(base64Data.length/1024)}KB encoded size)`);
       
       // Create JSON payload - include the "cover_pages/" prefix in the destination
       const payload = {
@@ -1551,10 +1565,10 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
         base64Data: base64Data
       };
       
-      console.log('Upload destination path:', payload.destination);
+      // Debug log removed('Upload destination path:', payload.destination);
       
       // Use the cloud function that accepts JSON payload
-      console.log(`Sending request to cloud function at ${cloudFunctionUrl}...`);
+      // Debug log removed(`Sending request to cloud function at ${cloudFunctionUrl}...`);
       const directResponse = await fetch(cloudFunctionUrl, {
         method: 'POST',
         headers: {
@@ -1575,10 +1589,10 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
       let directData;
       try {
         directData = await directResponse.json();
-        console.log('Direct upload response:', directData);
+        // Debug log removed('Direct upload response:', directData);
       } catch (jsonError) {
         console.error('Error parsing JSON response:', jsonError);
-        console.log('Raw response:', await directResponse.text());
+        // Debug log removed('Raw response:', await directResponse.text());
         throw new Error('Failed to parse response from cloud function');
       }
       
@@ -1587,7 +1601,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
       
       // Add verification step for the file
       try {
-        console.log(`Verifying file exists at: ${fileUrl}`);
+        // Debug log removed(`Verifying file exists at: ${fileUrl}`);
         // Wait a moment for cloud storage to process
         await new Promise(resolve => setTimeout(resolve, 3000)); // Wait longer - 3 seconds
         
@@ -1601,7 +1615,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
         
         // Since we're using no-cors, we can't check the status directly
         // But we can assume the file exists if we didn't get an exception
-        console.log('Verification request completed without errors - assuming file exists');
+        // Debug log removed('Verification request completed without errors - assuming file exists');
         
         // Create a direct download link for the user
         if (typeof window !== 'undefined') {
@@ -1613,7 +1627,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
             testLink.style.display = 'none';
             testLink.textContent = 'Test Link';
             document.body.appendChild(testLink);
-            console.log('Created test link for GCS file');
+            // Debug log removed('Created test link for GCS file');
             
             // Clean up after a short delay
             setTimeout(() => {
@@ -1630,7 +1644,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
       } catch (verifyError) {
         console.warn('Error verifying file in bucket:', verifyError);
         // Return the local URL instead
-        console.log('Falling back to local URL due to verification error');
+        // Debug log removed('Falling back to local URL due to verification error');
         return localDownloadUrl;
       }
     } catch (directUploadError) {
@@ -1638,7 +1652,7 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
       
       // Now try the API route as a fallback
       try {
-        console.log('Attempting to upload via Next.js API route as fallback...');
+        // Debug log removed('Attempting to upload via Next.js API route as fallback...');
         const response = await fetch('/api/uploadToGCS', {
           method: 'POST',
           body: formData,
@@ -1646,17 +1660,17 @@ async function uploadToGoogleCloudStorage(file: Blob, coverPageFileName: string)
         
         if (response.ok) {
           const data = await response.json();
-          console.log('Upload response from Next.js API:', data);
+          // Debug log removed('Upload response from Next.js API:', data);
           
           if (data.url) {
             // Verify the file exists in the bucket by making a HEAD request
             try {
-              console.log(`Verifying file exists at: ${data.url}`);
+              // Debug log removed(`Verifying file exists at: ${data.url}`);
               // Wait a moment for cloud storage to process
               await new Promise(resolve => setTimeout(resolve, 3000)); // Wait longer - 3 seconds
               const verifyResponse = await fetch(data.url, { method: 'HEAD' });
               if (verifyResponse.ok) {
-                console.log('Verification successful: File exists in bucket');
+                // Debug log removed('Verification successful: File exists in bucket');
                 return data.url;
               } else {
                 console.warn(`Verification failed: File might not exist in bucket (status: ${verifyResponse.status})`);

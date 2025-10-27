@@ -1,694 +1,667 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { DndContext, DragEndEvent, DragStartEvent, DragOverEvent, DragOverlay } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
-import { useDraggable, useDroppable } from '@dnd-kit/core';
-import styles from './DepthChart.module.css';
-import { fetchUserDetails, fetchSubPositions, addSubPosition as addSubPositionToDB, updateSubPosition, softDeleteSubPosition, fetchFormations, addFormation, updateFormation, softDeleteFormation } from '@/utils/utils';
-import { DepthChartSubPosition, DepthChartFormation } from '@/types/depthChart';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { DndProvider } from 'react-dnd/dist/core';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { Button, Spin, message, Modal, Input } from 'antd';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { 
+  fetchFormations, 
+  fetchSubPositions, 
+  addFormation, 
+  updateFormation, 
+  softDeleteFormation,
+  addSubPosition,
+  updateSubPosition,
+  softDeleteSubPosition
+} from '@/utils/utils';
+import FormationDropdown from '../depth-chart/FormationDropdown';
+import { 
+  getDepthChartSummary,
+  assignAthleteToDepthChart,
+  removeAthleteFromDepthChart,
+  moveAthleteRanking,
+  recalculateRankingsForPosition,
+  createTie
+} from '@/utils/depthChartUtils';
+import { DepthChartFormation, DepthChartSubPosition } from '@/types/depthChart';
+import { AthleteData } from '@/types/database';
+import { useUserData } from '@/hooks/useUserData';
 import { useZoom } from '@/contexts/ZoomContext';
-
-interface Player {
-  id: string;
-  name: string;
-  position: string;
-  rank: number;
-  subPosition: string;
-  image?: string;
-}
+import { supabase } from '@/lib/supabaseClient';
+import AthleteSelector from '../depth-chart/AthleteSelector';
+import DraggableSubPosition from '../depth-chart/DraggableSubPosition';
+import FieldDropZone from '../depth-chart/FieldDropZone';
+import CustomDragLayer from '../depth-chart/CustomDragLayer';
+import styles from './DepthChart.module.css';
 
 interface DepthChartProps {
   selectedYear?: number;
-  selectedMonth?: string;
+  selectedMonth?: number;
   selectedScenario?: string;
   activeFilters?: { [key: string]: string[] | string };
+  zoom?: number;
 }
 
-// Draggable SubPosition Header Component
-const DraggableSubPositionHeader: React.FC<{
-  subPosition: DepthChartSubPosition;
-  onPositionChange: (id: string, x: number, y: number) => void;
-  onDelete: (id: string) => void;
-}> = ({ subPosition, onPositionChange, onDelete }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    isDragging,
-  } = useDraggable({ 
-    id: subPosition.id
-  });
-
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    position: 'absolute' as const,
-    left: subPosition.x_coord,
-    top: subPosition.y_coord,
-    zIndex: isDragging ? 1000 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={
-        isDragging
-          ? `${styles.subPositionHeader} ${styles.subPositionHeaderDragging}`
-          : styles.subPositionHeader
-      }
-    >
-      <span className={styles.positionName}>{subPosition.name}</span>
-    </div>
-  );
-};
-
-// Droppable Trash Can Component
-const DroppableTrashCan: React.FC<{
-  isOver: boolean;
-  onDelete: (id: string) => void;
-  zoom: number;
-  onAddSubPosition: () => void;
-  formations: DepthChartFormation[];
-  selectedFormationId: string | null;
-  onFormationChange: (formationId: string) => void;
-  onAddFormation: () => void;
-  onDeleteFormation: (formationId: string) => void;
-  onMoveFormation: (formationId: string, direction: 'up' | 'down') => void;
-  onCopyFormation: (formationId: string) => void;
-  isDropdownOpen: boolean;
-  onToggleDropdown: () => void;
-}> = ({ 
-  isOver, 
-  onDelete, 
-  zoom, 
-  onAddSubPosition, 
-  formations, 
-  selectedFormationId, 
-  onFormationChange, 
-  onAddFormation, 
-  onDeleteFormation,
-  onMoveFormation,
-  onCopyFormation,
-  isDropdownOpen,
-  onToggleDropdown
-}) => {
-  const { setNodeRef, isOver: isOverCurrent } = useDroppable({
-    id: 'trash-can',
-  });
-
-  return (
-    <div style={{
-      position: 'absolute',
-      top: '20px',
-      right: '20px',
-      display: 'flex',
-      gap: '10px',
-      alignItems: 'center',
-    }}>
-      <FormationDropdown
-        formations={formations}
-        selectedFormationId={selectedFormationId}
-        onFormationChange={onFormationChange}
-        onAddFormation={onAddFormation}
-        onDeleteFormation={onDeleteFormation}
-        onMoveFormation={onMoveFormation}
-        onCopyFormation={onCopyFormation}
-        isOpen={isDropdownOpen}
-        onToggle={onToggleDropdown}
-      />
-      
-      <button
-        onClick={onAddSubPosition}
-        style={{
-          padding: '8px 16px',
-          backgroundColor: '#007bff',
-          color: 'white',
-          border: 'none',
-          borderRadius: '20px',
-          cursor: 'pointer',
-          fontSize: '14px',
-          fontWeight: '500',
-          transition: 'all 0.2s ease',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#0056b3';
-          e.currentTarget.style.transform = 'scale(1.05)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '#007bff';
-          e.currentTarget.style.transform = 'scale(1)';
-        }}
-      >
-        + Position
-      </button>
-      
-      <div 
-        ref={setNodeRef}
-        className={`trash-can ${isOver || isOverCurrent ? 'active' : ''}`}
-        style={{
-          width: '60px',
-          height: '60px',
-          transform: (isOver || isOverCurrent) ? 'scale(1.1)' : 'scale(1)',
-          backgroundColor: (isOver || isOverCurrent) ? '#dc3545' : '#6c757d',
-          borderRadius: '50%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          boxShadow: (isOver || isOverCurrent) ? '0 4px 12px rgba(220, 53, 69, 0.4)' : '0 2px 8px rgba(0,0,0,0.1)',
-        }}
-      >
-        <svg 
-          width="24" 
-          height="24" 
-          viewBox="0 0 24 24" 
-          fill="white"
-          style={{ transition: 'all 0.2s ease' }}
-        >
-          <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-        </svg>
-      </div>
-    </div>
-  );
-};
-
-// Custom Formation Dropdown Component
-const FormationDropdown: React.FC<{
-  formations: DepthChartFormation[];
-  selectedFormationId: string | null;
-  onFormationChange: (formationId: string) => void;
-  onAddFormation: () => void;
-  onDeleteFormation: (formationId: string) => void;
-  onMoveFormation: (formationId: string, direction: 'up' | 'down') => void;
-  onCopyFormation: (formationId: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ 
-  formations, 
-  selectedFormationId, 
-  onFormationChange, 
-  onAddFormation, 
-  onDeleteFormation, 
-  onMoveFormation,
-  onCopyFormation,
-  isOpen,
-  onToggle
-}) => {
-  const selectedFormation = formations.find(f => f.id === selectedFormationId);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        onToggle();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isOpen, onToggle]);
-
-  return (
-    <div ref={dropdownRef} style={{ position: 'relative' }}>
-      <button
-        onClick={onToggle}
-        style={{
-          padding: '8px 12px',
-          border: '1px solid #ddd',
-          borderRadius: '6px',
-          fontSize: '14px',
-          backgroundColor: 'white',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          minWidth: '200px',
-          justifyContent: 'space-between',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          transition: 'all 0.2s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = '#007bff';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = '#ddd';
-        }}
-      >
-        <span>{selectedFormation?.name || 'Select Formation'}</span>
-        <svg 
-          width="12" 
-          height="12" 
-          viewBox="0 0 24 24" 
-          fill="currentColor"
-          style={{ 
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s ease'
-          }}
-        >
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
-          border: '1px solid #ddd',
-          borderRadius: '6px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          zIndex: 1000,
-          maxHeight: '300px',
-          overflowY: 'auto',
-          marginTop: '4px',
-        }}>
-          {formations.map((formation, index) => (
-            <div
-              key={formation.id}
-              style={{
-                padding: '12px',
-                borderBottom: index < formations.length - 1 ? '1px solid #f0f0f0' : 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                cursor: 'pointer',
-                backgroundColor: formation.id === selectedFormationId ? '#f8f9fa' : 'white',
-                transition: 'background-color 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                if (formation.id !== selectedFormationId) {
-                  e.currentTarget.style.backgroundColor = '#f8f9fa';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (formation.id !== selectedFormationId) {
-                  e.currentTarget.style.backgroundColor = 'white';
-                }
-              }}
-              onClick={() => {
-                onFormationChange(formation.id);
-                onToggle();
-              }}
-            >
-              <span style={{ 
-                fontWeight: formation.id === selectedFormationId ? '600' : '400',
-                color: formation.id === selectedFormationId ? '#007bff' : '#333'
-              }}>
-                {formation.name}
-              </span>
-              
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMoveFormation(formation.id, 'up');
-                  }}
-                  disabled={index === 0}
-                  style={{
-                    padding: '4px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    cursor: index === 0 ? 'not-allowed' : 'pointer',
-                    borderRadius: '3px',
-                    opacity: index === 0 ? 0.3 : 1,
-                  }}
-                  title="Move Up"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#666">
-                    <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/>
-                  </svg>
-                </button>
-                
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMoveFormation(formation.id, 'down');
-                  }}
-                  disabled={index === formations.length - 1}
-                  style={{
-                    padding: '4px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    cursor: index === formations.length - 1 ? 'not-allowed' : 'pointer',
-                    borderRadius: '3px',
-                    opacity: index === formations.length - 1 ? 0.3 : 1,
-                  }}
-                  title="Move Down"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#666">
-                    <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"/>
-                  </svg>
-                </button>
-                
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onCopyFormation(formation.id);
-                  }}
-                  style={{
-                    padding: '4px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    cursor: 'pointer',
-                    borderRadius: '3px',
-                  }}
-                  title="Copy Formation"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#17a2b8">
-                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-                  </svg>
-                </button>
-                
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (formations.length > 1) {
-                      if (confirm(`Are you sure you want to delete "${formation.name}"? This action cannot be undone.`)) {
-                        onDeleteFormation(formation.id);
-                      }
-                    }
-                  }}
-                  disabled={formations.length <= 1}
-                  style={{
-                    padding: '4px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    cursor: formations.length <= 1 ? 'not-allowed' : 'pointer',
-                    borderRadius: '3px',
-                    opacity: formations.length <= 1 ? 0.3 : 1,
-                  }}
-                  title="Delete Formation"
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#dc3545">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ))}
-          
-          {/* Add Formation Option */}
-          <div
-            style={{
-              padding: '12px',
-              borderTop: '2px solid #e9ecef',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              backgroundColor: '#f8f9fa',
-              transition: 'background-color 0.2s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e9ecef';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#f8f9fa';
-            }}
-            onClick={() => {
-              onAddFormation();
-              onToggle();
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="#28a745">
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-            </svg>
-            <span style={{ color: '#28a745', fontWeight: '500' }}>Add New Formation</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Player Card Component
-const PlayerCard: React.FC<{
-  player: Player;
-  onRankChange: (playerId: string, newRank: number) => void;
-  onSubPositionChange: (playerId: string, newSubPosition: string) => void;
-  availableSubPositions: DepthChartSubPosition[];
-}> = ({ player, onRankChange, onSubPositionChange, availableSubPositions }) => {
-  return (
-    <div className="player-card">
-      <div className="player-image">
-        <img 
-          src={player.image || '/player-icon.svg'} 
-          alt={player.name}
-          onError={(e) => {
-            e.currentTarget.src = '/player-icon.svg';
-          }}
-        />
-      </div>
-      <div className="player-info">
-        <div className="player-name">{player.name}</div>
-        <div className="player-position">{player.position}</div>
-      </div>
-      <div className="player-controls">
-        <select
-          value={player.rank}
-          onChange={(e) => onRankChange(player.id, parseInt(e.target.value))}
-          className="rank-select"
-        >
-          {Array.from({ length: 10 }, (_, i) => i + 1).map(rank => (
-            <option key={rank} value={rank}>{rank}</option>
-          ))}
-        </select>
-        <select
-          value={player.subPosition}
-          onChange={(e) => onSubPositionChange(player.id, e.target.value)}
-          className="sub-position-select"
-        >
-          <option value="">Select Sub-Position</option>
-          {availableSubPositions.map(subPos => (
-            <option key={subPos.id} value={subPos.id}>{subPos.name}</option>
-          ))}
-        </select>
-      </div>
-    </div>
-  );
-};
+interface SubPositionWithAssignments {
+  id: string;
+  name: string;
+  x_coord: number;
+  y_coord: number;
+  assignments: any[];
+  depth_chart_formation_id?: string;
+  created_at?: string;
+  ended_at?: string | null;
+}
 
 const DepthChart: React.FC<DepthChartProps> = ({
   selectedYear = 2025,
-  selectedMonth = 'Jan',
+  selectedMonth = 1,
   selectedScenario = '',
-  activeFilters = {}
+  activeFilters = {},
+  zoom: propZoom
 }) => {
-  const [subPositions, setSubPositions] = useState<DepthChartSubPosition[]>([]);
+  const { activeCustomerId } = useUserData();
+  const { zoom: contextZoom } = useZoom();
+  
+  // Use prop zoom if provided, otherwise fall back to context zoom
+  const zoom = propZoom ?? contextZoom;
+  
+  // State management
   const [formations, setFormations] = useState<DepthChartFormation[]>([]);
   const [selectedFormationId, setSelectedFormationId] = useState<string | null>(null);
-  const [players, setPlayers] = useState<Player[]>([
-    { id: '1', name: 'John Smith', position: 'QB', rank: 1, subPosition: 'QB', image: '/player1.png' },
-    { id: '2', name: 'Mike Johnson', position: 'RB', rank: 1, subPosition: 'RB', image: '/player2.png' },
-    { id: '3', name: 'Tom Wilson', position: 'QB', rank: 2, subPosition: 'QB', image: '/player3.png' },
-  ]);
-  const [newSubPositionName, setNewSubPositionName] = useState('');
+  const [subPositionsWithAssignments, setSubPositionsWithAssignments] = useState<SubPositionWithAssignments[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showAthleteSelector, setShowAthleteSelector] = useState(false);
+  const [selectedSubPositionId, setSelectedSubPositionId] = useState<string | null>(null);
+  
+  // Formation dropdown state
+  const [isFormationDropdownOpen, setIsFormationDropdownOpen] = useState(false);
+  
+  // Sub-position management state
   const [isAddingSubPosition, setIsAddingSubPosition] = useState(false);
-  const [customerId, setCustomerId] = useState<string | null>(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [newSubPositionName, setNewSubPositionName] = useState('');
+  const [showAddSubPositionModal, setShowAddSubPositionModal] = useState(false);
+  
   const containerRef = useRef<HTMLDivElement>(null);
-  const { zoom } = useZoom();
 
-
-
+  // 🔍 FIND THE HTML5 DRAG SOURCE
   useEffect(() => {
-    async function getCustomerId() {
-      const userDetails = await fetchUserDetails();
-      if (userDetails?.customer_id) {
-        setCustomerId(userDetails.customer_id);
-      }
-    }
-    getCustomerId();
-  }, []);
-
-  useEffect(() => {
-    if (!customerId) return;
-    fetchFormations(customerId)
-      .then((formations) => {
-        setFormations(formations);
-        if (formations.length > 0 && !selectedFormationId) {
-          setSelectedFormationId(formations[0].id);
-        }
-      })
-      .catch((e) => console.error('Failed to fetch formations', e));
-  }, [customerId, selectedFormationId]);
-
-  useEffect(() => {
-    if (!selectedFormationId) return;
-    fetchSubPositions(selectedFormationId)
-      .then(setSubPositions)
-      .catch((e) => console.error('Failed to fetch sub-positions', e));
-  }, [selectedFormationId]);
-
-  // Update player assignments when sub-positions change
-  useEffect(() => {
-    setPlayers(prevPlayers => 
-      prevPlayers.map(player => ({
-        ...player,
-        subPosition: subPositions.find(sp => sp.id === player.subPosition) ? player.subPosition : ''
-      }))
-    );
-  }, [subPositions]);
-
-  // Add sub-position (calls Supabase, uses returned UUID)
-  const addSubPosition = async () => {
-    if (!newSubPositionName.trim() || !selectedFormationId) return;
-    try {
-      const newSub = await addSubPositionToDB({
-        depth_chart_formation_id: selectedFormationId!,
-        name: newSubPositionName.trim(),
-        x_coord: 100,
-        y_coord: 100,
-      });
-      setSubPositions(prev => [...prev, newSub]);
-      setNewSubPositionName('');
-      setIsAddingSubPosition(false);
-    } catch (e) {
-      // Optionally: show error
-      console.error('Failed to add sub-position', e);
-    }
-  };
-
-  // Update position in DB on drag
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over, delta } = event;
-    
-    const activeSubPosition = subPositions.find(sp => sp.id === active.id);
-    if (!activeSubPosition) return;
-
-    // Check if dropped on trash can
-    if (over && over.id === 'trash-can') {
-      console.log('Dropped on trash can, deleting:', active.id.toString());
-      deleteSubPosition(active.id.toString());
-      return;
-    }
-
-    // Calculate new position based on drag delta
-    const newX = activeSubPosition.x_coord + delta.x;
-    const newY = activeSubPosition.y_coord + delta.y;
-
-    // Apply smart locking (snap to grid)
-    const gridSize = 20;
-    const snappedX = Math.round(newX / gridSize) * gridSize;
-    const snappedY = Math.round(newY / gridSize) * gridSize;
-
-    // Ensure position stays within bounds (accounting for zoom)
-    const zoomFactor = zoom / 100;
-    
-    // Get the actual workspace dimensions
-    const workspaceElement = containerRef.current;
-    const containerWidth = workspaceElement ? workspaceElement.clientWidth : 1200;
-    const containerHeight = workspaceElement ? workspaceElement.clientHeight : 800;
-    
-    // Get height from multiple sources to ensure we have a valid value
-    let actualHeight = containerHeight;
-    if (actualHeight <= 0 && workspaceElement) {
-      // Use scrollHeight as it represents the full content area
-      const scrollHeight = workspaceElement.scrollHeight;
-      if (scrollHeight > 0) {
-        actualHeight = scrollHeight;
-      } else {
-        // Try computed style height
-        const computedStyle = window.getComputedStyle(workspaceElement);
-        const computedHeight = parseFloat(computedStyle.height);
+    const handleDragStart = (e: DragEvent) => {
+      const element = e.target as HTMLElement;
+      
+      
+      // Check if this element has draggable="true"
+      if (element.draggable === true) {
         
-        if (computedHeight > 0) {
-          actualHeight = computedHeight;
-        } else {
-          // Try offset height
-          const offsetHeight = workspaceElement.offsetHeight;
-          if (offsetHeight > 0) {
-            actualHeight = offsetHeight;
-          } else {
-            // Fallback to parent height or default
-            const parentHeight = workspaceElement.parentElement?.clientHeight || 800;
-            actualHeight = Math.max(parentHeight, 800);
+        if (e.dataTransfer) {
+          // Create invisible drag image
+          const canvas = document.createElement('canvas');
+          canvas.width = 1;
+          canvas.height = 1;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.clearRect(0, 0, 1, 1);
+            e.dataTransfer.setDragImage(canvas, 0, 0);
           }
         }
       }
-    }
-    
+    };
 
-    
-    // When zoomed out, the workspace is larger, so we need to allow more space
-    const workspaceScale = zoom < 100 ? (100 / zoom) : 1;
-    const maxX = (containerWidth * workspaceScale) - 120;
-    const maxY = (actualHeight * workspaceScale) - 60;
-    
-    const clampedX = Math.max(0, Math.min(snappedX, maxX));
-    const clampedY = Math.max(0, Math.min(snappedY, maxY));
-    
+    document.addEventListener('dragstart', handleDragStart, true);
+    return () => {
+      document.removeEventListener('dragstart', handleDragStart, true);
+    };
+  }, []);
 
+  // Fetch formations on mount
+  useEffect(() => {
+    if (!activeCustomerId) return;
+    
+    const loadFormations = async () => {
+      try {
+        const formationData = await fetchFormations(activeCustomerId);
+        setFormations(formationData);
+        if (formationData.length > 0 && !selectedFormationId) {
+          setSelectedFormationId(formationData[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading formations:', error);
+        message.error('Failed to load depth chart formations');
+      }
+    };
 
-    setSubPositions(prev => 
-      prev.map(sp => 
-        sp.id === active.id 
-          ? { ...sp, x_coord: clampedX, y_coord: clampedY }
-          : sp
-      )
-    );
+    loadFormations();
+  }, [activeCustomerId]);
 
-    // Persist to Supabase
+  // Load depth chart data when formation or filters change
+  useEffect(() => {
+    if (!selectedFormationId || !activeCustomerId) return;
+
+    const loadDepthChartData = async () => {
+      setLoading(true);
+      
+      try {
+        const data = await getDepthChartSummary(
+          selectedFormationId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+        
+        setSubPositionsWithAssignments(data.subPositions);
+      } catch (error) {
+        console.error('Error loading depth chart data:', error);
+        message.error('Failed to load depth chart data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDepthChartData();
+  }, [selectedFormationId, activeCustomerId, selectedYear, selectedScenario, selectedMonth]);
+
+  const handleDrop = async (item: any, subPositionId: string) => {
+    if (!activeCustomerId) return;
+
     try {
-      await updateSubPosition(active.id.toString(), { x_coord: clampedX, y_coord: clampedY });
-    } catch (e) {
-      // Optionally: show an error or revert state
-      console.error('Failed to update position in Supabase', e);
+      // Drop operation starting
+
+      const oldSubPositionId = item.currentSubPositionId;
+      
+      // If the athlete is being moved from another position, remove the old assignment
+      if (oldSubPositionId && oldSubPositionId !== subPositionId) {
+        // Moving between positions
+        await removeAthleteFromDepthChart(
+          item.athleteId,
+          oldSubPositionId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+      }
+
+      // Get current athletes at the new position to determine the highest ranking
+      const currentAssignments = subPositionsWithAssignments
+        .find(sp => sp.id === subPositionId)?.assignments || [];
+      
+      const highestRanking = currentAssignments.length > 0 
+        ? Math.max(...currentAssignments.map(a => a.ranking)) + 1
+        : 1;
+
+      // Ranking calculation
+
+      // Assign to new position with the highest ranking
+      await assignAthleteToDepthChart(
+        item.athleteId,
+        subPositionId,
+        activeCustomerId,
+        selectedYear,
+        highestRanking, // Add at the end (highest ranking)
+        selectedScenario,
+        selectedMonth
+      );
+
+      // Recalculate rankings for both positions to ensure they are sequential
+      if (oldSubPositionId && oldSubPositionId !== subPositionId) {
+        // Recalculating rankings for old position
+        // Recalculate rankings for the old position (after removal)
+        await recalculateRankingsForPosition(
+          oldSubPositionId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+      }
+      
+      // Recalculating rankings for new position
+      // Recalculate rankings for the new position (after addition)
+      await recalculateRankingsForPosition(
+        subPositionId,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+
+      // Reload data
+      const data = await getDepthChartSummary(
+        selectedFormationId!,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+      setSubPositionsWithAssignments(data.subPositions);
+      
+      // Drop operation completed
+      message.success('Athlete assigned successfully');
+      
+      // Close AthleteSelector modal if it was used for drag and drop
+      if (showAthleteSelector) {
+        setShowAthleteSelector(false);
+        setSelectedSubPositionId(null);
+      }
+    } catch (error) {
+      console.error('❌ [DEPTH CHART DROP] Error assigning athlete:', error);
+      message.error('Failed to assign athlete');
     }
   };
 
-  const deleteSubPosition = async (id: string) => {
-    // Soft delete in Supabase
+  const handleMoveUp = async (assignmentId: string) => {
     try {
-      await softDeleteSubPosition(id);
-    } catch (e) {
-      console.error('Failed to soft delete sub-position', e);
+      console.log(`⬆️ [DEPTH CHART MOVE UP] Starting move up for assignment: ${assignmentId}`);
+      await moveAthleteRanking(assignmentId, 'up');
+      
+      // Reload data
+      if (selectedFormationId && activeCustomerId) {
+        const data = await getDepthChartSummary(
+          selectedFormationId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+        setSubPositionsWithAssignments(data.subPositions);
+      }
+      console.log(`✅ [DEPTH CHART MOVE UP] Move up completed successfully`);
+    } catch (error) {
+      console.error('❌ [DEPTH CHART MOVE UP] Error moving athlete up:', error);
+      message.error('Failed to move athlete up');
     }
-    // Remove from local state
-    setSubPositions(prev => prev.filter(sp => sp.id !== id));
-    // Remove players from this sub-position
-    setPlayers(prev => 
-      prev.map(player => 
-        player.subPosition === id ? { ...player, subPosition: '' } : player
-      )
-    );
   };
 
+  const handleMoveDown = async (assignmentId: string) => {
+    try {
+      console.log(`⬇️ [DEPTH CHART MOVE DOWN] Starting move down for assignment: ${assignmentId}`);
+      await moveAthleteRanking(assignmentId, 'down');
+      
+      // Reload data
+      if (selectedFormationId && activeCustomerId) {
+        const data = await getDepthChartSummary(
+          selectedFormationId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+        setSubPositionsWithAssignments(data.subPositions);
+      }
+      console.log(`✅ [DEPTH CHART MOVE DOWN] Move down completed successfully`);
+    } catch (error) {
+      console.error('❌ [DEPTH CHART MOVE DOWN] Error moving athlete down:', error);
+      message.error('Failed to move athlete down');
+    }
+  };
+
+  const handleRemove = async (assignmentId: string) => {
+    if (!activeCustomerId) return;
+
+    try {
+      const assignment = subPositionsWithAssignments
+        .flatMap(sp => sp.assignments)
+        .find(a => a.id === assignmentId);
+      
+      if (assignment) {
+        console.log(`🗑️ [DEPTH CHART REMOVE] Starting removal:`, {
+          assignmentId,
+          athleteId: assignment.athlete_id,
+          subPositionId: assignment.sub_position_id,
+          currentRanking: assignment.ranking
+        });
+
+        const subPositionId = assignment.sub_position_id;
+        
+        await removeAthleteFromDepthChart(
+          assignment.athlete_id,
+          subPositionId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+
+        console.log(`🔄 [DEPTH CHART REMOVE] Recalculating rankings after removal`);
+        // Recalculate rankings for the position after removal
+        await recalculateRankingsForPosition(
+          subPositionId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+
+        // Reload data
+        const data = await getDepthChartSummary(
+          selectedFormationId!,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+        setSubPositionsWithAssignments(data.subPositions);
+        
+        console.log(`✅ [DEPTH CHART REMOVE] Removal completed successfully`);
+        message.success('Athlete removed from depth chart');
+      }
+    } catch (error) {
+      console.error('❌ [DEPTH CHART REMOVE] Error removing athlete:', error);
+      message.error('Failed to remove athlete');
+    }
+  };
+
+  const handleAthleteDrop = async (draggedAthlete: any, targetAthlete: any) => {
+    if (!activeCustomerId) return;
+
+    try {
+      console.log(`🎯 [ATHLETE DROP] Starting athlete-to-athlete drop:`, {
+        draggedAthlete: {
+          assignmentId: draggedAthlete.assignmentId,
+          athleteId: draggedAthlete.athleteId,
+          currentRanking: draggedAthlete.currentRanking
+        },
+        targetAthlete: {
+          assignmentId: targetAthlete.assignmentId,
+          athleteId: targetAthlete.athleteId,
+          currentRanking: targetAthlete.currentRanking
+        }
+      });
+
+      // Get all assignments for this position to understand the current order
+      const currentAssignments = subPositionsWithAssignments
+        .find(sp => sp.id === draggedAthlete.currentSubPositionId)?.assignments || [];
+      
+      const sortedAssignments = [...currentAssignments].sort((a, b) => a.ranking - b.ranking);
+      
+      console.log(`👥 [ATHLETE DROP] Current assignments before reorder:`, 
+        sortedAssignments.map(a => ({
+          assignmentId: a.id,
+          athleteId: a.athlete_id,
+          ranking: a.ranking
+        }))
+      );
+
+      // Find the indices of the dragged and target athletes
+      const draggedIndex = sortedAssignments.findIndex(a => a.id === draggedAthlete.assignmentId);
+      const targetIndex = sortedAssignments.findIndex(a => a.id === targetAthlete.assignmentId);
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        console.log(`❌ [ATHLETE DROP] Could not find athletes in current assignments`);
+        return;
+      }
+
+      console.log(`🔄 [ATHLETE DROP] Moving athlete from position ${draggedIndex + 1} to position ${targetIndex + 1}`);
+
+      // Create new array with swapped positions
+      const newAssignments = [...sortedAssignments];
+      [newAssignments[draggedIndex], newAssignments[targetIndex]] = [newAssignments[targetIndex], newAssignments[draggedIndex]];
+
+      console.log(`👥 [ATHLETE DROP] New order after swap:`, 
+        newAssignments.map((a, index) => ({
+          assignmentId: a.id,
+          athleteId: a.athlete_id,
+          oldRanking: a.ranking,
+          newRanking: index + 1
+        }))
+      );
+
+      // Update all rankings sequentially (1, 2, 3, 4, 5...)
+      const updatePromises = newAssignments.map((assignment: any, index: number) => {
+        const newRanking = index + 1;
+        console.log(`💾 [ATHLETE DROP] Writing to database:`, {
+          assignmentId: assignment.id,
+          athleteId: assignment.athlete_id,
+          oldRanking: assignment.ranking,
+          newRanking: newRanking
+        });
+        
+        return supabase
+          .from('depth_chart_assignments')
+          .update({ ranking: newRanking })
+          .eq('id', assignment.id);
+      });
+
+      await Promise.all(updatePromises);
+
+      // Reload data
+      const data = await getDepthChartSummary(
+        selectedFormationId!,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+      setSubPositionsWithAssignments(data.subPositions);
+      
+      console.log(`✅ [ATHLETE DROP] Athlete reorder completed successfully`);
+      message.success('Athlete ranking updated');
+    } catch (error) {
+      console.error('❌ [ATHLETE DROP] Error reordering athletes:', error);
+      message.error('Failed to reorder athletes');
+    }
+  };
+
+  const handleAthleteInsert = async (draggedAthlete: any, insertPosition: number) => {
+    if (!activeCustomerId) return;
+
+    try {
+      console.log(`🎯 [ATHLETE INSERT] Starting athlete insertion:`, {
+        draggedAthlete: {
+          assignmentId: draggedAthlete.assignmentId,
+          athleteId: draggedAthlete.athleteId,
+          currentRanking: draggedAthlete.currentRanking
+        },
+        insertPosition
+      });
+
+      // Get all assignments for this position to understand the current order
+      const currentAssignments = subPositionsWithAssignments
+        .find(sp => sp.id === draggedAthlete.currentSubPositionId)?.assignments || [];
+      
+      const sortedAssignments = [...currentAssignments].sort((a, b) => a.ranking - b.ranking);
+      
+      console.log(`👥 [ATHLETE INSERT] Current assignments before insertion:`, 
+        sortedAssignments.map(a => ({
+          assignmentId: a.id,
+          athleteId: a.athlete_id,
+          ranking: a.ranking
+        }))
+      );
+
+      // Find the dragged athlete
+      const draggedIndex = sortedAssignments.findIndex(a => a.id === draggedAthlete.assignmentId);
+      if (draggedIndex === -1) {
+        console.log(`❌ [ATHLETE INSERT] Could not find dragged athlete in current assignments`);
+        return;
+      }
+
+      // Remove the dragged athlete from its current position
+      const draggedAthleteData = sortedAssignments[draggedIndex];
+      const remainingAssignments = sortedAssignments.filter(a => a.id !== draggedAthlete.assignmentId);
+
+      // Insert the athlete at the specified position
+      const newAssignments = [...remainingAssignments];
+      newAssignments.splice(insertPosition - 1, 0, draggedAthleteData);
+
+      console.log(`👥 [ATHLETE INSERT] New order after insertion:`, 
+        newAssignments.map((a, index) => ({
+          assignmentId: a.id,
+          athleteId: a.athlete_id,
+          oldRanking: a.ranking,
+          newRanking: index + 1
+        }))
+      );
+
+      // Update all rankings sequentially (1, 2, 3, 4, 5...)
+      const updatePromises = newAssignments.map((assignment: any, index: number) => {
+        const newRanking = index + 1;
+        console.log(`💾 [ATHLETE INSERT] Writing to database:`, {
+          assignmentId: assignment.id,
+          athleteId: assignment.athlete_id,
+          oldRanking: assignment.ranking,
+          newRanking: newRanking
+        });
+        
+        return supabase
+          .from('depth_chart_assignments')
+          .update({ ranking: newRanking })
+          .eq('id', assignment.id);
+      });
+
+      await Promise.all(updatePromises);
+
+      // Reload data
+      const data = await getDepthChartSummary(
+        selectedFormationId!,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+      setSubPositionsWithAssignments(data.subPositions);
+      
+      console.log(`✅ [ATHLETE INSERT] Athlete insertion completed successfully`);
+      message.success('Athlete ranking updated');
+    } catch (error) {
+      console.error('❌ [ATHLETE INSERT] Error inserting athlete:', error);
+      message.error('Failed to reorder athletes');
+    }
+  };
+
+  const handleCreateTie = async (draggedAthlete: any, targetAthlete: any) => {
+    if (!activeCustomerId) return;
+
+    try {
+      console.log(`🤝 [CREATE TIE] Starting tie creation:`, {
+        draggedAthlete: {
+          assignmentId: draggedAthlete.assignmentId,
+          athleteId: draggedAthlete.athleteId,
+          currentRanking: draggedAthlete.currentRanking
+        },
+        targetAthlete: {
+          assignmentId: targetAthlete.assignmentId,
+          athleteId: targetAthlete.athleteId,
+          currentRanking: targetAthlete.currentRanking
+        }
+      });
+
+      await createTie(
+        draggedAthlete.athleteId,
+        targetAthlete.athleteId,
+        draggedAthlete.currentSubPositionId,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+
+      // Reload data
+      const data = await getDepthChartSummary(
+        selectedFormationId!,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+      setSubPositionsWithAssignments(data.subPositions);
+      
+      console.log(`✅ [CREATE TIE] Tie creation completed successfully`);
+      message.success('Athletes tied successfully');
+    } catch (error) {
+      console.error('❌ [CREATE TIE] Error creating tie:', error);
+      message.error('Failed to create tie');
+    }
+  };
+
+  const handleAddAthlete = (subPositionId: string) => {
+    setSelectedSubPositionId(subPositionId);
+    setShowAthleteSelector(true);
+  };
+
+  const handleSelectAthlete = async (athlete: AthleteData) => {
+    if (!selectedSubPositionId || !activeCustomerId) return;
+
+    try {
+      // Get current athletes at the position to determine the highest ranking
+      const currentAssignments = subPositionsWithAssignments
+        .find(sp => sp.id === selectedSubPositionId)?.assignments || [];
+      
+      const highestRanking = currentAssignments.length > 0 
+        ? Math.max(...currentAssignments.map(a => a.ranking)) + 1
+        : 1;
+
+      await assignAthleteToDepthChart(
+        athlete.id,
+        selectedSubPositionId,
+        activeCustomerId,
+        selectedYear,
+        highestRanking, // Add at the end (highest ranking)
+        selectedScenario,
+        selectedMonth
+      );
+
+      // Recalculate rankings for the position after adding new athlete
+      await recalculateRankingsForPosition(
+        selectedSubPositionId,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+
+      // Reload data
+      const data = await getDepthChartSummary(
+        selectedFormationId!,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+      setSubPositionsWithAssignments(data.subPositions);
+      
+      message.success(`${athlete.first_name} ${athlete.last_name} added to depth chart`);
+    } catch (error) {
+      console.error('Error adding athlete:', error);
+      message.error('Failed to add athlete');
+    }
+  };
+
+  // Formation management functions
   const handleFormationChange = (formationId: string) => {
     setSelectedFormationId(formationId);
   };
 
   const handleAddFormation = async () => {
     const formationName = prompt('Enter formation name:');
-    if (!formationName || !customerId) return;
+    if (!formationName || !activeCustomerId) return;
     
     try {
       const newFormation = await addFormation({
         name: formationName,
         order: formations.length,
-        customer_id: customerId,
+        customer_id: activeCustomerId,
       });
       setFormations(prev => [...prev, newFormation]);
       setSelectedFormationId(newFormation.id);
-    } catch (e) {
-      console.error('Failed to add formation', e);
+      message.success('Formation added successfully');
+    } catch (error) {
+      console.error('Failed to add formation', error);
+      message.error('Failed to add formation');
     }
   };
 
   const handleDeleteFormation = async (formationId: string) => {
-    if (!formationId || formations.length <= 1) return;
+    if (!formationId || formations.length <= 1) {
+      message.warning('Cannot delete the last formation');
+      return;
+    }
+    
+    const formation = formations.find(f => f.id === formationId);
+    if (!formation) return;
+
+    const confirmed = window.confirm(`Are you sure you want to delete "${formation.name}"?`);
+    if (!confirmed) return;
     
     try {
       await softDeleteFormation(formationId);
@@ -699,61 +672,63 @@ const DepthChart: React.FC<DepthChartProps> = ({
           setSelectedFormationId(remainingFormations[0].id);
         }
       }
-    } catch (e) {
-      console.error('Failed to delete formation', e);
+      message.success('Formation deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete formation', error);
+      message.error('Failed to delete formation');
     }
   };
 
   const handleMoveFormation = async (formationId: string, direction: 'up' | 'down') => {
-    const currentIndex = formations.findIndex(f => f.id === formationId);
-    if (currentIndex === -1) return;
+    const formationIndex = formations.findIndex(f => f.id === formationId);
+    if (formationIndex === -1) return;
 
-    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const newIndex = direction === 'up' ? formationIndex - 1 : formationIndex + 1;
     if (newIndex < 0 || newIndex >= formations.length) return;
 
-    // Create new array with reordered formations
-    const newFormations = [...formations];
-    const [movedFormation] = newFormations.splice(currentIndex, 1);
-    newFormations.splice(newIndex, 0, movedFormation);
-
-    // Update order values
-    const updatedFormations = newFormations.map((formation, index) => ({
-      ...formation,
-      order: index
-    }));
-
-    setFormations(updatedFormations);
-
-    // Update in database
     try {
-      await updateFormation(formationId, { order: newIndex });
-      const otherFormationId = newFormations[newIndex === currentIndex + 1 ? currentIndex : newIndex].id;
-      await updateFormation(otherFormationId, { order: currentIndex });
-    } catch (e) {
-      console.error('Failed to update formation order', e);
+      // Update the order of both formations
+      const formation = formations[formationIndex];
+      const otherFormation = formations[newIndex];
+      
+      await updateFormation(formation.id, { order: otherFormation.order });
+      await updateFormation(otherFormation.id, { order: formation.order });
+      
+      // Update local state
+      const updatedFormations = [...formations];
+      [updatedFormations[formationIndex], updatedFormations[newIndex]] = 
+        [updatedFormations[newIndex], updatedFormations[formationIndex]];
+      
+      setFormations(updatedFormations);
+      message.success('Formation order updated');
+    } catch (error) {
+      console.error('Failed to move formation', error);
+      message.error('Failed to move formation');
     }
   };
 
   const handleCopyFormation = async (formationId: string) => {
-    const formationToCopy = formations.find(f => f.id === formationId);
-    if (!formationToCopy || !customerId) return;
-
-    const newName = prompt(`Enter a name for the copied formation (copying "${formationToCopy.name}"):`);
-    if (!newName || !newName.trim()) return;
+    if (!activeCustomerId) return;
+    
+    const formation = formations.find(f => f.id === formationId);
+    if (!formation) return;
+    
+    const newName = prompt('Enter name for copied formation:', `${formation.name} Copy`);
+    if (!newName) return;
 
     try {
       // Create new formation
       const newFormation = await addFormation({
-        name: newName.trim(),
+        name: newName,
         order: formations.length,
-        customer_id: customerId,
+        customer_id: activeCustomerId,
       });
 
       // Copy sub-positions from the original formation
       const originalSubPositions = await fetchSubPositions(formationId);
       
       for (const subPosition of originalSubPositions) {
-        await addSubPositionToDB({
+        await addSubPosition({
           depth_chart_formation_id: newFormation.id,
           name: subPosition.name,
           x_coord: subPosition.x_coord,
@@ -761,315 +736,401 @@ const DepthChart: React.FC<DepthChartProps> = ({
         });
       }
 
-      // Add to local state and select it
       setFormations(prev => [...prev, newFormation]);
       setSelectedFormationId(newFormation.id);
-      
-      // Refresh sub-positions for the new formation
-      const newSubPositions = await fetchSubPositions(newFormation.id);
-      setSubPositions(newSubPositions);
-      
-    } catch (e) {
-      console.error('Failed to copy formation', e);
-      alert('Failed to copy formation. Please try again.');
+      message.success('Formation copied successfully');
+    } catch (error) {
+      console.error('Failed to copy formation', error);
+      message.error('Failed to copy formation');
     }
   };
 
-  const handlePlayerRankChange = (playerId: string, newRank: number) => {
-    setPlayers(prev => 
-      prev.map(player => 
-        player.id === playerId ? { ...player, rank: newRank } : player
-      )
-    );
+  // Sub-position management functions
+  const handleAddSubPosition = async () => {
+    if (!newSubPositionName.trim() || !selectedFormationId || !activeCustomerId) return;
+    
+    try {
+      const newSubPos = await addSubPosition({
+        depth_chart_formation_id: selectedFormationId,
+        name: newSubPositionName.trim(),
+        x_coord: 100, // Default position
+        y_coord: 100, // Default position
+      });
+      
+      // Reload depth chart data to include new sub-position
+      const data = await getDepthChartSummary(
+        selectedFormationId,
+        activeCustomerId,
+        selectedYear,
+        selectedScenario,
+        selectedMonth
+      );
+      setSubPositionsWithAssignments(data.subPositions);
+      
+      setNewSubPositionName('');
+      setShowAddSubPositionModal(false);
+      message.success('Sub-position added successfully');
+    } catch (error) {
+      console.error('Failed to add sub-position', error);
+      message.error('Failed to add sub-position');
+    }
   };
 
-  const handlePlayerSubPositionChange = (playerId: string, newSubPosition: string) => {
-    setPlayers(prev => 
-      prev.map(player => 
-        player.id === playerId ? { ...player, subPosition: newSubPosition } : player
-      )
-    );
+  const handleDeleteSubPosition = async (subPositionId: string) => {
+    const subPosition = subPositionsWithAssignments.find(sp => sp.id === subPositionId);
+    if (!subPosition) return;
+    
+    const confirmed = window.confirm(`Are you sure you want to delete "${subPosition.name}" position?`);
+    if (!confirmed) return;
+    
+    try {
+      await softDeleteSubPosition(subPositionId);
+      
+      // Reload depth chart data
+      if (selectedFormationId && activeCustomerId) {
+        const data = await getDepthChartSummary(
+          selectedFormationId,
+          activeCustomerId,
+          selectedYear,
+          selectedScenario,
+          selectedMonth
+        );
+        setSubPositionsWithAssignments(data.subPositions);
+      }
+      
+      message.success('Sub-position deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete sub-position', error);
+      message.error('Failed to delete sub-position');
+    }
   };
 
-  // Group players by sub-position and rank
-  const groupedPlayers = subPositions.map(subPosition => {
-    const subPositionPlayers = players.filter(p => p.subPosition === subPosition.id);
-    const groupedByRank = subPositionPlayers.reduce((acc, player) => {
-      if (!acc[player.rank]) acc[player.rank] = [];
-      acc[player.rank].push(player);
-      return acc;
-    }, {} as Record<number, Player[]>);
+  const handleMoveSubPosition = async (subPositionId: string, x: number, y: number) => {
+    const subPosition = subPositionsWithAssignments.find(sp => sp.id === subPositionId);
+    
+    console.log('💾 HANDLE MOVE SUB-POSITION - Final update:', {
+      subPositionId,
+      subPositionName: subPosition?.name,
+      oldPosition: { x: subPosition?.x_coord, y: subPosition?.y_coord },
+      newPosition: { x, y },
+      rounded: { x: Math.round(x), y: Math.round(y) }
+    });
+    
+    try {
+      // Update in database
+      await updateSubPosition(subPositionId, {
+        x_coord: Math.round(x),
+        y_coord: Math.round(y)
+      });
 
-    return {
-      id: subPosition.id,
-      name: subPosition.name,
-      x_coord: subPosition.x_coord,
-      y_coord: subPosition.y_coord,
-      players: groupedByRank
+      // Update local state
+      setSubPositionsWithAssignments(prev =>
+        prev.map(sp =>
+          sp.id === subPositionId
+            ? { ...sp, x_coord: Math.round(x), y_coord: Math.round(y) }
+            : sp
+        )
+      );
+      
+      console.log('✅ POSITION UPDATED successfully');
+    } catch (error) {
+      console.error('Failed to move sub-position', error);
+      message.error('Failed to move position');
+    }
+  };
+
+  const selectedFormation = formations.find(f => f.id === selectedFormationId);
+
+  // Calculate dynamic sizing for the droppable zone
+  const calculateDropZoneSize = useCallback(() => {
+    // Always ensure viewport coverage as minimum
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight - 200; // Account for header
+    
+    
+    if (subPositionsWithAssignments.length === 0) {
+      // Default size when no positions exist - always fill viewport
+      // Account for zoom: if zoom is 50%, we need 2x the size to fill viewport after scaling
+      const result = {
+        width: viewportWidth / (zoom / 100),
+        height: viewportHeight / (zoom / 100)
+      };
+      return result;
+    }
+
+    // Find the bounds of all sub-positions and their athletes
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    
+    subPositionsWithAssignments.forEach(subPosition => {
+      // Account for sub-position bounds (240px width, variable height)
+      const subPosLeft = subPosition.x_coord - 120; // Half width
+      const subPosRight = subPosition.x_coord + 120;
+      const subPosTop = subPosition.y_coord - 50; // Half height estimate
+      const subPosBottom = subPosition.y_coord + 200; // Estimate for athletes below
+      
+      minX = Math.min(minX, subPosLeft);
+      maxX = Math.max(maxX, subPosRight);
+      minY = Math.min(minY, subPosTop);
+      maxY = Math.max(maxY, subPosBottom);
+    });
+
+    // Add padding around the content
+    const padding = 200;
+    const contentWidth = maxX - minX + (padding * 2);
+    const contentHeight = maxY - minY + (padding * 2);
+
+    // Calculate the minimum size needed to fill viewport after zoom scaling
+    const minWidthForViewport = viewportWidth / (zoom / 100);
+    const minHeightForViewport = viewportHeight / (zoom / 100);
+
+    // Return the larger of content size or zoom-adjusted viewport size
+    const result = {
+      width: Math.max(contentWidth, minWidthForViewport),
+      height: Math.max(contentHeight, minHeightForViewport)
     };
-  });
+    
+    
+    return result;
+  }, [subPositionsWithAssignments, zoom]);
+
+  const [dropZoneSize, setDropZoneSize] = useState(() => calculateDropZoneSize());
+
+  // Recalculate drop zone size when sub-positions change, window resizes, or zoom changes
+  useEffect(() => {
+    const newSize = calculateDropZoneSize();
+    setDropZoneSize(newSize);
+  }, [calculateDropZoneSize, zoom]);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      const newSize = calculateDropZoneSize();
+      setDropZoneSize(newSize);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [calculateDropZoneSize, zoom]);
+
 
   return (
-    <div className="depth-chart-container">
-
-      {isAddingSubPosition && (
-        <div className="add-sub-position-modal">
-          <div className="modal-content">
-            <h3>Add New Sub-Position</h3>
-            <input
-              type="text"
-              value={newSubPositionName}
-              onChange={(e) => setNewSubPositionName(e.target.value)}
-              placeholder="Enter sub-position name (e.g., QB, RB)"
-              onKeyPress={(e) => e.key === 'Enter' && addSubPosition()}
-            />
-            <div className="modal-actions">
-              <button onClick={addSubPosition}>Add</button>
-              <button onClick={() => {
-                setIsAddingSubPosition(false);
-                setNewSubPositionName('');
-              }}>Cancel</button>
+    <DndProvider 
+      backend={HTML5Backend} 
+      options={{ 
+        enableMouseEvents: true,
+        enableKeyboardEvents: true
+      }}
+      data-react-dnd-provider="depth-chart"
+    >
+      <div className="w-full h-full flex flex-col">
+        {/* <CustomDragLayer /> */}
+        <style jsx global>{`
+          /* Hide the default HTML5 drag preview */
+          .react-dnd-drag-preview {
+            display: none !important;
+          }
+        `}</style>
+        {/* Header Controls */}
+        <div className="bg-white border-b border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <h2 className="text-xl font-bold text-gray-900">Depth Chart</h2>
+              
+              {/* Advanced Formation Dropdown */}
+              <FormationDropdown
+                formations={formations}
+                selectedFormationId={selectedFormationId}
+                onFormationChange={handleFormationChange}
+                onAddFormation={handleAddFormation}
+                onDeleteFormation={handleDeleteFormation}
+                onMoveFormation={handleMoveFormation}
+                onCopyFormation={handleCopyFormation}
+                isOpen={isFormationDropdownOpen}
+                onToggle={() => setIsFormationDropdownOpen(!isFormationDropdownOpen)}
+              />
             </div>
+
+                         <div className="flex items-center space-x-2">
+               <Button
+                 icon={<PlusOutlined />}
+                 onClick={() => setShowAddSubPositionModal(true)}
+                 disabled={!selectedFormationId}
+               >
+                 Add Position
+               </Button>
+               
+               <Button
+                 type="primary"
+                 icon={<PlusOutlined />}
+                 onClick={() => setShowAthleteSelector(true)}
+               >
+                 Add Athletes
+               </Button>
           </div>
         </div>
-      )}
 
-      <div 
-        className="depth-chart-workspace" 
-        ref={containerRef}
-        style={{ 
-          paddingBottom: zoom > 100 ? '2rem' : '0',
-          paddingRight: zoom > 100 ? '5%' : '0',
-          width: zoom < 100 ? `${100 / (zoom / 100)}%` : '100%',
-          height: zoom < 100 ? `${100 / (zoom / 100)}%` : '100%',
-          minHeight: zoom > 100 ? `${zoom}vh` : '100%', 
-          marginBottom: zoom > 100 ? '4rem' : '0'
-        }}
-      >
-        <DndContext onDragEnd={handleDragEnd}>
-          {subPositions.map(subPosition => (
-            <DraggableSubPositionHeader
-              key={subPosition.id}
-              subPosition={subPosition}
-              onPositionChange={(id, x, y) => {
-                setSubPositions(prev => 
-                  prev.map(sp => sp.id === id ? { ...sp, x_coord: x, y_coord: y } : sp)
-                );
+          {selectedFormation && (
+            <div className="mt-2 text-sm text-gray-600">
+              Formation: <span className="font-medium">{selectedFormation.name}</span>
+              {selectedScenario !== '' && (
+                <span className="ml-2">Scenario: <span className="font-medium">{selectedScenario}</span></span>
+              )}
+              {selectedMonth !== 1 && (
+                <span className="ml-2">Month: <span className="font-medium">
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][selectedMonth - 1]}
+                </span></span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Depth Chart Canvas */}
+        <div 
+          className="flex-1 relative bg-gray-50" 
+          style={{ 
+            minHeight: 0,
+            overflowX: "auto", 
+            overflowY: "auto"
+          }}
+        >
+          {loading ? (
+            <div className="flex items-center justify-center h-96">
+              <Spin size="large" />
+            </div>
+          ) : !selectedFormationId ? (
+            <div className="flex items-center justify-center h-96 text-gray-500">
+              <div className="text-center">
+                <div className="text-lg font-medium mb-2">No Formation Selected</div>
+                <div>Please select a formation to view the depth chart</div>
+              </div>
+            </div>
+          ) : subPositionsWithAssignments.length === 0 ? (
+            <div className="flex items-center justify-center h-96 text-gray-500">
+              <div className="text-center">
+                <div className="text-lg font-medium mb-2">No Positions Configured</div>
+                <div>Add sub-positions to this formation to get started</div>
+              </div>
+            </div>
+          ) : (
+            <div 
+              ref={containerRef}
+              className="depth-chart-container"
+              style={{ 
+                position: 'relative',
+                transform: `scale(${zoom / 100})`,
+                transformOrigin: 'top left',
+                width: `${dropZoneSize.width}px`,
+                height: `${dropZoneSize.height}px`
               }}
-              onDelete={deleteSubPosition}
-            />
-          ))}
-          
-          {/* Droppable Trash Can */}
-          <DroppableTrashCan 
-            isOver={false}
-            onDelete={deleteSubPosition}
-            zoom={zoom}
-            onAddSubPosition={() => setIsAddingSubPosition(true)}
-            formations={formations}
-            selectedFormationId={selectedFormationId}
-            onFormationChange={handleFormationChange}
-            onAddFormation={handleAddFormation}
-            onDeleteFormation={handleDeleteFormation}
-            onMoveFormation={handleMoveFormation}
-            onCopyFormation={handleCopyFormation}
-            isDropdownOpen={isDropdownOpen}
-            onToggleDropdown={() => setIsDropdownOpen(!isDropdownOpen)}
-          />
-        </DndContext>
-
-        {/* Render players under each sub-position */}
-        {groupedPlayers.map(subPosition => (
-          <div
-            key={subPosition.id}
-            className="sub-position-section"
-            style={{
-              position: 'absolute',
-              left: subPosition.x_coord,
-              top: subPosition.y_coord + 60, // Below the header
-            }}
-          >
-            {Object.entries(subPosition.players)
-              .sort(([a], [b]) => parseInt(a) - parseInt(b))
-              .map(([rank, playersInRank]) => (
-                <div key={rank} className="rank-group">
-                  <div className="rank-label">Rank {rank}</div>
-                  <div className="players-row">
-                    {playersInRank.map(player => (
-                      <PlayerCard
-                        key={player.id}
-                        player={player}
-                        onRankChange={handlePlayerRankChange}
-                        onSubPositionChange={handlePlayerSubPositionChange}
-                        availableSubPositions={subPositions}
-                      />
-                    ))}
+            >
+              <div 
+                className="relative"
+                style={{ 
+                  width: '100%',
+                  height: '100%',
+                  position: 'relative'
+                }}
+              >
+                <FieldDropZone 
+                  onMoveSubPosition={handleMoveSubPosition}
+                  existingPositions={subPositionsWithAssignments.map(sp => ({
+                    id: sp.id,
+                    x_coord: sp.x_coord,
+                    y_coord: sp.y_coord,
+                    name: sp.name
+                  }))}
+                >
+                  {/* Football Field Background */}
+                  <div className="absolute inset-0 bg-green-600 opacity-10">
+                    <div className="w-full h-full bg-gradient-to-r from-green-600 to-green-700 opacity-20"></div>
                   </div>
+
+                  {/* Draggable Sub-position Drop Zones */}
+                  {subPositionsWithAssignments.map(subPosition => (
+                    <DraggableSubPosition
+                      key={subPosition.id}
+                      subPosition={subPosition as any}
+                      assignments={subPosition.assignments}
+                      onDrop={handleDrop}
+                      onMoveUp={handleMoveUp}
+                      onMoveDown={handleMoveDown}
+                      onRemove={handleRemove}
+                      onAddAthlete={handleAddAthlete}
+                      onDeleteSubPosition={handleDeleteSubPosition}
+                      onMoveSubPosition={handleMoveSubPosition}
+                      onAthleteDrop={handleAthleteDrop}
+                      onAthleteInsert={handleAthleteInsert}
+                      onCreateTie={handleCreateTie}
+                    />
+                  ))}
+                </FieldDropZone>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Athlete Selector Modal */}
+        <AthleteSelector
+          year={selectedYear}
+          scenario={selectedScenario}
+          month={selectedMonth}
+          isOpen={showAthleteSelector}
+          onClose={() => {
+            setShowAthleteSelector(false);
+            setSelectedSubPositionId(null);
+          }}
+          onSelectAthlete={handleSelectAthlete}
+            selectedFormationId={selectedFormationId}
+          onAthleteAssigned={() => {
+            // Reload depth chart data after assignment
+            if (selectedFormationId && activeCustomerId) {
+              const loadDepthChartData = async () => {
+                const data = await getDepthChartSummary(
+                  selectedFormationId,
+                  activeCustomerId,
+                  selectedYear,
+                  selectedScenario,
+                  selectedMonth
+                );
+                setSubPositionsWithAssignments(data.subPositions);
+              };
+              loadDepthChartData();
+            }
+          }}
+        />
+
+        {/* Add Sub-Position Modal */}
+        <Modal
+          title="Add New Position"
+          open={showAddSubPositionModal}
+          onOk={handleAddSubPosition}
+          onCancel={() => {
+            setShowAddSubPositionModal(false);
+            setNewSubPositionName('');
+          }}
+          okText="Add Position"
+          cancelText="Cancel"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Position Name
+              </label>
+              <Input
+                value={newSubPositionName}
+                onChange={(e) => setNewSubPositionName(e.target.value)}
+                placeholder="Enter position name (e.g., QB, RB, WR)"
+                onPressEnter={handleAddSubPosition}
+                autoFocus
+              />
+                  </div>
+            <div className="text-sm text-gray-500">
+              The position will be placed at a default location and can be repositioned by dragging.
                 </div>
-              ))}
           </div>
-        ))}
+        </Modal>
       </div>
-
-      <style jsx>{`
-        .depth-chart-container {
-          padding: 2rem;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          overflow: visible;
-          box-sizing: border-box;
-          width: 100%;
-          min-height: 100%;
-          align-items: stretch;
-        }
-
-
-
-        .depth-chart-workspace {
-          flex: 1 1 auto;
-          flex-grow: 1;
-          flex-shrink: 1;
-          flex-basis: auto;
-          position: relative;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 8px;
-          overflow: visible;
-          height: 100%;
-          width: 100%;
-          box-sizing: border-box;
-          min-height: 800px;
-          min-width: 100%;
-          display: flex;
-          flex-direction: column;
-          align-self: stretch;
-        }
-
-        .sub-position-section {
-          min-width: 300px;
-        }
-
-        .rank-group {
-          margin-bottom: 1rem;
-        }
-
-        .rank-label {
-          font-weight: bold;
-          color: #666;
-          margin-bottom: 0.5rem;
-          font-size: 0.9rem;
-        }
-
-        .players-row {
-          display: flex;
-          gap: 0.5rem;
-          flex-wrap: wrap;
-        }
-
-        .player-card {
-          background: white;
-          border: 1px solid #ddd;
-          border-radius: 6px;
-          padding: 0.75rem;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          min-width: 200px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-
-        .player-image img {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-
-        .player-info {
-          flex: 1;
-        }
-
-        .player-name {
-          font-weight: bold;
-          font-size: 0.9rem;
-        }
-
-        .player-position {
-          font-size: 0.8rem;
-          color: #666;
-        }
-
-        .player-controls {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-
-        .rank-select, .sub-position-select {
-          padding: 0.25rem;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 0.8rem;
-        }
-
-        .add-sub-position-modal {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0,0,0,0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-
-        .modal-content {
-          background: white;
-          padding: 2rem;
-          border-radius: 8px;
-          min-width: 300px;
-        }
-
-        .modal-content h3 {
-          margin-top: 0;
-          margin-bottom: 1rem;
-        }
-
-        .modal-content input {
-          width: 100%;
-          padding: 0.5rem;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          margin-bottom: 1rem;
-        }
-
-        .modal-actions {
-          display: flex;
-          gap: 0.5rem;
-          justify-content: flex-end;
-        }
-
-        .modal-actions button {
-          padding: 0.5rem 1rem;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-        }
-
-        .modal-actions button:first-child {
-          background: #007bff;
-          color: white;
-        }
-
-        .modal-actions button:last-child {
-          background: #6c757d;
-          color: white;
-        }
-      `}</style>
-    </div>
+    </DndProvider>
   );
 };
 

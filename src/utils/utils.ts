@@ -25,6 +25,26 @@ export const formatYear = (year: string, redshirtStatus: string) => {
   return year;
 };
 
+export const formatPhoneNumber = (phoneNumber: string | null | undefined): string => {
+  if (!phoneNumber) return "";
+  
+  // Remove all non-digit characters
+  const cleaned = phoneNumber.replace(/\D/g, "");
+  
+  // Check if it's a valid US phone number (10 digits)
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  
+  // Check if it's a valid US phone number with country code (11 digits starting with 1)
+  if (cleaned.length === 11 && cleaned.startsWith("1")) {
+    return `(${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+  }
+  
+  // If it doesn't match expected format, return the original
+  return phoneNumber;
+};
+
 export const adjustPlayerForYear = (player: Player, selectedYear: number): Player | null => {
   const yearDifference = selectedYear - player.starting_season;
   const updatedEligRemaining = Math.max(0, player.elig_remaining - yearDifference);
@@ -101,7 +121,6 @@ export const fetchAdjustedPlayers = async (
   const { data: athletesData, error: athletesError } = await query;
 
   if (athletesError) {
-    console.error("Error fetching athletes data:", athletesError);
     return { players: [], deadMoney: [], totalTeamCompensation: 0, positionCompensation: {} };
   }
   
@@ -119,7 +138,6 @@ export const fetchAdjustedPlayers = async (
     .eq('month', '00')
     .in('scenario', scenarioFilter);
   if (compensationError) {
-    console.error("Error fetching compensation data:", compensationError);
     return { players: [], deadMoney: [], totalTeamCompensation: 0, positionCompensation: {} };
   }
 
@@ -160,7 +178,7 @@ export const fetchAdjustedPlayers = async (
     
     // Only log if it's for the specific athlete
     if (baseComp.athlete_id === TEST_ATHLETE_ID) {
-      console.log('baseComp', baseComp);
+      // Debug log removed('baseComp', baseComp);
     }
 
     return baseComp;
@@ -367,7 +385,7 @@ export const fetchAdjustedPlayers = async (
     }
     return athlete;
   });
-  // console.log('athleteMergedData', athleteMergedData);
+  // // Debug log removed('athleteMergedData', athleteMergedData);
   
   // Create a map that groups compensation by athlete
   const athleteCompensationMap = new Map();
@@ -391,7 +409,7 @@ export const fetchAdjustedPlayers = async (
       
       // Log yearly compensation for the specific athlete
       if (comp.athlete_id === TEST_ATHLETE_ID) {
-        console.log(`DEBUG: Yearly compensation for athlete 2adca696 - Year ${comp.year}, Amount: ${comp.amount}, Scenario: ${comp.scenario}`);
+        // Debug log removed(`DEBUG: Yearly compensation for athlete 2adca696 - Year ${comp.year}, Amount: ${comp.amount}, Scenario: ${comp.scenario}`);
       }
     }
   });
@@ -421,9 +439,9 @@ export const fetchAdjustedPlayers = async (
     // If we have compensation data for this athlete
     const isTargetAthlete = athleteId === TEST_ATHLETE_ID;
     if (isTargetAthlete) {
-      console.log(`DEBUG-FORWARD: Athlete ID ${athleteId} (${athlete.name__first} ${athlete.name__last})`);
-      console.log(`DEBUG-FORWARD: Starting year: ${startingYear}, Eligibility remaining: ${eligRemaining}, Ending year: ${endingYear}`);
-      console.log(`DEBUG-FORWARD: Years with compensation data: ${yearsWithComp.join(', ')}`);
+      // Debug log removed(`DEBUG-FORWARD: Athlete ID ${athleteId} (${athlete.name__first} ${athlete.name__last})`);
+      // Debug log removed(`DEBUG-FORWARD: Starting year: ${startingYear}, Eligibility remaining: ${eligRemaining}, Ending year: ${endingYear}`);
+      // Debug log removed(`DEBUG-FORWARD: Years with compensation data: ${yearsWithComp.join(', ')}`);
     }
     
     // For each year where we have data, carry it forward until the next year with data or until ending year
@@ -433,9 +451,9 @@ export const fetchAdjustedPlayers = async (
       const currentYearAmount = yearlyCompensationMap.get(`${athleteId}_${currentYear}`);
       
       if (isTargetAthlete) {
-        console.log(`DEBUG-FORWARD: Considering year ${currentYear}`);
-        console.log(`DEBUG-FORWARD: Next year with data: ${nextYearWithData}`);
-        console.log(`DEBUG-FORWARD: Current year amount: ${currentYearAmount}`);
+        // Debug log removed(`DEBUG-FORWARD: Considering year ${currentYear}`);
+        // Debug log removed(`DEBUG-FORWARD: Next year with data: ${nextYearWithData}`);
+        // Debug log removed(`DEBUG-FORWARD: Current year amount: ${currentYearAmount}`);
       }
       
       // Carry the current year amount forward to all years until the next year with data
@@ -449,7 +467,7 @@ export const fetchAdjustedPlayers = async (
           yearlyCompensationMap.set(key, currentYearAmount);
           
           if (isTargetAthlete) {
-            console.log(`DEBUG-FORWARD: Carrying forward compensation to year ${year}: ${currentYearAmount}`);
+            // Debug log removed(`DEBUG-FORWARD: Carrying forward compensation to year ${year}: ${currentYearAmount}`);
           }
         }
       }
@@ -462,21 +480,21 @@ export const fetchAdjustedPlayers = async (
       .filter(key => key.startsWith(`${TEST_ATHLETE_ID}_`))
       .sort();
       
-    console.log('DEBUG-FORWARD: Final yearly compensation map for target athlete:');
+    // Debug log removed('DEBUG-FORWARD: Final yearly compensation map for target athlete:');
     allYearsKeys.forEach(key => {
-      console.log(`DEBUG-FORWARD: ${key}: ${yearlyCompensationMap.get(key)}`);
+      // Debug log removed(`DEBUG-FORWARD: ${key}: ${yearlyCompensationMap.get(key)}`);
     });
   }
 
   // Log monthly compensation data for the specific athlete
   Object.entries(monthlyCompByAthleteAndYear).forEach(([key, months]) => {
     if (key.includes(TEST_ATHLETE_ID)) {
-      // console.log(`DEBUG: Monthly data for athlete - Key: ${key}`);
-      // console.log('Monthly data:', months);
+      // // Debug log removed(`DEBUG: Monthly data for athlete - Key: ${key}`);
+      // // Debug log removed('Monthly data:', months);
     }
   });
   
-  // console.log('athleteCompensationMap', athleteCompensationMap);
+  // // Debug log removed('athleteCompensationMap', athleteCompensationMap);
   // Helper function to calculate fiscal year compensation based on selected month
   const calculateFiscalYearCompensation = (
     athleteId: string, 
@@ -487,8 +505,8 @@ export const fetchAdjustedPlayers = async (
     const isTargetAthlete = athleteId === TEST_ATHLETE_ID;
     
     if (isTargetAthlete) {
-      console.log(`DEBUG-FY: Starting fiscal year calc for athlete 94dcde39 - Year: ${year}, Month: ${selectedMonth}`);
-      console.log('DEBUG-FY: Extra Props:', extraProps);
+      // Debug log removed(`DEBUG-FY: Starting fiscal year calc for athlete 94dcde39 - Year: ${year}, Month: ${selectedMonth}`);
+      // Debug log removed('DEBUG-FY: Extra Props:', extraProps);
     }
     
     // Find the index of the selected month
@@ -513,15 +531,15 @@ export const fetchAdjustedPlayers = async (
           nextYearComp = currentYearComp;
           
           if (isTargetAthlete) {
-            console.log(`DEBUG-FY: Carrying forward current year comp to next year: ${nextYearComp}`);
+            // Debug log removed(`DEBUG-FY: Carrying forward current year comp to next year: ${nextYearComp}`);
           }
         }
       }
     }
 
     if (isTargetAthlete) {
-      console.log(`DEBUG-FY: Current year comp (${year}): ${currentYearComp}`);
-      console.log(`DEBUG-FY: Next year comp (${year + 1}): ${nextYearComp}`);
+      // Debug log removed(`DEBUG-FY: Current year comp (${year}): ${currentYearComp}`);
+      // Debug log removed(`DEBUG-FY: Next year comp (${year + 1}): ${nextYearComp}`);
     }
     
     // Get the monthly compensation data
@@ -534,9 +552,9 @@ export const fetchAdjustedPlayers = async (
     const scenario = extraProps['scenario'] || '';
     
     if (isTargetAthlete) {
-      console.log(`DEBUG-FY: Using scenario: ${scenario}, Selected scenario: ${selectedScenario}`);
-      console.log('DEBUG-FY: Current year monthly data:', currentYearMonthlyData);
-      console.log('DEBUG-FY: Next year monthly data:', nextYearMonthlyData);
+      // Debug log removed(`DEBUG-FY: Using scenario: ${scenario}, Selected scenario: ${selectedScenario}`);
+      // Debug log removed('DEBUG-FY: Current year monthly data:', currentYearMonthlyData);
+      // Debug log removed('DEBUG-FY: Next year monthly data:', nextYearMonthlyData);
     }
     
     // Calculate total for fiscal year: selectedMonth of current year to previous month of next year
@@ -578,34 +596,34 @@ export const fetchAdjustedPlayers = async (
         (!selectedScenario && (!monthData.scenario || monthData.scenario === ''))
       )) {
         if (isTargetAthlete) {
-          console.log(`DEBUG-MV: Using monthly value for selected scenario (or no scenario if none selected):`, monthData.amount);
+          // Debug log removed(`DEBUG-MV: Using monthly value for selected scenario (or no scenario if none selected):`, monthData.amount);
         }
         return monthData.amount || 0;
       }
       // 2. Annual value for selected scenario
       if (annualSelectedScenario > 0) {
         if (isTargetAthlete) {
-          console.log(`DEBUG-MV: Using annual value for selected scenario / 12:`, annualSelectedScenario / 12);
+          // Debug log removed(`DEBUG-MV: Using annual value for selected scenario / 12:`, annualSelectedScenario / 12);
         }
         return annualSelectedScenario / 12;
       }
       // 3. Monthly value for no scenario
       if (monthData && (!monthData.scenario || monthData.scenario === '')) {
         if (isTargetAthlete) {
-          console.log(`DEBUG-MV: Using monthly value for no scenario:`, monthData.amount);
+          // Debug log removed(`DEBUG-MV: Using monthly value for no scenario:`, monthData.amount);
         }
         return monthData.amount || 0;
       }
       // 4. Annual value for no scenario
       if (annualNoScenario > 0) {
         if (isTargetAthlete) {
-          console.log(`DEBUG-MV: Using annual value for no scenario / 12:`, annualNoScenario / 12);
+          // Debug log removed(`DEBUG-MV: Using annual value for no scenario / 12:`, annualNoScenario / 12);
         }
         return annualNoScenario / 12;
       }
       // Default fallback
       if (isTargetAthlete) {
-        console.log(`DEBUG-MV: No value found, returning 0`);
+        // Debug log removed(`DEBUG-MV: No value found, returning 0`);
       }
       return 0;
     };
@@ -651,8 +669,8 @@ export const fetchAdjustedPlayers = async (
       // Store the calculated monthly value for later use
       calculatedMonthlyValues[month] = monthlyValue;
       if (isTargetAthlete) {
-        console.log(`DEBUG-FY: ${month} ${year} value: ${monthlyValue} (running total: ${fiscalYearTotal})`);
-        console.log(`DEBUG-FY: monthData for ${month}:`, currentYearMonthlyData[month]);
+        // Debug log removed(`DEBUG-FY: ${month} ${year} value: ${monthlyValue} (running total: ${fiscalYearTotal})`);
+        // Debug log removed(`DEBUG-FY: monthData for ${month}:`, currentYearMonthlyData[month]);
       }
       // Gather extra compensation values
       gatherExtraCompValues(currentYearMonthlyData[month], extraProps, true);
@@ -671,16 +689,16 @@ export const fetchAdjustedPlayers = async (
       // Store the calculated monthly value for later use
       calculatedMonthlyValues[month] = monthlyValue;
       if (isTargetAthlete) {
-        console.log(`DEBUG-FY: ${month} ${year + 1} value: ${monthlyValue} (running total: ${fiscalYearTotal})`);
-        console.log(`DEBUG-FY: monthData for ${month}:`, nextYearMonthlyData[month]);
+        // Debug log removed(`DEBUG-FY: ${month} ${year + 1} value: ${monthlyValue} (running total: ${fiscalYearTotal})`);
+        // Debug log removed(`DEBUG-FY: monthData for ${month}:`, nextYearMonthlyData[month]);
       }
       // Gather extra compensation values
       gatherExtraCompValues(nextYearMonthlyData[month], extraProps, false);
     }
     
     if (isTargetAthlete) {
-      console.log(`DEBUG-FY: Final fiscal year total: ${fiscalYearTotal}`);
-      console.log(`DEBUG-FY: Final calculatedMonthlyValues:`, calculatedMonthlyValues);
+      // Debug log removed(`DEBUG-FY: Final fiscal year total: ${fiscalYearTotal}`);
+      // Debug log removed(`DEBUG-FY: Final calculatedMonthlyValues:`, calculatedMonthlyValues);
     }
     
     return {
@@ -696,7 +714,7 @@ export const fetchAdjustedPlayers = async (
       const isTargetAthlete = athlete.id === TEST_ATHLETE_ID;
       
       if (isTargetAthlete) {
-        console.log('DEBUG-ATH: Found target athlete:', athlete.name__first, athlete.name__last);
+        // Debug log removed('DEBUG-ATH: Found target athlete:', athlete.name__first, athlete.name__last);
       }
       
       const originalYear = athlete.year; // Store original year
@@ -705,19 +723,19 @@ export const fetchAdjustedPlayers = async (
       const athleteCompData = athleteCompensationMap.get(athlete.id) || [];
       
       if (isTargetAthlete) {
-        console.log('DEBUG-ATH: Athlete yearly compensation data (athleteCompData):', athleteCompData);
+        // Debug log removed('DEBUG-ATH: Athlete yearly compensation data (athleteCompData):', athleteCompData);
         
         // SPECIAL DEBUGGING: Get the monthly data directly from the source
         const targetAthleteKeys = Object.keys(monthlyCompByAthleteAndYear).filter(key => 
           key.includes(athlete.id)
         );
         if (targetAthleteKeys.length > 0) {
-          console.log('DEBUG-ATH: Athlete monthly compensation data keys:', targetAthleteKeys);
+          // Debug log removed('DEBUG-ATH: Athlete monthly compensation data keys:', targetAthleteKeys);
           targetAthleteKeys.forEach(key => {
-            console.log(`DEBUG-ATH: Monthly data for key ${key}:`, monthlyCompByAthleteAndYear[key]);
+            // Debug log removed(`DEBUG-ATH: Monthly data for key ${key}:`, monthlyCompByAthleteAndYear[key]);
           });
         } else {
-          console.log('DEBUG-ATH: No monthly data found for this athlete');
+          // Debug log removed('DEBUG-ATH: No monthly data found for this athlete');
         }
       }
       
@@ -761,8 +779,8 @@ export const fetchAdjustedPlayers = async (
       }
 
       if (isTargetAthlete) {
-        console.log('DEBUG-ATH: Matching compensation for current year:', matchingCompensation);
-        console.log('DEBUG-ATH: Matching compensation for next year:', nextYearMatchingCompensation);
+        // Debug log removed('DEBUG-ATH: Matching compensation for current year:', matchingCompensation);
+        // Debug log removed('DEBUG-ATH: Matching compensation for next year:', nextYearMatchingCompensation);
       }
 
       // Extract extra comp fields from matching compensation
@@ -778,7 +796,7 @@ export const fetchAdjustedPlayers = async (
       }
       
       if (isTargetAthlete) {
-        console.log('DEBUG-ATH: Extra fields:', extraFields);
+        // Debug log removed('DEBUG-ATH: Extra fields:', extraFields);
       }
       
       // Add next year's compensation to the yearlyCompensationMap if available
@@ -788,7 +806,7 @@ export const fetchAdjustedPlayers = async (
         yearlyCompensationMap.set(nextYearKey, nextYearMatchingCompensation.amount || 0);
         
         if (isTargetAthlete) {
-          console.log(`DEBUG-ATH: Added next year comp to map: ${nextYearKey} = ${nextYearMatchingCompensation.amount}`);
+          // Debug log removed(`DEBUG-ATH: Added next year comp to map: ${nextYearKey} = ${nextYearMatchingCompensation.amount}`);
         }
       }
 
@@ -797,7 +815,7 @@ export const fetchAdjustedPlayers = async (
       const fiscalYearCompensation = calculateFiscalYearCompensation(athlete.id, year, extraFields);
 
       if (isTargetAthlete) {
-        console.log('DEBUG-ATH: Fiscal year compensation result:', fiscalYearCompensation);
+        // Debug log removed('DEBUG-ATH: Fiscal year compensation result:', fiscalYearCompensation);
       }
 
       // Create a new object with all athlete data and compensation
@@ -825,18 +843,18 @@ export const fetchAdjustedPlayers = async (
       athleteWithComp.monthlyCompensation = Object.fromEntries(monthlyCompensationEntries);
       
       if (isTargetAthlete) {
-        console.log('DEBUG-ATH: Final monthly compensation:', athleteWithComp.monthlyCompensation);
-        console.log('DEBUG-ATH: Final total compensation:', athleteWithComp.compensation);
+        // Debug log removed('DEBUG-ATH: Final monthly compensation:', athleteWithComp.monthlyCompensation);
+        // Debug log removed('DEBUG-ATH: Final total compensation:', athleteWithComp.compensation);
         
         // SPECIFIC DEBUG: Show monthlyValues directly from fiscalYearCompensation
-        console.log('DEBUG-ATH: monthlyValues from fiscalYearCompensation:', monthlyValues);
-        console.log('DEBUG-ATH: monthlyCompensationEntries array:', monthlyCompensationEntries);
-        console.log('DEBUG-ATH: Object.fromEntries result:', Object.fromEntries(monthlyCompensationEntries));
+        // Debug log removed('DEBUG-ATH: monthlyValues from fiscalYearCompensation:', monthlyValues);
+        // Debug log removed('DEBUG-ATH: monthlyCompensationEntries array:', monthlyCompensationEntries);
+        // Debug log removed('DEBUG-ATH: Object.fromEntries result:', Object.fromEntries(monthlyCompensationEntries));
       }
       
       return athleteWithComp;
   });
-  // console.log('athletesWithCompensation', athletesWithCompensation);
+  // // Debug log removed('athletesWithCompensation', athletesWithCompensation);
     // Fetch additional data from athletes_additional_data table
     const { data: additionalData, error: additionalDataError } = await supabase
       .from("athletes_additional_data")
@@ -894,8 +912,8 @@ export const fetchAdjustedPlayers = async (
       .map((player: any) => adjustPlayerForYear(player, selectedYear))
       .filter((player: Player | null): player is Player => player !== null)
     // Apply active filters
-    // console.log('sortedData', sortedData);
-    // console.log('activeFilters', activeFilters);
+    // // Debug log removed('sortedData', sortedData);
+    // // Debug log removed('activeFilters', activeFilters);
     const filteredData = sortedData.filter((player: Player) => {
       // Filter by position
       if (activeFilters.position && activeFilters.position.length > 0) {
@@ -904,7 +922,7 @@ export const fetchAdjustedPlayers = async (
         }
       }
       if (player.id === TEST_ATHLETE_ID) {
-        console.log('player', player);
+        // Debug log removed('player', player);
       }
 
       // Filter by recruit status
@@ -965,8 +983,8 @@ export const fetchAdjustedPlayers = async (
     const deadMoneyData = filteredData.filter((player: Player) => 
       player.ending_season !== 0 && player.ending_season < selectedYear
     );
-    console.log('activeData', activeData.filter((player: Player) => player.athlete_id === TEST_ATHLETE_ID));
-  // console.log('deadMoneyData', deadMoneyData);
+    // Debug log removed('activeData', activeData.filter((player: Player) => player.athlete_id === TEST_ATHLETE_ID));
+  // // Debug log removed('deadMoneyData', deadMoneyData);
     return {
       players: activeData,
       deadMoney: deadMoneyData,
@@ -1137,7 +1155,7 @@ export const fetchPositionOrder = async (teamId: string, selectedYear: number) =
     console.error('Error fetching position order:', error);
     return [];
   }
-  // console.log('data', data);
+  // // Debug log removed('data', data);
   // Use a Map to remove duplicates, keeping the first occurrence (which will be from the most recent year)
   const uniquePositions = new Map();
   const categories = new Set();
@@ -1169,7 +1187,7 @@ export const fetchPositionOrder = async (teamId: string, selectedYear: number) =
     positions: positionsArray,
     categories: Array.from(categories) as string[]
   };
-  // console.log('originalFormat', originalFormat);
+  // // Debug log removed('originalFormat', originalFormat);
   return originalFormat;
 };
 
@@ -1527,7 +1545,7 @@ export interface CustomerOptionFact {
  */
 export const fetchColorConfigurations = async (customerId: string): Promise<CustomerOption[]> => {
   try {
-    // console.log('DEBUG_FETCH: Starting fetchColorConfigurations for customer ID:', customerId);
+    // // Debug log removed('DEBUG_FETCH: Starting fetchColorConfigurations for customer ID:', customerId);
     
     // 1. Fetch customer options
     const { data: options, error: optionsError } = await supabase
@@ -1536,7 +1554,7 @@ export const fetchColorConfigurations = async (customerId: string): Promise<Cust
       .eq('customer_id', customerId)
       .is('ended_at', null);
     
-    // console.log('DEBUG_FETCH: customer_option query response:', { options, optionsError });
+    // // Debug log removed('DEBUG_FETCH: customer_option query response:', { options, optionsError });
     
     if (optionsError) {
       console.error('Error fetching customer options:', optionsError);
@@ -1544,15 +1562,15 @@ export const fetchColorConfigurations = async (customerId: string): Promise<Cust
     }
 
     if (!options || options.length === 0) {
-      // console.log('DEBUG_FETCH: No options found for customer ID:', customerId);
+      // // Debug log removed('DEBUG_FETCH: No options found for customer ID:', customerId);
       return [];
     }
 
-    // console.log('DEBUG_FETCH: Found options:', options.length);
+    // // Debug log removed('DEBUG_FETCH: Found options:', options.length);
     
     // 2. Fetch associated facts for each option
     const optionIds = options.map((option: any) => option.id);
-    // console.log('DEBUG_FETCH: Fetching facts for option IDs:', optionIds);
+    // // Debug log removed('DEBUG_FETCH: Fetching facts for option IDs:', optionIds);
     
     const { data: facts, error: factsError } = await supabase
       .from('customer_option_fact')
@@ -1561,7 +1579,7 @@ export const fetchColorConfigurations = async (customerId: string): Promise<Cust
       .is('ended_at', null)
       .or(`option_type.eq.card_color,option_type.eq.side_color`);
     
-    // console.log('DEBUG_FETCH: Facts query response:', { 
+    // // Debug log removed('DEBUG_FETCH: Facts query response:', { 
     //   factsCount: facts ? facts.length : 0, 
     //   factsError 
     // });
@@ -1577,7 +1595,7 @@ export const fetchColorConfigurations = async (customerId: string): Promise<Cust
         ? facts.filter((fact: any) => fact.customer_option_id === option.id)
         : [];
       
-      // console.log(`DEBUG_FETCH: Option ${option.id} has ${optionFacts.length} facts`);
+      // // Debug log removed(`DEBUG_FETCH: Option ${option.id} has ${optionFacts.length} facts`);
       
       return {
         ...option,
@@ -1585,7 +1603,7 @@ export const fetchColorConfigurations = async (customerId: string): Promise<Cust
       };
     });
 
-    // console.log('DEBUG_FETCH: Returning options with facts:', optionsWithFacts.length);
+    // // Debug log removed('DEBUG_FETCH: Returning options with facts:', optionsWithFacts.length);
     return optionsWithFacts;
   } catch (error) {
     console.error('Error in fetchColorConfigurations:', error);
@@ -1651,7 +1669,7 @@ export const updateConfigurationSelectionState = async (
   selected: number
 ): Promise<boolean> => {
   try {
-    // console.log(`DEBUG_UPDATE: Updating configuration ${configId} selection state to ${selected}`);
+    // // Debug log removed(`DEBUG_UPDATE: Updating configuration ${configId} selection state to ${selected}`);
     
     const { data, error } = await supabase
       .from('customer_option')
@@ -1659,7 +1677,7 @@ export const updateConfigurationSelectionState = async (
       .eq('id', configId)
       .select();
     
-    // console.log(`DEBUG_UPDATE: Update query response:`, { data, error });
+    // // Debug log removed(`DEBUG_UPDATE: Update query response:`, { data, error });
     
     if (error) {
       console.error('Error updating configuration selection state:', error);
@@ -1673,7 +1691,7 @@ export const updateConfigurationSelectionState = async (
       .eq('id', configId)
       .single();
     
-    // console.log(`DEBUG_UPDATE: Verification query response:`, { 
+    // // Debug log removed(`DEBUG_UPDATE: Verification query response:`, { 
     //   verifyData, 
     //   verifyError,
     //   selectionMatches: verifyData && verifyData.selected === selected
@@ -1917,20 +1935,57 @@ export const convertFactsToTagRules = (facts: CustomerOptionFact[]): TagColorRul
 
 /**
  * Fetches active alerts (where ended_date is null or 'na') from tp_alert table
+ * For customer users, filters alerts based on user_customer_map access
  */
 export const fetchActiveAlerts = async (): Promise<Alert[]> => {
-  const { data, error } = await supabase
-    .from('tp_alert')
-    .select('*')
-    .is('ended_at', null)
-    .order('created_at', { ascending: false });
+  try {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      console.error('Error getting current user:', userError);
+      return [];
+    }
 
-  if (error) {
-    console.error('Error fetching alerts:', error);
+    // All users (including admins) only see alerts for customers they have access to
+    // First get the customer IDs the user has access to
+    const { data: userCustomers, error: userCustomerError } = await supabase
+      .from('user_customer_map')
+      .select('customer_id')
+      .eq('user_id', user.id)
+      .is('access_end', null);
+
+    if (userCustomerError) {
+      console.error('Error fetching user customers:', userCustomerError);
+      return [];
+    }
+
+    if (!userCustomers || userCustomers.length === 0) {
+      // User has no customer access
+      return [];
+    }
+
+    const customerIds = userCustomers.map((uc: { customer_id: string }) => uc.customer_id);
+
+    const query = supabase
+      .from('tp_alert')
+      .select('*')
+      .is('ended_at', null)
+      .in('customer_id', customerIds)
+      .order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching alerts:', error);
+      return [];
+    }
+    
+    return (data || []) as Alert[];
+  } catch (err) {
+    console.error('Unexpected error in fetchActiveAlerts:', err);
     return [];
   }
-  // console.log("[DEBUG] fetchActiveAlerts returned:", data);
-  return data as Alert[];
 };
 
 export const updateAlert = async (alert: Alert) => {
@@ -1959,7 +2014,8 @@ export const deleteAlert = async (id: number) => {
 };
 
 /**
- * Fetches all users' emails and names attached to a given customer_id.
+ * Fetches all active users' emails and names attached to a given customer_id.
+ * Only returns users with access_end = null (active users).
  * @param customerId The customer ID to fetch users for
  * @returns Promise<Array<{ id: string; email: string; name_first: string; name_last: string }>>
  */
@@ -1971,19 +2027,21 @@ export const fetchUsersForCustomer = async (
       .from('user_customer_map')
       .select(`
         user_id,
+        access_end,
         user_detail:user_id (
           id,
           name_first,
           name_last
         )
       `)
-      .eq('customer_id', customerId);
+      .eq('customer_id', customerId)
+      .is('access_end', null); // Only fetch active users
 
     if (error) {
       console.error('Error fetching users for customer:', error);
       return [];
     }
-    // console.log("[DEBUG] fetchUsersForCustomer returned:", data);
+    // // Debug log removed("[DEBUG] fetchUsersForCustomer returned:", data);
     // Map to a flat array of user info
     return (
       data?.filter((item: any) => item.user_detail)

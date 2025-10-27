@@ -1,21 +1,42 @@
-import React, { useRef, useEffect } from 'react';
-import { useDrag, useDrop } from 'react-dnd';
-import { getEmptyImage } from 'react-dnd-html5-backend';
+import React, { useRef } from 'react';
+import { useDrag } from 'react-dnd/dist/hooks';
 import { DepthChartSubPosition, DepthChartAssignmentWithAthlete } from '@/types/depthChart';
 import DepthChartDropZone from './DepthChartDropZone';
 
-export const SUB_POSITION_DRAG_TYPE = 'SUB_POSITION';
+interface AthleteDropItem {
+  assignmentId: string;
+  athleteId: string;
+  currentSubPositionId: string;
+  currentRanking: number;
+}
+
+export const SUB_POSITION_DRAG_TYPE = 'SUB_POSITION' as const;
+
+type DragItem = {
+  id: string;
+  type: typeof SUB_POSITION_DRAG_TYPE;
+  currentX: number;
+  currentY: number;
+  name: string;
+  assignmentCount: number;
+  hasAssignments: boolean;
+  offsetX: number;
+  offsetY: number;
+}
 
 interface DraggableSubPositionProps {
   subPosition: DepthChartSubPosition;
   assignments: DepthChartAssignmentWithAthlete[];
-  onDrop: (item: any, subPositionId: string) => void;
+  onDrop: (item: AthleteDropItem, subPositionId: string) => void;
   onMoveUp: (assignmentId: string) => void;
   onMoveDown: (assignmentId: string) => void;
   onRemove: (assignmentId: string) => void;
   onAddAthlete: (subPositionId: string) => void;
   onDeleteSubPosition?: (subPositionId: string) => void;
   onMoveSubPosition: (subPositionId: string, x: number, y: number) => void;
+  onAthleteDrop?: (draggedAthlete: AthleteDropItem, targetAthlete: AthleteDropItem) => void;
+  onAthleteInsert?: (draggedAthlete: AthleteDropItem, insertPosition: number) => void;
+  onCreateTie?: (draggedAthlete: AthleteDropItem, targetAthlete: AthleteDropItem) => void;
   isDropping?: boolean;
 }
 
@@ -29,25 +50,28 @@ const DraggableSubPosition: React.FC<DraggableSubPositionProps> = ({
   onAddAthlete,
   onDeleteSubPosition,
   onMoveSubPosition,
+  onAthleteDrop,
+  onAthleteInsert,
+  onCreateTie,
   isDropping = false
-}) => {
+}: DraggableSubPositionProps) => {
   const ref = useRef<HTMLDivElement>(null);
 
   // Set up drag for the sub-position
-  const [{ isDragging }, drag, preview] = useDrag({
+  const [{ isDragging }, drag] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: SUB_POSITION_DRAG_TYPE,
-    item: () => {
-      // Use fixed offsets since we know the element structure
-      // The element is 200px wide and uses translate(-50%, -50%)
-      // So the center point is at 100px from left, ~60px from top
-      const offsetX = 100; // Half of 200px width
-      const offsetY = 60;  // Approximate center for the height
+    item: (monitor): DragItem => {
+      // Get the actual element dimensions and position
+      const element = ref.current;
+      const rect = element?.getBoundingClientRect();
       
-      console.log('🎯 DRAG START - Using fixed offsets:', {
-        subPositionName: subPosition.name,
-        subPositionCoords: { x: subPosition.x_coord, y: subPosition.y_coord },
-        fixedOffsets: { offsetX, offsetY }
-      });
+      // Get the initial client offset when drag started
+      const initialClientOffset = monitor.getInitialClientOffset();
+      const initialSourceClientOffset = monitor.getInitialSourceClientOffset();
+      
+      // Set offsets to 0 so the mouse position directly corresponds to top-left
+      const offsetX = 0;
+      const offsetY = 0;
       
       const dragItem = {
         id: subPosition.id,
@@ -60,19 +84,23 @@ const DraggableSubPosition: React.FC<DraggableSubPositionProps> = ({
         offsetX,
         offsetY
       };
-      
-      console.log('📦 DRAG ITEM created:', dragItem);
       return dragItem;
     },
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isDragging: monitor.isDragging(),
     }),
+    end: (item: DragItem | undefined, monitor: any) => {
+      const dropResult = monitor.getDropResult();
+      if (!dropResult) return;
+
+      // Handle the drop result if needed
+      const { x, y } = dropResult as { x: number; y: number };
+      if (typeof x === 'number' && typeof y === 'number') {
+        onMoveSubPosition(subPosition.id, x, y);
+      }
+    },
   });
 
-  // Use empty image for preview to remove default ghost image
-  useEffect(() => {
-    preview(getEmptyImage(), { captureDraggingState: true });
-  }, [preview]);
 
   // Apply drag ref
   drag(ref);
@@ -94,6 +122,9 @@ const DraggableSubPosition: React.FC<DraggableSubPositionProps> = ({
         onRemove={onRemove}
         onAddAthlete={onAddAthlete}
         onDeleteSubPosition={onDeleteSubPosition}
+        onAthleteDrop={onAthleteDrop}
+        onAthleteInsert={onAthleteInsert}
+        onCreateTie={onCreateTie}
         isDropping={isDropping}
       />
     </div>

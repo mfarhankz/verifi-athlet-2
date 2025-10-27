@@ -1,26 +1,31 @@
 import React from 'react';
-import { useDragLayer } from 'react-dnd';
+import { useDragLayer } from 'react-dnd/dist/hooks';
 import { SUB_POSITION_DRAG_TYPE } from './DraggableSubPosition';
+import { ATHLETE_DRAG_TYPE } from './DraggableAthleteCard';
 
 const CustomDragLayer: React.FC = () => {
   const {
     isDragging,
     item,
     clientOffset,
+    initialClientOffset,
+    initialSourceClientOffset,
   } = useDragLayer((monitor) => ({
     item: monitor.getItem(),
     isDragging: monitor.isDragging(),
     clientOffset: monitor.getClientOffset(),
+    initialClientOffset: monitor.getInitialClientOffset(),
+    initialSourceClientOffset: monitor.getInitialSourceClientOffset(),
   }));
 
   if (!isDragging || !clientOffset) {
     return null;
   }
 
-  // Get the field container to match its scaling and positioning
-  const fieldContainer = document.querySelector('[data-field-drop-zone="true"]')?.parentElement;
+  // Get the depth chart container to match its scaling and positioning
+  const depthChartContainer = document.querySelector('.depth-chart-container');
   const fieldDropZone = document.querySelector('[data-field-drop-zone="true"]');
-  const containerStyle = fieldContainer ? window.getComputedStyle(fieldContainer) : null;
+  const containerStyle = depthChartContainer ? window.getComputedStyle(depthChartContainer) : null;
   const dropZoneRect = fieldDropZone ? fieldDropZone.getBoundingClientRect() : null;
   
   // Parse the scale from the container's transform
@@ -46,8 +51,30 @@ const CustomDragLayer: React.FC = () => {
     adjustedY = dropZoneRect.top + (relativeY * scaleY) - (item?.offsetY || 60);
   }
 
+  // Just log that our custom drag layer is active
+  console.log('👻 CUSTOM DRAG LAYER ACTIVE:', item?.type, item?.name || 'athlete');
+
   const renderDragPreview = () => {
     switch (item.type) {
+      case ATHLETE_DRAG_TYPE:
+        return (
+          <div style={{ 
+            width: '200px', 
+            opacity: 0.9,
+            backgroundColor: 'white',
+            border: '2px solid #3b82f6',
+            borderRadius: '8px',
+            padding: '12px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+          }}>
+            <div className="text-sm font-medium text-gray-900">
+              Athlete Card
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Moving athlete assignment
+            </div>
+          </div>
+        );
       case SUB_POSITION_DRAG_TYPE:
         return (
           <div style={{ width: '200px', opacity: 0.9 }}>
@@ -106,6 +133,7 @@ const CustomDragLayer: React.FC = () => {
 
   return (
     <div
+      data-custom-drag-layer="true"
       style={{
         position: 'fixed',
         pointerEvents: 'none',

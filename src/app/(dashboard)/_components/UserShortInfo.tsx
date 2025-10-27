@@ -52,7 +52,7 @@ export default function UserShortInfo({
     } else if (athleteWeight) {
       return `${athleteWeight} lbs`;
     }
-    return 'N/A';
+    return '';
   };
 
   return (
@@ -112,7 +112,7 @@ export default function UserShortInfo({
                 </>
               ) : (
                 // No rating available
-                <h6>N/A</h6>
+                <h6></h6>
               )}
             </Flex>
           </Flex>

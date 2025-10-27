@@ -113,7 +113,7 @@ export default function Step4({
         </Flex>
       </Flex>
 
-      <div className="flex flex-col lg:flex-row gap-5">
+      <div className="flex flex-col gap-5 max-w-3xl mx-auto">
         <Flex vertical className="w-full">
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>Playing time</Typography.Title>

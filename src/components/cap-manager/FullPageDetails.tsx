@@ -13,6 +13,8 @@ import { fetchAdjustedPlayers } from '../../utils/utils';
 import { CompDisplayMode } from '../../utils/compAccessUtils';
 import { fetchBudgetData } from '../../utils/utils';
 import { useShowScholarshipDollars } from '../../utils/utils';
+import { CommentService } from '../../lib/commentService';
+import { Comment } from '@/types/database';
 
 interface FullPageDetailsProps {
   athleteId: string;
@@ -53,6 +55,9 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
     meals: 0,
     cost_attendance: 0,
   });
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [showCommentHistory, setShowCommentHistory] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, any>[]>([]);
   const showScholarshipDollars = useShowScholarshipDollars();
 
@@ -72,7 +77,7 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         return;
       }
 
-      console.log('Fetched budget data:', budgetData);
+      // Debug log removed('Fetched budget data:', budgetData);
 
       // Get additional fields from budget data
       const standardFields = [
@@ -94,7 +99,7 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         .filter(key => !standardFields.includes(key))
         .filter(key => overallBudgetItem[key] !== null && overallBudgetItem[key] !== undefined);
 
-      console.log('Found additional budget fields:', additionalFields);
+      // Debug log removed('Found additional budget fields:', additionalFields);
 
       // Now fetch the player data
       const { players } = await fetchAdjustedPlayers(
@@ -113,7 +118,7 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
       }
 
       const player = players[0];
-      console.log('Fetched player data:', player);
+      // Debug log removed('Fetched player data:', player);
 
       // Create additional budget fields array using the fields found in budget data
       const additionalBudgetFields = additionalFields.map(fieldName => ({
@@ -121,7 +126,7 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         amount: (player as any)[fieldName] || 0
       }));
       
-      console.log('Additional budget fields with values:', additionalBudgetFields);
+      // Debug log removed('Additional budget fields with values:', additionalBudgetFields);
       setAdditionalBudgets(additionalBudgetFields);
       
       // Set form data with the player info
@@ -148,7 +153,7 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
           }, {} as Record<string, number>)
         }
       };
-      console.log('Initial yearly data:', initialYearlyData);
+      // Debug log removed('Initial yearly data:', initialYearlyData);
       setYearlyData(initialYearlyData);
 
       setScholarshipDetails({
@@ -222,8 +227,8 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
       const monthlyOverride = overrides.find(co => co.season_override === year && co.month === month);
       const monthlyCompensation = overrides.find(c => c.year === year && c.month === month);
       const monthlyAthleteOverride = overrides.find(o => o.season_override === year && o.month === month);
-      // console.log("monthlyAthleteOverride", monthlyCompensation);
-      // console.log("monthlyOverride", monthlyOverride);
+      // // Debug log removed("monthlyAthleteOverride", monthlyCompensation);
+      // // Debug log removed("monthlyOverride", monthlyOverride);
       return {
         year,
         month,
@@ -245,19 +250,19 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
   };
 
   const handleSave = async (overrideScholarshipInput?: number, force = false) => {
-    console.log("handleSave called", { overrideScholarshipInput, formData, showScholarshipDollars, force });
+    // Debug log removed("handleSave called", { overrideScholarshipInput, formData, showScholarshipDollars, force });
     if (!formData) {
-      console.log("formData is null, aborting save");
+      // Debug log removed("formData is null, aborting save");
       return;
     }
 
     if (showScholarshipDollars) {
       const sum = Object.values(scholarshipDetails).reduce((a, b) => a + b, 0);
       const inputToUse = overrideScholarshipInput !== undefined ? overrideScholarshipInput : scholarshipInput;
-      console.log("Scholarship save check", { inputToUse, sum, scholarshipDetails });
+      // Debug log removed("Scholarship save check", { inputToUse, sum, scholarshipDetails });
       if (inputToUse !== sum && !force) {
         setShowScholarshipMismatchModal(true);
-        console.log("Mismatch, showing modal");
+        // Debug log removed("Mismatch, showing modal");
         return;
       }
 
@@ -271,11 +276,11 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
           value: inputToUse,
         }, { onConflict: ['athlete_id', 'season', 'category_name'] });
 
-      console.log("Upsert response:", { data, error, status, statusText });
+      // Debug log removed("Upsert response:", { data, error, status, statusText });
       if (error) {
         console.error("Error saving scholarship total:", error);
       } else {
-        console.log("Saved scholarship total");
+        // Debug log removed("Saved scholarship total");
       }
 
       // Save each detail
@@ -298,11 +303,11 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         if (error) {
           console.error(`Error saving ${category}:`, error);
         } else {
-          console.log(`Saved ${category}`);
+          // Debug log removed(`Saved ${category}`);
         }
       }
     } else {
-      console.log("showScholarshipDollars is false, skipping scholarship save");
+      // Debug log removed("showScholarshipDollars is false, skipping scholarship save");
     }
 
     // Check validation and await the result
@@ -336,7 +341,6 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         name__first: formData.name__first,
         name__last: formData.name__last,
         image_url: image_url,
-        notes: formData.notes,
       })
       .eq('id', athleteId)
       .eq('scenario', selectedScenario);
@@ -351,7 +355,6 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         name__first: formData.name__first,
         name__last: formData.name__last,
         image_url: image_url,
-        notes: formData.notes,
         scenario: selectedScenario
       });
     
@@ -607,9 +610,9 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
                 return;
               }
               
-              console.log(`Successfully saved additional budget data`);
+              // Debug log removed(`Successfully saved additional budget data`);
             } else {
-              console.log('No extraUpserts to save');
+              // Debug log removed('No extraUpserts to save');
             }
           } catch (error) {
             console.error('Unexpected error during compensation save:', error);
@@ -649,6 +652,52 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
 
   const handleClose = () => {
     window.close();
+  };
+
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !athleteId) return;
+
+    try {
+      const { data: userDetails } = await supabase.auth.getUser();
+      if (!userDetails?.user?.id) {
+        console.error('No user ID found');
+        return;
+      }
+
+      await CommentService.createComment({
+        content: newComment,
+        athlete_id: athleteId,
+        user_id: userDetails.user.id,
+        customer_id: team
+      });
+
+      // Refresh comments
+      const comments = await CommentService.getCommentsForAthlete(athleteId);
+      setComments(comments);
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+
+    try {
+      const { data: userDetails } = await supabase.auth.getUser();
+      if (!userDetails?.user?.id) {
+        console.error('No user ID found');
+        return;
+      }
+
+      await CommentService.deleteComment(commentId, userDetails.user.id);
+      
+      // Refresh comments
+      const comments = await CommentService.getCommentsForAthlete(athleteId);
+      setComments(comments);
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+    }
   };
 
   useEffect(() => {
@@ -706,6 +755,20 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
       cost_attendance: formData.scholarship_dollars_cost_attendance || 0,
     });
   }, [formData]);
+
+  // Fetch comments when athlete ID changes
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!athleteId) return;
+      try {
+        const comments = await CommentService.getCommentsForAthlete(athleteId);
+        setComments(comments);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+      }
+    };
+    fetchComments();
+  }, [athleteId]);
 
   if (loading) {
     return (
@@ -924,8 +987,88 @@ const FullPageDetails: React.FC<FullPageDetailsProps> = ({ athleteId, team, sele
         </>
       )}
       <div>
-        <label>Notes</label>
-        <textarea name="notes" value={formData.notes || ''} onChange={handleChange} />
+        <label>Comments</label>
+        <div className={styles.commentsSection}>
+          {/* Side by side layout for add comment and most recent comment */}
+          <div className={styles.commentsRow}>
+            {/* Add New Comment */}
+            <div className={styles.addCommentSection}>
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Add a comment..."
+                className={styles.commentInput}
+              />
+              <button
+                onClick={handleAddComment}
+                disabled={!newComment.trim()}
+                className={styles.addCommentButton}
+              >
+                Add Comment
+              </button>
+            </div>
+
+            {/* Most Recent Comment */}
+            {comments.length > 0 && (
+              <div className={styles.mostRecentComment}>
+                <div className={styles.commentItem}>
+                  <div className={styles.commentHeader}>
+                    <span className={styles.commentAuthor}>
+                      {comments[0].user_detail.name_first} {comments[0].user_detail.name_last}
+                    </span>
+                    <span className={styles.commentDate}>
+                      {new Date(comments[0].created_at).toLocaleDateString()}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteComment(comments[0].id)}
+                      className={styles.deleteCommentButton}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className={styles.commentContent}>{comments[0].content}</div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Comment History Toggle */}
+          {comments.length > 1 && (
+            <div className={styles.commentHistorySection}>
+              <button
+                onClick={() => setShowCommentHistory(!showCommentHistory)}
+                className={styles.commentHistoryToggle}
+              >
+                {showCommentHistory ? 'Hide History' : `Show History (${comments.length - 1} more)`}
+              </button>
+              
+              {/* Comment History */}
+              {showCommentHistory && (
+                <div className={styles.commentHistory}>
+                  {comments.slice(1).map((comment) => (
+                    <div key={comment.id} className={styles.commentItem}>
+                      <div className={styles.commentHeader}>
+                        <span className={styles.commentAuthor}>
+                          {comment.user_detail.name_first} {comment.user_detail.name_last}
+                        </span>
+                        <span className={styles.commentDate}>
+                          {new Date(comment.created_at).toLocaleDateString()}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteComment(comment.id)}
+                          className={styles.deleteCommentButton}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className={styles.commentContent}>{comment.content}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div>
         <label>Injured</label>

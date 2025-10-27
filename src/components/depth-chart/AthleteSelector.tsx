@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Input, Select, Button, Space, Spin, Modal, List } from 'antd';
 import { SearchOutlined, CloseOutlined } from '@ant-design/icons';
-import { useDrag } from 'react-dnd';
+import { useDrag } from 'react-dnd/dist/hooks';
 import { AthleteData } from '@/types/database';
 import { isAthleteAssigned, assignAthleteToDepthChart } from '@/utils/depthChartUtils';
 import { fetchAdjustedPlayers, fetchSubPositions } from '@/utils/utils';

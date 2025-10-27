@@ -43,7 +43,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
       try {
         setLoading(true);
         const data = await fetchAthleteById(athleteId);
-        if (data) {
+          if (data) {
           setAthlete(data);
           
           // Fetch existing data from athlete_fact table for survey fields
@@ -51,7 +51,8 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
             .from('athlete_fact')
             .select('data_type_id, value, created_at')
             .eq('athlete_id', athleteId)
-            .in('data_type_id', [1, 2, 3, 8, 10, 13, 14, 15, 16, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 77, 78, 79, 230, 231, 234, 246, 247, 248, 251, 570, 571])
+            .or('inactive.is.null,inactive.eq.false')
+            .in('data_type_id', [1, 2, 3, 8, 10, 13, 14, 15, 16, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 77, 78, 79, 230, 231, 234, 246, 247, 248, 251, 570, 571, 7, 72, 255, 256, 365, 366, 679, 680, 681, 682, 686, 687, 688, 693, 696])
             .order('created_at', { ascending: false });
 
           if (factsError) {
@@ -103,7 +104,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
 
   // Visual feedback when currentStep changes (when user advances to next step)
   useEffect(() => {
-    console.log('Current step changed to:', currentStep);
+    // Debug log removed('Current step changed to:', currentStep);
     
     // Force a re-render and add visual feedback
     setStepChangeKey(prev => prev + 1);
@@ -113,7 +114,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
       // Try multiple approaches for visual feedback
       
       // 1. Simple alert to confirm step change (temporary for testing)
-      console.log('STEP CHANGED - VISUAL FEEDBACK SHOULD HAPPEN NOW');
+      // Debug log removed('STEP CHANGED - VISUAL FEEDBACK SHOULD HAPPEN NOW');
       
       // 2. Try to scroll to top
       window.scrollTo(0, 0);
@@ -126,29 +127,78 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
       
       // 4. Try to flash the container if it exists
       if (containerRef.current) {
-        console.log('Container found, trying to highlight');
+        // Debug log removed('Container found, trying to highlight');
         containerRef.current.style.transition = 'background-color 0.3s ease';
         containerRef.current.style.backgroundColor = '#ffeb3b'; // Bright yellow for visibility
         setTimeout(() => {
           if (containerRef.current) {
             containerRef.current.style.backgroundColor = '';
-            console.log('Highlight removed');
+            // Debug log removed('Highlight removed');
           }
         }, 500);
       } else {
-        console.log('Container ref not found');
+        // Debug log removed('Container ref not found');
       }
     }
   }, [currentStep]);
 
   // Function to save individual survey section to the database
+  // Function to update survey_completed field in athlete_fact table
+  const updateSurveyCompleted = async () => {
+    try {
+      // Debug log removed('Updating survey_completed field for athlete:', athleteId);
+      
+      // First check if survey_completed already exists for this athlete
+      const { data: existingSurveyCompleted, error: checkError } = await supabase
+        .from('athlete_fact')
+        .select('id')
+        .eq('athlete_id', athleteId)
+        .eq('data_type_id', 250)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
+        console.error('Error checking for existing survey_completed:', checkError);
+        return false;
+      }
+
+      // Only insert if it doesn't already exist
+      if (!existingSurveyCompleted) {
+        // Debug log removed('Creating survey_completed entry for athlete:', athleteId);
+        const { error: insertError } = await supabase
+          .from('athlete_fact')
+          .insert({
+            athlete_id: athleteId,
+            data_type_id: 250,
+            value: 'true',
+            source: 'survey',
+            date: new Date().toISOString(),
+            created_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.error('Error inserting survey_completed:', insertError);
+          return false;
+        }
+
+        // Debug log removed('Survey completed entry created successfully');
+      } else {
+        // Debug log removed('Survey completed entry already exists for this athlete');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error in updateSurveyCompleted:', error);
+      return false;
+    }
+  };
+
   const saveSurveySection = async (sectionData: any, sectionNumber: number) => {
     try {
-      console.log(`Saving section ${sectionNumber} data:`, sectionData);
+      // Debug log removed(`Saving section ${sectionNumber} data:`, sectionData);
       
       // Handle the special case for committed school (only in section 1)
       if (sectionNumber === 1 && sectionData.committed_school) {
-        console.log('Checking for existing offer entry for school:', sectionData.committed_school);
+        // Debug log removed('Checking for existing offer entry for school:', sectionData.committed_school);
         
         // First check if an offer already exists for this athlete and school
         const { data: existingOffer, error: checkError } = await supabase
@@ -165,7 +215,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
 
         // Only insert if no existing offer found
         if (!existingOffer) {
-          console.log('Creating new offer entry for school:', sectionData.committed_school);
+          // Debug log removed('Creating new offer entry for school:', sectionData.committed_school);
           const { error: offerError } = await supabase
             .from('offer')
             .insert({
@@ -178,16 +228,16 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           if (offerError) {
             console.error('Error creating offer entry:', offerError);
           } else {
-            console.log('Offer entry created successfully');
+            // Debug log removed('Offer entry created successfully');
           }
         } else {
-          console.log('Offer entry already exists for this athlete and school');
+          // Debug log removed('Offer entry already exists for this athlete and school');
         }
       }
 
       // Remove committed_school from data before saving to athlete_fact
       const { committed_school, ...dataToSave } = sectionData;
-      console.log('Data to save to athlete_fact:', dataToSave);
+      // Debug log removed('Data to save to athlete_fact:', dataToSave);
 
       // Convert the data object to array of athlete_fact entries, filtering out empty values
       const factEntries = Object.entries(dataToSave)
@@ -201,7 +251,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           created_at: new Date().toISOString()
         }));
 
-      console.log('Fact entries to insert:', factEntries);
+      // Debug log removed('Fact entries to insert:', factEntries);
 
       // Insert new entries (not updating existing ones)
       const result = await supabase
@@ -213,7 +263,10 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
         return false;
       }
 
-      console.log(`Section ${sectionNumber} data saved successfully`);
+      // Update survey_completed field whenever any survey section is saved
+      await updateSurveyCompleted();
+
+      // Debug log removed(`Section ${sectionNumber} data saved successfully`);
       return true;
     } catch (error) {
       console.error('Error in saveSurveySection:', error);
@@ -224,11 +277,11 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
   // Function to save survey data to the database
   const saveSurveyData = async (data: any) => {
     try {
-      console.log('Saving survey data:', data);
+      // Debug log removed('Saving survey data:', data);
       
       // Handle the special case for committed school
       if (data.committed_school) {
-        console.log('Checking for existing offer entry for school:', data.committed_school);
+        // Debug log removed('Checking for existing offer entry for school:', data.committed_school);
         
         // First check if an offer already exists for this athlete and school
         const { data: existingOffer, error: checkError } = await supabase
@@ -245,7 +298,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
 
         // Only insert if no existing offer found
         if (!existingOffer) {
-          console.log('Creating new offer entry for school:', data.committed_school);
+          // Debug log removed('Creating new offer entry for school:', data.committed_school);
           const { error: offerError } = await supabase
             .from('offer')
             .insert({
@@ -258,16 +311,16 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           if (offerError) {
             console.error('Error creating offer entry:', offerError);
           } else {
-            console.log('Offer entry created successfully');
+            // Debug log removed('Offer entry created successfully');
           }
         } else {
-          console.log('Offer entry already exists for this athlete and school');
+          // Debug log removed('Offer entry already exists for this athlete and school');
         }
       }
 
       // Remove committed_school from data before saving to athlete_fact
       const { committed_school, ...dataToSave } = data;
-      console.log('Data to save to athlete_fact:', dataToSave);
+      // Debug log removed('Data to save to athlete_fact:', dataToSave);
 
       // Convert the data object to array of athlete_fact entries, filtering out empty values
       const factEntries = Object.entries(dataToSave)
@@ -281,7 +334,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           created_at: new Date().toISOString()
         }));
 
-      console.log('Fact entries to insert:', factEntries);
+      // Debug log removed('Fact entries to insert:', factEntries);
 
       // Insert new entries (not updating existing ones)
       const result = await supabase
@@ -293,7 +346,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
         return false;
       }
 
-      console.log('Survey data saved successfully');
+      // Debug log removed('Survey data saved successfully');
       return true;
     } catch (error) {
       console.error('Error in saveSurveyData:', error);
@@ -334,11 +387,11 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
   const handleFinalSubmit = async (finalStepData: any) => {
     // Prevent multiple submissions
     if (isSubmitting) {
-      console.log('Survey submission already in progress, ignoring duplicate call');
+      // Debug log removed('Survey submission already in progress, ignoring duplicate call');
       return;
     }
 
-    console.log('Final step data:', finalStepData);
+    // Debug log removed('Final step data:', finalStepData);
     
     setIsSubmitting(true);
     
@@ -366,7 +419,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           <div className="card">
             <Flex vertical className="w-[100%] m-auto">
               <Flex align="center" justify="center">
-                <Image src={"/logo.svg"} alt={"logo"} height={31} width={192} />
+                <Image src={"/wide logo spelled out.webp"} alt={"Verified Athletics"} width={300} height={40} style={{ width: "auto", maxWidth: "100%", height: "40px", marginBottom: "3px" }} />
               </Flex>
               <div className="text-center py-8">
                 <p>Loading athlete data...</p>
@@ -385,7 +438,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           <div className="card">
             <Flex vertical className="w-[100%] m-auto">
               <Flex align="center" justify="center">
-                <Image src={"/logo.svg"} alt={"logo"} height={31} width={192} />
+                <Image src={"/wide logo spelled out.webp"} alt={"Verified Athletics"} width={300} height={40} style={{ width: "auto", maxWidth: "100%", height: "40px", marginBottom: "3px" }} />
               </Flex>
               <div className="text-center py-8">
                 <p>Athlete not found or you don&apos;t have permission to view this survey.</p>
@@ -403,7 +456,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
         <div className="card">
           <Flex vertical className="w-[100%] m-auto">
             <Flex align="center" justify="center">
-              <Image src={"/logo.svg"} alt={"logo"} height={31} width={192} />
+              <Image src={"/wide logo spelled out.webp"} alt={"Verified Athletics"} width={300} height={40} style={{ width: "auto", maxWidth: "100%", height: "40px", marginBottom: "3px" }} />
             </Flex>
             
             {/* Show athlete info at the top */}

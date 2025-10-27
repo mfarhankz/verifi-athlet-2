@@ -30,22 +30,30 @@ const WeeksManager: React.FC = () => {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">Manage Weeks</h2>
-        <Button type="primary" onClick={() => setIsModalOpen(true)}>
+    <div className="p-2 sm:p-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+        <h2 className="text-lg sm:text-xl font-semibold">Manage Weeks</h2>
+        <Button type="primary" onClick={() => setIsModalOpen(true)} size="small" className="w-full sm:w-auto">
           Create New Week
         </Button>
       </div>
 
       <List
-        grid={{ gutter: 16, column: 3 }}
+        grid={{ 
+          gutter: [8, 8], 
+          xs: 1, 
+          sm: 2, 
+          md: 3,
+          lg: 3,
+          xl: 3,
+          xxl: 3
+        }}
         dataSource={weeks}
         loading={loading}
         renderItem={(week) => (
           <List.Item>
-            <Card title={week.name}>
-              <p>Created: {new Date(week.created_at).toLocaleDateString()}</p>
+            <Card title={week.name} size="small">
+              <p className="text-sm">Created: {new Date(week.created_at).toLocaleDateString()}</p>
             </Card>
           </List.Item>
         )}

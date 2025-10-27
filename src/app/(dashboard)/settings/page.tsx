@@ -71,7 +71,7 @@ export default function Setting() {
 
   return (
     <div className="main-container">
-      <div className="w-full h-full overflow-auto">
+      <div className="w-full h-full">
         <div 
           style={{ 
             transform: `scale(${zoom / 100})`,

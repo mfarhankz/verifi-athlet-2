@@ -1,0 +1,1620 @@
+﻿  dataSource = 'transfer_portal', 
+  baseRoute = '/transfers' 
+}: PortalContentProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [selectionType] = useState<"checkbox" | "radio">("checkbox");
+  const [isChatVisible, setIsChatVisible] = useState(false);
+  const [selectedPlyer, setSelectedPlyer] = useState<AthleteData | null>(null);
+  const [data, setData] = useState<AthleteData[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { searchQuery, setSearchQuery } = useSearch();
+  const [localSearchInput, setLocalSearchInput] = useState<string>(searchQuery || '');
+  const debouncedSearchQuery = useDebounce(localSearchInput, 500); // 500ms delay
+  const [activeFilters, setActiveFilters] = useState<FilterState>({});
+  const debouncedFilters = useDebounce(activeFilters, 300); // 300ms delay for filters
+  const [comment, setcomment] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [editingComment, setEditingComment] = useState<Comment | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [athleteCommentCounts, setAthleteCommentCounts] = useState<Record<string, number>>({});
+  const [userTeamId, setUserTeamId] = useState<string | null>(null);
+  const [selectedAthletes, setSelectedAthletes] = useState<AthleteData[]>([]);
+  const [isAddingToRecruitingBoard, setIsAddingToRecruitingBoard] = useState(false);
+  const [recruitingBoardAthletes, setRecruitingBoardAthletes] = useState<string[]>([]);
+  const [isLoadingRecruitingBoard, setIsLoadingRecruitingBoard] = useState(false);
+  const [tableKey, setTableKey] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [displayedData, setDisplayedData] = useState<AthleteData[]>([]);
+  const [extensionInactive, setExtensionInactive] = useState(false);
+
+  // Function to check extension activity
+  const checkExtensionActivity = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('chrome_extension_user_history')
+        .select('timestamp')
+        .order('timestamp', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking extension activity:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const lastActivity = new Date(data[0].timestamp);
+        const now = new Date();
+        const diffInMinutes = (now.getTime() - lastActivity.getTime()) / (1000 * 60);
+        setExtensionInactive(diffInMinutes > 30);
+      } else {
+        setExtensionInactive(true); // No activity records found
+      }
+    } catch (error) {
+      console.error('Error in checkExtensionActivity:', error);
+    }
+  }, []);
+  
+  // Modal state for player profile
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [isPlayerModalVisible, setIsPlayerModalVisible] = useState(false);
+  
+  // Handle URL player parameter
+  useEffect(() => {
+    const playerId = searchParams?.get('player');
+    if (playerId && playerId !== selectedPlayerId) {
+      setSelectedPlayerId(playerId);
+      setIsPlayerModalVisible(true);
+    } else if (!playerId && isPlayerModalVisible) {
+      setIsPlayerModalVisible(false);
+      setSelectedPlayerId(null);
+    }
+  }, [searchParams, selectedPlayerId, isPlayerModalVisible]);
+
+
+
+  // Handle modal close
+  const handleClosePlayerModal = () => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    params.delete('player');
+    params.delete('use_main_tp_page_id'); // Clean up the flag parameter
+    const newUrl = params.toString() ? `${baseRoute}?${params.toString()}` : baseRoute;
+    router.push(newUrl);
+  };
+
+  // Handle add to recruiting board from modal - this function will be passed to the component
+  const handleModalAddToRecruitingBoard = async () => {
+    // The AthleteProfileContent component will handle the actual recruitment board logic
+    // This is just a placeholder that gets passed down
+  };
+
+  // Add logging for data changes
+  useEffect(() => {
+    // Track data changes for debugging if needed
+  }, [displayedData.length, hasMore, loading, page]);
+  const ITEMS_PER_PAGE = 25;
+  const { activeCustomerId, customers, activeSportAbbrev } = useCustomer();
+  const userDetails = useUser();
+  const [ratings, setRatings] = useState<CustomerRating[]>([]);
+  const [athleteRatings, setAthleteRatings] = useState<Record<string, { name: string; color: string }>>({});
+  const [dynamicColumns, setDynamicColumns] = useState<SportStatConfig[]>([]); // For table display (with search_column_display)
+  const [filterColumns, setFilterColumns] = useState<SportStatConfig[]>([]); // For filter options (all stats)
+  const [sportId, setSportId] = useState<string | null>(null);
+  const [tableScrollHeight, setTableScrollHeight] = useState<string>("calc(100vh - 200px)");
+  
+  // Add cache for data to prevent redundant fetches
+  const [dataCache, setDataCache] = useState<Record<string, { data: AthleteData[]; timestamp: number }>>({});
+  const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  
+  // Add state for tracking total records and filtered records
+  const [totalRecords, setTotalRecords] = useState<number>(0);
+  const [filteredRecords, setFilteredRecords] = useState<number>(0);
+  
+  // Add sorting state with default values
+  const [sortField, setSortField] = useState<string | null>('date'); // Default to date column
+  const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | null>('descend'); // Default to descending
+  
+  // Define columns that should start with ascending order on first click
+  const ascendingFirstColumns = ['position', 'high_name', 'state', 'era', 'fip', 'bb_per9', 'whip'];
+  
+  // Add ref to track which athletes we've already fetched comment counts for
+  const fetchedCommentCountsRef = useRef<Set<string>>(new Set());
+  
+  // Add ref to track if component is mounted
+  const isMountedRef = useRef(true);
+  
+  // Add ref to track previous search query to prevent loops
+  const prevSearchQueryRef = useRef<string>(searchQuery);
+
+  // Get the active customer and sport abbreviation from context
+  const activeCustomer = customers.find(c => c.customer_id === activeCustomerId);
+  const activeSport = activeSportAbbrev || ''; // fallback to blank if not found
+  
+  // Get zoom functionality
+  const { zoom } = useZoom();
+
+
+
+  // Update table scroll height based on zoom
+  useEffect(() => {
+    const updateScrollHeight = () => {
+      // Use CSS calc that works with the scaled container
+      // Since the container is scaled, we need the scroll height to be relative to the scaled size
+      const baseVh = 78; // Approximately 78vh after accounting for headers
+      const scaledVh = Math.floor(baseVh / (zoom / 100));
+      const finalHeight = `${Math.min(scaledVh, 200)}vh`; // Cap at 200vh to prevent excessive height
+      
+
+      
+      setTableScrollHeight(finalHeight);
+    };
+
+    updateScrollHeight();
+    
+    // Update on window resize
+    window.addEventListener('resize', updateScrollHeight);
+    return () => window.removeEventListener('resize', updateScrollHeight);
+  }, [zoom]);
+
+  const columns: TableColumnsType<AthleteData> = useMemo(() => {
+    return [
+    {
+      title: "Name",
+      key: "name",
+      fixed: "left",
+      onCell: (record: AthleteData) => ({
+        style: recruitingBoardAthletes.includes(record.id)
+          ? { backgroundColor: '#f0f9f0' }
+          : {},
+      }),
+      render: (record: AthleteData) => {
+        const handlePlayerClick = async (e: React.MouseEvent) => {
+          e.stopPropagation();
+          
+          // Get the main_tp_page_id for this athlete
+          try {
+            const { getMainTpPageIdFromAthleteId } = await import('@/lib/queries');
+            const mainTpPageId = await getMainTpPageIdFromAthleteId(record.id);
+            
+            if (mainTpPageId) {
+              // Use main_tp_page_id instead of athlete_id
+              const params = new URLSearchParams(searchParams?.toString() || '');
+              params.set('player', mainTpPageId);
+              params.set('use_main_tp_page_id', 'true'); // Flag to indicate we're using main_tp_page_id
+              router.push(`${baseRoute}?${params.toString()}`);
+            } else {
+              // Fallback to athlete_id if main_tp_page_id not found
+              console.warn('No main_tp_page_id found for athlete, falling back to athlete_id');
+              const params = new URLSearchParams(searchParams?.toString() || '');
+              params.set('player', record.id);
+              router.push(`${baseRoute}?${params.toString()}`);
+            }
+          } catch (error) {
+            console.error('Error fetching main_tp_page_id:', error);
+            // Fallback to athlete_id on error
+            const params = new URLSearchParams(searchParams?.toString() || '');
+            params.set('player', record.id);
+            router.push(`/transfers?${params.toString()}`);
+          }
+        };
+
+        return (
+          <div 
+            className="profile-list"
+            onClick={handlePlayerClick}
+            style={{ cursor: 'pointer' }}
+          >
+            <ImageWithAverage
+              src={record.image_url || "/blank-user.svg"}
+              alt={record.athlete_name || ''}
+              size="small"
+              height={126}
+              width={126}
+              average={record.true_score || 0}
+            />
+            <div className="pro-detail">
+              <h4 className="flex items-center mb-0.5">
+                {record.athlete_name}
+                {athleteRatings[record.id] && (
+                  <div className="ml-2 flex items-center">
+                    <div
+                      className="mr-1 flex items-center justify-center"
+                      style={{
+                        width: 16,
+                        height: 16,
+                        backgroundColor: athleteRatings[record.id].color,
+                      }}
+                    >
+                      <StarFilled style={{ color: '#fff', fontSize: 12 }} />
+                    </div>
+                    <span className="text-sm text-gray-600">{athleteRatings[record.id].name.substring(0, 4)}</span>
+                  </div>
+                )}
+              </h4>
+              <div 
+                className="name"
+                style={{
+                  backgroundColor: record.commit_school_name && record.commit_school_name.trim() !== '' ? '#00bcd430' : 'transparent',
+                  padding: record.commit_school_name && record.commit_school_name.trim() !== '' ? '1px 1px 0px 5px' : '0',
+                  borderRadius: record.commit_school_name && record.commit_school_name.trim() !== '' ? '0px' : '0',
+                  border: record.commit_school_name && record.commit_school_name.trim() !== '' ? '' : 'none',
+                  margin: '0'
+                }}
+              >
+                  {record.year && (
+                  <span className="year-display inline mr-1">{record.year} / </span>
+                )}
+                    {record.division && (
+                <div className="text-base inline mr-1">
+                  {record.division} / 
+                </div>
+              )}
+                <p style={{ margin: '0' }} className="inline">
+                  {/* <img src="/b.svg" height={16} className="mr-1"></img> */}
+                  {/* <img src="/b.svg" height={16} className="mr-1"/> */}
+                  {/* Display commit school name if available */}
+                  {record.commit_school_name && record.commit_school_name.trim() !== '' ? (
+                    <>
+                      {/* Current school logo and name */}
+                      {record.school_logo_url && record.school_logo_url.trim() !== '' && (
+                        <Image
+                        className="mr-1"
+                          src={record.school_logo_url}
+                          alt="Current school logo"
+                          width={20}
+                          height={20}
+                          style={{ objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <span style={{ color: '#888' }}>{record.name_name}</span>
+                      
+                      {/* Arrow */}
+                      <span className="text-gray-900"> â†’ </span>
+                      
+                      {/* Commit school logo and name */}
+                      {record.commit_school_logo_url && record.commit_school_logo_url.trim() !== '' && (
+                        <Image
+                         className="mr-1"
+                          src={record.commit_school_logo_url}
+                          alt="Commit school logo"
+                          width={20}
+                          height={20}
+                          style={{ objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <span className="text-gray-900">{record.commit_school_name}</span>
+                    </>
+                  ) : (
+                    <>
+                      {/* Single school logo and name */}
+                      {record.school_logo_url && record.school_logo_url.trim() !== '' && (
+                        <Image
+                          src={record.school_logo_url}
+                          alt="School logo"
+                          width={20}
+                          height={20}
+                          style={{ objectFit: 'contain' }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <span>{record.name_name}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      title: "Date",
+      dataIndex: "date",
+      key: "date",
+      sorter: true,
+      defaultSortOrder: 'descend' as const,
+      render: (value: string) => {
+        if (!value) return null;
+        try {
+          // For date-only values, append time to avoid timezone issues
+          const date = new Date(value + 'T12:00:00');
+          return date.toLocaleDateString('en-US', {
+            month: 'numeric',
+            day: 'numeric',
+            year: '2-digit'
+          });
+        } catch (error) {
+          return value; // Return original value if parsing fails
+        }
+      },
+    },
+    {
+      title: "$",
+      key: "athletic_aid",
+      width: 60,
+      sorter: true,
+      dataIndex: "athletic_aid",
+    },
+    {
+      title: "Pos",
+      dataIndex: "position",
+      key: "position",
+      width: 50,
+      sorter: true,
+    },
+    // {
+    //   title: "High School",
+    //   dataIndex: "high_name",
+    //   key: "high_name",
+    //   sorter: true,
+    //   width: 140, // Set a fixed width that works for most cases
+    //   render: (text: string) => (
+    //     <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.3 }}>
+    //       {text}
+    //     </div>
+    //   ),
+    // },
+    {
+      title: "State",
+      dataIndex: "state",
+      key: "state",
+      width: 70,
+      sorter: true,
+    },
+    // Dynamic columns based on sport_stat_config
+    ...(dynamicColumns.length > 0 
+      ? dynamicColumns.map((col) => {
+          const tooltip = getColumnTooltip(col.display_name);
+          return {
+            title: () => (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'flex-start',
+                width: '100%'
+              }}>
+                {tooltip && <InfoIcon tooltip={tooltip} style={{ marginRight: '4px', marginLeft: '0' }} />}
+                <span>{col.display_name}</span>
+              </div>
+            ),
+            dataIndex: col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_'),
+            key: col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_'),
+            width: Math.max(70, (col.display_name.length + 4) * 11), // Increased width to accommodate info icon + title + sorting arrows
+            sorter: true,
+
+            render: (value: any, record: any) => {
+              // Special handling for height data (data_type_id 304)
+              if (col.data_type_id === 304) {
+                const heightFeet = record.height_feet;
+                const heightInch = record.height_inch;
+                if (heightFeet && heightInch) {
+                  return `${heightFeet}'${heightInch}"`;
+                } else if (heightFeet) {
+                  return `${heightFeet}'`;
+                } else if (heightInch) {
+                  return `${heightInch}"`;
+                }
+                return null;
+              }
+              
+              // Default handling for other stats
+              if (value === null || value === undefined || value === '') {
+                return null;
+              }
+              return formatStatDecimal(value, col.decimal_places, col.is_percentage, col.convert_negative_to_zero);
+            },
+          };
+        })
+      : []
+    ),
+    {
+      title: "",
+      key: "operation",
+      fixed: "right",
+      width: 60,
+      render: (_, record) => (
+        <div className="flex flex-col items-center justify-center action-icons">
+          {/* hamburger menu */}
+          <Link href="" className="icon-menu-1" style={{ display: 'none' }}></Link>
+          {/* message icon */}
+          <Link
+            href=""
+            className={`icon-message ${athleteCommentCounts[record.id] > 0 ? 'has-comment' : ''}`}
+            onClick={(e) => {
+              e.preventDefault();
+              handleChat(record);
+            }}
+          >
+          </Link>
+        </div>
+      ),
+    },
+  ];
+  }, [dynamicColumns, athleteRatings, athleteCommentCounts]);
+
+  // Unified data loading function
+  const loadAthleteData = useCallback(async (options: {
+    isInitialLoad?: boolean;
+    isLoadMore?: boolean;
+    isFiltered?: boolean;
+    page?: number;
+    filters?: FilterState;
+    search?: string;
+    sortField?: string | null;
+    sortOrder?: 'ascend' | 'descend' | null;
+  } = {}) => {
+    const {
+      isInitialLoad = false,
+      isLoadMore = false,
+      isFiltered = false,
+      page: targetPage = 1,
+      filters = {},
+      search = '',
+      sortField: targetSortField = null,
+      sortOrder: targetSortOrder = null
+    } = options;
+
+    // Prevent multiple simultaneous data loads
+    if (loading) {
+      return;
+    }
+    
+    // Only proceed if we have the necessary data
+    if (!activeCustomer?.sport_id || !activeCustomerId) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      
+      // Handle initial load caching
+      if (isInitialLoad) {
+        const cacheKey = `initial_${activeCustomer.sport_id}_${activeCustomerId}`;
+        const cachedData = dataCache[cacheKey];
+        const now = Date.now();
+        
+        if (cachedData && (now - cachedData.timestamp) < CACHE_DURATION) {
+          setData(cachedData.data);
+          setDisplayedData(cachedData.data);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Set sportId and fetch dynamic columns if not already set
+      let currentDynamicColumns = dynamicColumns;
+      let currentFilterColumns = filterColumns;
+      
+      // Only fetch columns if sport changed OR we don't have columns loaded yet
+      const shouldFetchColumns = !sportId || 
+        sportId !== activeCustomer.sport_id || 
+        dynamicColumns.length === 0 || 
+        filterColumns.length === 0;
+        
+      if (shouldFetchColumns) {
+
+        setSportId(activeCustomer.sport_id);
+        try {
+          // Fetch columns for table display (with search_column_display filter)
+          const displayColumns = await fetchSportColumnConfig(activeCustomer.sport_id, false);
+          setDynamicColumns(displayColumns);
+          currentDynamicColumns = displayColumns;
+          
+          // Fetch columns for filters (all stats)
+          const allColumns = await fetchSportColumnConfig(activeCustomer.sport_id, true);
+          setFilterColumns(allColumns);
+          currentFilterColumns = allColumns;
+
+        } catch (error) {
+          console.error('Error fetching sport column config:', error);
+          setDynamicColumns([]);
+          setFilterColumns([]);
+          currentDynamicColumns = [];
+          currentFilterColumns = [];
+        }
+      } else {
+
+      }
+      
+      // Create display columns list based on the table columns
+      const displayColumns = [
+        'date',
+        'athletic_aid',
+        'position',
+        'high_name',
+        'state',
+        'true_score',
+        // Add dynamic stat columns
+        ...(currentDynamicColumns.length > 0 
+          ? currentDynamicColumns.map(col => col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_'))
+          : []
+        )
+      ];
+      
+      // Get user's school_id from active customer
+      const userSchoolId = activeCustomer?.school_id;
+      // Prepare fetch parameters
+      const fetchParams = {
+        page: targetPage,
+        limit: ITEMS_PER_PAGE,
+        sportId: activeCustomer.sport_id,
+        dataSource: dataSource, // Use the dataSource prop
+        displayColumns,
+        sportAbbrev: activeSportAbbrev || undefined,
+        userPackages: userDetails?.packages || [],
+        dynamicColumns: currentFilterColumns, // Use filter columns for filtering
+        userSchoolId, // Pass user's school_id to filter out their own school
+        ...(isFiltered && { filters, search }),
+        ...(targetSortField && targetSortOrder && { 
+          sortField: targetSortField, 
+          sortOrder: targetSortOrder 
+        })
+      };
+      
+      const athleteData = await fetchAthleteData(activeSport, fetchParams);
+      
+
+      
+      let finalData: AthleteData[];
+      
+      if (isLoadMore) {
+        // For load more, merge with existing data
+        const existingAthletesMap = new Map(displayedData.map(athlete => [athlete.id, athlete]));
+        athleteData.data.forEach(athlete => {
+          if (!existingAthletesMap.has(athlete.id)) {
+            existingAthletesMap.set(athlete.id, athlete);
+          }
+        });
+        finalData = Array.from(existingAthletesMap.values());
+      } else {
+        // For initial load or filtered data, ensure uniqueness
+        const uniqueAthletesMap = new Map();
+        athleteData.data.forEach(athlete => {
+          if (!uniqueAthletesMap.has(athlete.id)) {
+            uniqueAthletesMap.set(athlete.id, athlete);
+          }
+        });
+        finalData = Array.from(uniqueAthletesMap.values());
+      }
+      
+      // Update record counts
+      if (isInitialLoad) {
+        setTotalRecords(athleteData.totalCount || 0);
+        setFilteredRecords(athleteData.data.length);
+      } else if (isFiltered) {
+        // For filtered data, update the total records to show how many match the filter
+        setTotalRecords(athleteData.totalCount || 0);
+        setFilteredRecords(athleteData.data.length);
+      } else if (isLoadMore) {
+        // For load more, update the filtered count to reflect the total displayed data
+        setFilteredRecords(finalData.length);
+      }
+      
+      // Apply height sorting if needed
+      if (sortField === 'height_frontend' && sortOrder) {
+        finalData = sortDataByHeight(finalData, sortOrder);
+      }
+      
+      // Update state based on operation type
+      if (isInitialLoad) {
+        setData(finalData);
+        setDisplayedData(finalData);
+        
+        // Cache the data for initial loads
+        const cacheKey = `initial_${activeCustomer.sport_id}_${activeCustomerId}`;
+        setDataCache(prev => ({
+          ...prev,
+          [cacheKey]: { data: finalData, timestamp: Date.now() }
+        }));
+      } else if (isLoadMore) {
+        setDisplayedData(finalData);
+        setPage(targetPage);
+      } else {
+        // Filtered data
+        setDisplayedData(finalData);
+        setPage(1); // Reset to first page for filtered results
+      }
+      
+      setHasMore(athleteData.hasMore);
+      
+      // Fetch ratings for the loaded athletes
+      const athleteIds = athleteData.data.map(athlete => athlete.id);
+      if (athleteIds.length > 0 && activeCustomerId) {
+        try {
+          const { data: ratingData, error } = await supabase
+            .from('athlete_rating')
+            .select(`
+              athlete_id,
+              customer_rating_scale_id,
+              customer_rating_scale:customer_rating_scale_id(name, color)
+            `)
+            .in('athlete_id', athleteIds);
+
+          if (error) {
+            console.error('Error fetching athlete ratings:', error);
+          } else {
+            const ratingsMap: Record<string, { name: string; color: string }> = {};
+            ratingData?.forEach((rating: any) => {
+              const ratingScale = rating.customer_rating_scale as unknown as { name: string; color: string } | null;
+              if (ratingScale) {
+                ratingsMap[rating.athlete_id] = {
+                  name: ratingScale.name,
+                  color: ratingScale.color
+                };
+              }
+            });
+            
+            if (isLoadMore) {
+              setAthleteRatings(prev => ({ ...prev, ...ratingsMap }));
+            } else {
+              setAthleteRatings(ratingsMap);
+            }
+          }
+        } catch (error) {
+          console.error('Error in fetchAthleteRatings:', error);
+        }
+      }
+
+      // Fetch comment counts for newly loaded athletes (only for load more)
+      if (isLoadMore && athleteIds.length > 0) {
+        try {
+          const commentCounts = await CommentService.getCommentCounts(athleteIds);
+          const newCommentCounts = { ...athleteCommentCounts, ...commentCounts };
+          setAthleteCommentCounts(newCommentCounts);
+        } catch (error) {
+          console.error('Error fetching comment counts:', error);
+        }
+      }
+      
+    } catch (err) {
+      console.error('Error in loadAthleteData:', err);
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    loading, 
+    activeCustomer, 
+    activeCustomerId, 
+    activeSport, 
+    sportId, 
+    displayedData, 
+    athleteCommentCounts, 
+    dataCache,
+    activeSportAbbrev,
+    userDetails?.packages
+  ]);
+
+  // Initial data load
+  useEffect(() => {
+    loadAthleteData({ 
+      isInitialLoad: true,
+      sortField,
+      sortOrder
+    });
+  }, [activeCustomer, activeCustomerId, activeSport, sortField, sortOrder]);
+
+  // Update search query when debounced value changes
+  useEffect(() => {
+    if (debouncedSearchQuery !== prevSearchQueryRef.current) {
+      prevSearchQueryRef.current = debouncedSearchQuery;
+      setSearchQuery(debouncedSearchQuery);
+    }
+  }, [debouncedSearchQuery, setSearchQuery]);
+
+  // Sync local search input with external search query changes (only when searchQuery changes externally)
+  useEffect(() => {
+    if (searchQuery !== prevSearchQueryRef.current && searchQuery !== localSearchInput) {
+      setLocalSearchInput(searchQuery);
+    }
+  }, [searchQuery, localSearchInput]); // Keep only necessary dependencies
+
+  useEffect(() => {
+    if (activeCustomerId) {
+      setUserTeamId(activeCustomerId);
+    }
+  }, [activeCustomerId]);
+
+  // Load more data function
+  const loadMoreData = useCallback(async () => {
+    if (loading || !hasMore) {
+      return;
+    }
+    await loadAthleteData({ 
+      isLoadMore: true, 
+      page: page + 1,
+      sortField,
+      sortOrder,
+      // Preserve current filters and search when loading more data
+      isFiltered: Object.keys(activeFilters).length > 0 || searchQuery.trim() !== '',
+      filters: activeFilters,
+      search: searchQuery
+    });
+  }, [loading, hasMore, page, sortField, sortOrder, activeFilters, searchQuery]); // Added activeFilters and searchQuery to dependencies
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (loading || !hasMore) {
+        return;
+      }
+
+      const tableContainer = document.querySelector('.ant-table-body');
+      const tableWrapper = document.querySelector('.ant-table-wrapper');
+      const tableContent = document.querySelector('.ant-table-content');
+      
+      if (!tableContainer) {
+        return;
+      }
+
+      const { scrollTop, scrollHeight, clientHeight } = tableContainer;
+      const scrollInfo = {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        scrollBottom: scrollHeight - scrollTop - clientHeight,
+        threshold: 100
+      };
+      
+      if (scrollHeight - scrollTop - clientHeight < 100) {
+        loadMoreData();
+      }
+    };
+
+    const tableContainer = document.querySelector('.ant-table-body');
+    
+    if (tableContainer) {
+      tableContainer.addEventListener('scroll', handleScroll);
+    }
+
+    return () => {
+      if (tableContainer) {
+        tableContainer.removeEventListener('scroll', handleScroll);
+      }
+    };
+  }, [loading, hasMore, data, page, loadMoreData]);
+
+  const applyFilters = (filters: FilterState) => {
+    setActiveFilters(filters);
+  };
+
+  const resetFilters = () => {
+    setActiveFilters({});
+  };
+
+  // Filter application with debouncing
+  useEffect(() => {
+    // Only run if we have initial data loaded and basic customer info
+    if (!activeCustomer || !activeCustomerId) return;
+    
+    // Prevent multiple simultaneous filter applications
+    if (loading) return;
+    
+    // Always run the query when filters or search change, even if filters are empty
+    loadAthleteData({ 
+      isFiltered: true, 
+      filters: debouncedFilters, 
+      search: searchQuery,
+      sortField,
+      sortOrder
+    });
+  }, [debouncedFilters, searchQuery, sortField, sortOrder]); // Use debounced filters and simplified dependencies
+
+  const rowSelection: TableProps<AthleteData>["rowSelection"] = {
+    onChange: (selectedRowKeys: React.Key[], selectedRows: AthleteData[]) => {
+
+      setSelectedAthletes(selectedRows);
+    },
+    getCheckboxProps: (record: AthleteData) => ({
+      disabled: recruitingBoardAthletes.includes(record.id),
+      name: record.athlete_name,
+    }),
+  };
+
+  const handleCancel = () => {
+    setIsChatVisible(false);
+  };
+
+  const handleChat = (record: AthleteData) => {
+    setSelectedPlyer(record);
+    setIsChatVisible(true);
+    fetchcomment(record.id);
+  };
+
+  const fetchcomment = async (athleteId: string) => {
+    try {
+      const athlete = displayedData.find(a => a.id === athleteId);
+      if (!athlete) {
+        console.error('No athlete found:', athleteId);
+        return;
+      }
+
+      if (!userTeamId) {
+        console.error('No user team ID found');
+        return;
+      }
+
+      // Fetch comments using the service
+      const commentData = await CommentService.getCommentsForAthlete(athleteId);
+      setcomment(commentData);
+      
+      // Update the comment count for this athlete
+      setAthleteCommentCounts(prev => ({
+        ...prev,
+        [athleteId]: commentData.length
+      }));
+    } catch (error) {
+      console.error('Error fetching comment:', error);
+      setcomment([]);
+    }
+  };
+
+  const handleSaveComment = async () => {
+    if (!selectedPlyer || !newComment.trim() || isSubmitting || !userTeamId || !userDetails) return;
+    
+    const athleteId = selectedPlyer.id;
+    if (!athleteId) {
+      console.error('No athlete ID found');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      if (editingComment) {
+        // Update existing comment
+        await CommentService.updateComment(editingComment.id, userDetails.id, newComment);
+      } else {
+        // Create new comment
+        await CommentService.createComment({
+          content: newComment,
+          athlete_id: athleteId,
+          user_id: userDetails.id,
+          customer_id: userTeamId
+        });
+      }
+
+      // Refresh comment
+      await fetchcomment(selectedPlyer.id);
+      setNewComment("");
+      setEditingComment(null);
+    } catch (error) {
+      console.error('Error saving comment:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditComment = (comment: Comment) => {
+    setEditingComment(comment);
+    setNewComment(comment.content);
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    
+    try {
+      if (!userDetails) return;
+      await CommentService.deleteComment(commentId, userDetails.id);
+      
+      // Refresh comment
+      await fetchcomment(selectedPlyer?.id || '');
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+    }
+  };
+
+  // Add a function to fetch comment counts for all athletes
+  const fetchAllCommentCounts = async () => {
+    try {
+      if (!userTeamId) {
+        console.error('No user team ID found');
+        return;
+      }
+      
+      // Get all athlete IDs from the displayedData instead of data
+      const athleteIds = displayedData.map(athlete => athlete.id).filter(Boolean);
+      
+      if (athleteIds.length === 0) return;
+      
+      // Fetch comment counts using the service
+      const commentCounts = await CommentService.getCommentCounts(athleteIds);
+      
+      // Update the ref to track which athletes we've fetched counts for
+      athleteIds.forEach(id => fetchedCommentCountsRef.current.add(id));
+      
+      setAthleteCommentCounts(commentCounts);
+    } catch (error) {
+      console.error('Error fetching comment counts:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+    }
+  };
+  
+  // Update the useEffect to use displayedData instead of data
+  useEffect(() => {
+    if (displayedData.length > 0 && userTeamId) {
+      // Only fetch comment counts if we don't already have them for these athletes
+      const athletesWithoutCommentCounts = displayedData.filter(athlete => 
+        !fetchedCommentCountsRef.current.has(athlete.id)
+      );
+      
+      if (athletesWithoutCommentCounts.length > 0) {
+        fetchAllCommentCounts();
+      }
+    }
+  }, [displayedData, userTeamId]); // Removed athleteCommentCounts from dependencies to prevent infinite loop
+
+  // Add this function to fetch athletes already in the user's recruiting board
+  const fetchRecruitingBoardAthletes = async () => {
+    if (!userDetails?.id) return;
+    
+    try {
+      // RLS policies already filter by customer_id, so we don't need to filter here
+      const { data, error } = await supabase
+        .from('recruiting_board')
+        .select('athlete_id');
+        
+      if (error) {
+        console.error('Error fetching recruiting board:', error);
+        return;
+      }
+      
+      // Extract athlete IDs from the response
+      const athleteIds = data.map((item: { athlete_id: string }) => item.athlete_id);
+      setRecruitingBoardAthletes(athleteIds);
+    } catch (error) {
+      console.error('Error in fetchRecruitingBoardAthletes:', error);
+    } finally {
+      setIsLoadingRecruitingBoard(false);
+    }
+  };
+
+  // Call this function when the component mounts and when the session changes
+  useEffect(() => {
+    if (userDetails?.id && recruitingBoardAthletes.length === 0) {
+      fetchRecruitingBoardAthletes();
+    }
+  }, [userDetails?.id, recruitingBoardAthletes.length]);
+  
+  // Reset the comment counts ref when user changes
+  useEffect(() => {
+    fetchedCommentCountsRef.current.clear();
+  }, [userTeamId]);
+
+  // Add this function to handle adding athletes to recruiting board
+  const handleAddToRecruitingBoard = async () => {
+    if (selectedAthletes.length === 0) {
+      alert("Please select at least one athlete to add to the recruiting board.");
+      return;
+    }
+
+    setIsAddingToRecruitingBoard(true);
+    
+    try {
+      if (!userDetails) {
+        alert("You must be logged in to add athletes to the recruiting board.");
+        return;
+      }
+      if (!activeCustomerId) {
+        console.error("No active customer ID found");
+        alert("No active customer ID found. Please make sure your account is properly set up.");
+        return;
+      }
+      const userId = userDetails.id;
+
+      // Prepare the data for insertion - no need to include id as it's auto-generated
+      const recruitingBoardEntries = selectedAthletes.map(athlete => ({
+        athlete_id: athlete.id,
+        user_id: userId,
+        customer_id: activeCustomerId,
+        position: athlete.position || 'Unassigned' // Add position from athlete data
+      }));
+
+      // Insert the data into the recruiting_board table
+      const { data: insertData, error: insertError } = await supabase
+        .from('recruiting_board')
+        .insert(recruitingBoardEntries)
+        .select();
+      if (insertError) {
+        console.error("Error adding athletes to recruiting board:", insertError);
+        console.error("Error details:", JSON.stringify(insertError, null, 2));
+        alert(`Error adding athletes to recruiting board: ${insertError.message || 'Unknown error'}`);
+        return;
+      }
+
+      alert(`Successfully added ${selectedAthletes.length} athlete(s) to your recruiting board.`);
+      // Update the recruiting board athletes list
+      const newAthleteIds = selectedAthletes.map(athlete => athlete.id);
+      setRecruitingBoardAthletes(prev => [...prev, ...newAthleteIds]);
+      setSelectedAthletes([]); // Clear selection after successful addition
+    } catch (error) {
+      console.error("Error in handleAddToRecruitingBoard:", error);
+      if (error instanceof Error) {
+        alert(`An unexpected error occurred: ${error.message}`);
+      } else {
+        alert("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setIsAddingToRecruitingBoard(false);
+    }
+  };
+
+  // Updated handler to use local search input with debouncing
+  const handleSearch = (value: string) => {
+    setLocalSearchInput(value);  // Update local input state, debouncing will handle the actual search
+  };
+
+  // --- DEBUG: Log in visibility handler and forcibly set loading states to false ---
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        setLoading(false);
+        setIsLoadingRecruitingBoard(false);
+        setTableKey((k) => k + 1);
+        setTimeout(() => {
+          window.dispatchEvent(new Event("resize"));
+        }, 50);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  // Cleanup effect to prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Helper to check if any filter is active
+  const isAnyFilterActive = Object.values(activeFilters).some(
+    (val) =>
+      (Array.isArray(val) && val.length > 0) ||
+      (typeof val === "object" && val !== null && Object.keys(val).length > 0)
+  );
+
+  // Helper function to get data_type name for static filters
+  const getDataTypeName = async (dataTypeId: number): Promise<string> => {
+    try {
+      const { data, error } = await supabase
+        .from('data_type')
+        .select('name')
+        .eq('id', dataTypeId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching data_type name:', error);
+        return `data_type_${dataTypeId}`;
+      }
+      
+      return data?.name || `data_type_${dataTypeId}`;
+    } catch (error) {
+      console.error('Error in getDataTypeName:', error);
+      return `data_type_${dataTypeId}`;
+    }
+  };
+
+  // Helper to display active filters as a string
+  const renderActiveFilters = async () => {
+    const filterLabels: string[] = [];
+    
+    // Handle height filter
+    if (activeFilters.height) {
+      const { comparison, feet, inches, minFeet, minInches, maxFeet, maxInches } = activeFilters.height;
+      if (comparison === 'between' && minFeet !== undefined && maxFeet !== undefined) {
+        const minTotalInches = (minFeet * 12) + (minInches || 0);
+        const maxTotalInches = (maxFeet * 12) + (maxInches || 0);
+        filterLabels.push(`height_total_inches Min: ${minTotalInches}, Max: ${maxTotalInches}`);
+      } else if (comparison === 'greater' && feet !== undefined) {
+        const totalInches = (feet * 12) + (inches || 0);
+        filterLabels.push(`height_total_inches Min: ${totalInches}`);
+      } else if (comparison === 'less' && feet !== undefined) {
+        const totalInches = (feet * 12) + (inches || 0);
+        filterLabels.push(`height_total_inches Max: ${totalInches}`);
+      } else if (comparison === 'equal' && feet !== undefined) {
+        const totalInches = (feet * 12) + (inches || 0);
+        filterLabels.push(`height_total_inches: ${totalInches}`);
+      }
+    }
+
+    // Handle static filters with async data_type lookups
+    if (activeFilters.position?.length) {
+      filterLabels.push(`Position: ${activeFilters.position.join(", ")}`);
+    }
+    if (activeFilters.divisions?.length) filterLabels.push(`Division: ${activeFilters.divisions.join(", ")}`);
+    if (activeFilters.states?.length) {
+      const stateName = await getDataTypeName(24);
+      filterLabels.push(`Home State: ${activeFilters.states.join(", ")}`);
+    }
+    if (activeFilters.international?.length) {
+      // Handle "All International" selection specially
+      const internationalLabels = activeFilters.international.map(item => 
+        item === 'ALL_INTERNATIONAL' ? 'All International' : item
+      );
+      filterLabels.push(`International: ${internationalLabels.join(", ")}`);
+    }
+    if (activeFilters.years?.length) {
+      const yearName = await getDataTypeName(1);
+      filterLabels.push(`${yearName}: ${activeFilters.years.join(", ")}`);
+    }
+    if (activeFilters.athleticAid?.length) filterLabels.push(`Athletic Aid: ${activeFilters.athleticAid.join(", ")}`);
+    if (activeFilters.status?.length) filterLabels.push(`Status: ${activeFilters.status.join(", ")}`);
+    if (activeFilters.dateRange?.startDate || activeFilters.dateRange?.endDate) {
+      filterLabels.push(`Date Entered: ${activeFilters.dateRange.startDate || ''} - ${activeFilters.dateRange.endDate || ''}`);
+    }
+    if (activeFilters.gamesPlayed) filterLabels.push(`GP: ${activeFilters.gamesPlayed.comparison} ${activeFilters.gamesPlayed.value}`);
+    if (activeFilters.survey_completed !== undefined) {
+      // Handle both array format (from multiple select) and boolean format
+      if (Array.isArray(activeFilters.survey_completed)) {
+        if (activeFilters.survey_completed.includes(true) && activeFilters.survey_completed.includes(false)) {
+          filterLabels.push('Survey Completed: Yes, No');
+        } else if (activeFilters.survey_completed.includes(true)) {
+          filterLabels.push('Survey Completed: Yes');
+        } else if (activeFilters.survey_completed.includes(false)) {
+          filterLabels.push('Survey Completed: No');
+        }
+      } else {
+        // Handle direct boolean values
+        if (activeFilters.survey_completed === true) {
+          filterLabels.push('Survey Completed: Yes');
+        } else if (activeFilters.survey_completed === false) {
+          filterLabels.push('Survey Completed: No');
+        }
+      }
+    }
+    if (activeFilters.gradStudent !== undefined) {
+      // Handle array format for grad student filter
+      if (Array.isArray(activeFilters.gradStudent)) {
+        if (activeFilters.gradStudent.includes(true) && activeFilters.gradStudent.includes(false)) {
+          filterLabels.push('Grad Student: Yes, No');
+        } else if (activeFilters.gradStudent.includes(true)) {
+          filterLabels.push('Grad Student: Yes');
+        } else if (activeFilters.gradStudent.includes(false)) {
+          filterLabels.push('Grad Student: No');
+        }
+      }
+    }
+    if (activeFilters.honors?.length) {
+      filterLabels.push(`Honors: ${activeFilters.honors.join(", ")}`);
+    }
+    
+    // Handle dynamic stat filters
+    Object.keys(activeFilters).forEach(key => {
+      if (key.startsWith('stat_')) {
+        const dataTypeId = key.replace('stat_', '');
+        const column = dynamicColumns.find(col => col.data_type_id.toString() === dataTypeId);
+        const filterValue = activeFilters[key];
+        if (filterValue && typeof filterValue === 'object' && 'comparison' in filterValue && 'value' in filterValue) {
+          filterLabels.push(`${column?.data_type_name || key}: ${filterValue.comparison} ${filterValue.value}`);
+        }
+      }
+    });
+    
+    return filterLabels.length ? filterLabels.join(" | ") : "No filters set";
+  };
+
+  // Add useEffect to fetch ratings when component mounts
+  useEffect(() => {
+    const loadRatings = async () => {
+      if (activeCustomerId) {
+        try {
+          const data = await fetchCustomerRatings(activeCustomerId);
+          setRatings(data);
+        } catch (error) {
+          console.error('Error loading ratings:', error);
+        }
+      }
+    };
+    loadRatings();
+  }, [activeCustomerId]);
+
+  // Check extension activity periodically
+  useEffect(() => {
+    // Check immediately on mount
+    checkExtensionActivity();
+
+    // Then check every minute
+    const interval = setInterval(checkExtensionActivity, 60000);
+
+    return () => clearInterval(interval);
+  }, [checkExtensionActivity]);
+
+  // Function to sort data by height
+  const sortDataByHeight = (data: AthleteData[], order: 'ascend' | 'descend') => {
+    return [...data].sort((a, b) => {
+      // Convert height to total inches for comparison
+      const getHeightInInches = (athlete: AthleteData) => {
+        const feet = athlete.height_feet || 0;
+        const inches = athlete.height_inch || 0;
+        return feet * 12 + inches;
+      };
+      
+      const heightA = getHeightInInches(a);
+      const heightB = getHeightInInches(b);
+      
+      if (order === 'ascend') {
+        return heightA - heightB;
+      } else {
+        return heightB - heightA;
+      }
+    });
+  };
+
+  // Add function to fetch athlete ratings
+  const fetchAthleteRatings = async (athleteIds: string[]) => {
+    if (!athleteIds.length || !activeCustomerId) return;
+
+    try {
+      const { data: ratingData, error } = await supabase
+        .from('athlete_rating')
+        .select(`
+          athlete_id,
+          customer_rating_scale_id,
+          customer_rating_scale:customer_rating_scale_id(name, color)
+        `)
+        .in('athlete_id', athleteIds);
+
+      if (error) {
+        console.error('Error fetching athlete ratings:', error);
+        return;
+      }
+
+      const ratingsMap: Record<string, { name: string; color: string }> = {};
+      ratingData?.forEach((rating: any) => {
+        const ratingScale = rating.customer_rating_scale as unknown as { name: string; color: string } | null;
+        if (ratingScale) {
+          ratingsMap[rating.athlete_id] = {
+            name: ratingScale.name,
+            color: ratingScale.color
+          };
+        }
+      });
+
+      setAthleteRatings(prev => ({ ...prev, ...ratingsMap }));
+    } catch (error) {
+      console.error('Error in fetchAthleteRatings:', error);
+    }
+  };
+
+  // Handle table sorting
+  const handleTableChange: TableProps<AthleteData>['onChange'] = (pagination, filters, sorter) => {
+    
+    // Handle sorting
+    if (Array.isArray(sorter)) {
+      // Multiple sorters (not used in this case)
+      const firstSorter = sorter[0];
+      if (firstSorter) {
+        setSortField(firstSorter.field as string);
+        setSortOrder(firstSorter.order as 'ascend' | 'descend' | null);
+      } else {
+        // If no sorter provided, use default
+        setSortField('date');
+        setSortOrder('descend');
+      }
+    } else {
+      // Single sorter
+      if (sorter && sorter.field) {
+        const fieldName = sorter.field as string;
+        
+        // Check if this is a height column (data_type_id 304)
+        const heightColumn = dynamicColumns.find(col => 
+          col.sanitized_column_name === fieldName ||
+          col.data_type_name?.toLowerCase().replace(/\s+/g, '_') === fieldName ||
+          col.display_name.toLowerCase().replace(/\s+/g, '_') === fieldName
+        );
+        
+        if (heightColumn?.data_type_id === 304) {
+          // For height sorting, we'll use a special field name that indicates frontend sorting
+          setSortField('height_frontend');
+          setSortOrder(sorter.order as 'ascend' | 'descend' | null);
+        } else {
+          setSortField(fieldName);
+          setSortOrder(sorter.order as 'ascend' | 'descend' | null);
+        }
+      } else {
+        // If no sorter provided, use default
+        setSortField('date');
+        setSortOrder('descend');
+      }
+    }
+  };
+
+
+
+  return (
+    <div className="w-full h-full" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div 
+        style={{ 
+          transform: `scale(${zoom / 100})`,
+          transformOrigin: 'top left',
+          paddingBottom: zoom > 100 ? '2rem' : '0',
+          paddingRight: zoom > 100 ? '5%' : '0',
+          width: zoom < 100 ? `${100 / (zoom / 100)}%` : '100%',
+          height: zoom < 100 ? `${100 / (zoom / 100)}%` : '100%',
+          minHeight: zoom > 100 ? `${zoom}vh` : '100%',
+          marginBottom: zoom > 100 ? '4rem' : '0',
+          overflow: 'visible',
+          flex: '1 1 auto'
+        }}
+      >
+        <Flex style={boxStyle}>
+          <Flex style={headerBox} justify="space-between" align="center">
+      
+              <Typography.Text type="secondary" style={{fontSize: 14 }}>
+                Showing {filteredRecords} of {totalRecords} records
+                {isAnyFilterActive && ` (filtered)`}
+              </Typography.Text>
+            <Space>
+              <div className="selectbox-ui" style={{ display: "flex", alignItems: "center" }}>
+                {isAnyFilterActive && (
+                  <AddAlert
+                    trigger={
+                      <Button
+                        type="primary"
+                        size="large"
+                        className="alert-gradient-btn"
+                        style={{
+                          marginRight: 5,
+                          fontWeight: 500,
+                          background: "linear-gradient(90deg, #6affab 0%, #c8ff24 111.68%)",
+                          border: "none",
+                          fontFamily: '"Inter Tight", serif',
+                          boxShadow: "0 2px 8px rgba(202, 255, 36, 0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <img src="/bell.svg"></img> Set Up Email Alert
+                      </Button>
+                    }
+                    renderActiveFilters={renderActiveFilters}
+                  />
+                )}
+                <Filters 
+                  onApplyFilters={applyFilters} 
+                  onResetFilters={resetFilters} 
+                  dynamicColumns={dynamicColumns}
+                  filterColumns={filterColumns}
+                />
+              </div>
+                  
+              {/* <div className="selectbox-ui">
+                <TableView />
+              </div> */}
+            </Space>
+          </Flex>
+          <div className="mb-3 search-row">
+             <Space>
+              <Input.Search
+                style={{ width: 300 }}
+                placeholder="Search here..."
+                allowClear
+                value={localSearchInput}
+                onChange={(e) => handleSearch(e.target.value)}
+                onSearch={handleSearch}
+              />
+              <Button 
+                onClick={handleAddToRecruitingBoard} 
+                type="primary"
+                loading={isAddingToRecruitingBoard}
+                disabled={selectedAthletes.length === 0}
+              >
+                Add to Recruiting Board ({selectedAthletes.length})
+              </Button>
+            </Space>
+            
+          </div>
+          {extensionInactive && 
+           activeSportAbbrev && 
+           (userDetails?.packages?.map(Number)?.includes(NAIA_PACKAGES[activeSportAbbrev]) === false) && (
+            <Alert
+              message={<>
+                The extension hasn&apos;t been run in over 30 minutes - {' '}
+                <a 
+                  href="https://docs.google.com/document/d/1B4OmmZXafm3JNwZvOoqel0ekB1tHCSYfj_5owlWRGHs/edit?tab=t.0#heading=h.1qe0m1s9sb5l"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Please click here to run it and stay up to date
+                </a>
+              </>}
+              type="warning"
+              showIcon
+              style={{ marginBottom: '16px' }}
+            />
+          )}
+          <div style={{ 
+            flex: '1 1 auto', 
+            overflow: 'hidden', 
+            minHeight: 0, 
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: 'calc(100vh - 180px)' // Ensure container doesn't exceed viewport
+          }}>
+            <Table<AthleteData>
+              key={tableKey}
+              rowKey="id"
+              rowSelection={{ type: selectionType, ...rowSelection }}
+              columns={columns}
+              dataSource={displayedData}
+              loading={loading || isLoadingRecruitingBoard}
+              pagination={false}
+              bordered
+              style={{ 
+                width: "100%", 
+                height: "100%",
+                flex: '1 1 auto'
+              }}
+              scroll={{ 
+                x: "max-content", 
+                y: "calc(100vh - 230px)" // Fixed height that ensures horizontal scroll bar stays in viewport
+              }}
+              onChange={handleTableChange}
+              onRow={(record) => {
+                return {
+                  style: {
+                    backgroundColor: recruitingBoardAthletes.includes(record.id) ? '#f0f9f0' : undefined,
+                  },
+                  className: recruitingBoardAthletes.includes(record.id) ? 'recruiting-board-row' : '',
+                };
+              }}
+            />
+          </div>
+      <Modal
+        title={
+          <Flex align="center" gap={8}>
+            <i className="icon-message-text-1"></i>
+            <span>comment</span>
+          </Flex>
+        }
+        width={370}
+        footer={null}
+        open={isChatVisible}
+        onCancel={() => {
+          handleCancel();
+          setNewComment("");
+          setEditingComment(null);
+        }}
+        className="comment-modal"
+        centered
+      >
+        <Flex vertical gap={16}>
+          <Flex vertical gap={8}>
+            <Input.TextArea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              placeholder="Write a comment..."
+              rows={3}
+            />
+            <Flex justify="flex-end" gap={8}>
+              {editingComment && (
+                <Button 
+                  type="text" 
+                  className="cancel"
+                  onClick={() => {
+                    setEditingComment(null);
+                    setNewComment("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button 
+                type="primary"
+                onClick={handleSaveComment}
+                loading={isSubmitting}
+                disabled={!newComment.trim()}
+              >
+                {editingComment ? 'Update' : 'Save'}
+              </Button>
+            </Flex>
+          </Flex>
+
+          <Divider />
+
+          {comment.map((comment) => (
+            <Flex vertical key={comment.id} className="comment-item">
+              <Flex gap={16} align="flex-start">
+                <div
+                  className="px-3 py-1 rounded-md"
+                  style={{
+                    backgroundColor: athleteCommentCounts[selectedPlyer?.id ?? ""] > 0 ? "#4CAF50" : "#F5F5F5",
+                    color: athleteCommentCounts[selectedPlyer?.id ?? ""] > 0 ? "#fff" : "#000"
+                  }}
+                >
+                  <Typography.Text strong>
+                    {comment.user_detail?.name_first} {comment.user_detail?.name_last}
+                  </Typography.Text>
+                </div>
+                <Typography.Paragraph className="flex-1">{comment.content}</Typography.Paragraph>
+              </Flex>
+              <Flex justify="space-between" align="center">
+                <Typography.Text type="secondary">
+                  {new Date(comment.created_at).toLocaleString()}
+                </Typography.Text>
+                {comment.user_id === userDetails?.id && (
+                  <Space>
+                    <Button 
+                      type="text" 
+                      icon={<i className="icon-edit-2"></i>}
+                      onClick={() => handleEditComment(comment)}
+                    />
+                    <Button 
+                      type="text" 
+                      icon={<i className="icon-trash"></i>}
+                      onClick={() => handleDeleteComment(comment.id)}
+                    />
+                  </Space>
+                )}
+              </Flex>
+              <Divider />
+            </Flex>
+          ))}
+        </Flex>
+      </Modal>
+        </Flex>
+      </div>
+
+      {/* Player Profile Modal */}
+      <Modal
+        title={null}
+        open={isPlayerModalVisible}
+        onCancel={handleClosePlayerModal}
+        footer={null}
+        width="95vw"
+        style={{ top: 20 }}
+        styles={{ 
+          body: {
+            padding: 0,
+            height: 'calc(100vh - 100px)',
+            overflow: 'hidden'
+          }
+        }}
+        destroyOnHidden={true}
+        closable={true}
+        maskClosable={true}
+      >
+        {selectedPlayerId ? (
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            {searchParams?.get('use_main_tp_page_id') === 'true' ? (
+              <AthleteProfileContent 
+                mainTpPageId={selectedPlayerId} 
+                onAddToBoard={handleModalAddToRecruitingBoard}
+                isInModal={true}
+              />
+            ) : (
+              <AthleteProfileContent 
+                athleteId={selectedPlayerId} 
+                onAddToBoard={handleModalAddToRecruitingBoard}
+                isInModal={true}
+              />
+            )}
+          </div>
+        ) : (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '50vh' 
+          }}>
+            <div>Player not found</div>
+          </div>
+        )}
+      </Modal>

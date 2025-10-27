@@ -10,6 +10,7 @@ import { CustomerProvider } from "@/contexts/CustomerContext";
 import { ColorConfigProvider } from "@/contexts/ColorConfigContext";
 import { ZoomProvider } from "@/contexts/ZoomContext";
 import AuthProtection from "@/components/AuthProtection";
+import { useState, useEffect } from 'react';
 
 const { Header, Sider, Content } = Layout;
 
@@ -17,17 +18,26 @@ const headerStyle: React.CSSProperties = {
 
 };
 
-const contentStyle: React.CSSProperties = {
+const getContentStyle = (collapsed: boolean): React.CSSProperties => ({
   textAlign: "center",
   color: "var(--foreground)",
   backgroundColor: "var(--background)",
-};
+  marginLeft: collapsed ? "50px" : "209px", // Adjust based on sidebar state
+  overflowY: "auto",
+  height: "calc(100vh - 64px)", // Subtract header height
+  padding: "20px",
+  transition: "margin-left 0.2s",
+});
 
 const siderStyle: React.CSSProperties = {
   textAlign: "center",
   lineHeight: "16px",
   color: "var(--text-white)",
   backgroundColor: "var(--bg-primary)",
+  height: "100vh",
+  position: "fixed",
+  left: 0,
+  overflowY: "auto",
 };
 
 const layoutStyle = {
@@ -36,7 +46,19 @@ const layoutStyle = {
 };
 
 function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { collapsed } = useSidebar();
+  const { collapsed, isMobileOpen } = useSidebar();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   return (
     <AuthProtection>
@@ -46,17 +68,41 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Navbar/>
           </Header>
           <Layout>
-            <Sider 
-              width="209px" 
-              collapsible
-              collapsed={collapsed}
-              trigger={null}
-              collapsedWidth={50}
-              style={siderStyle}
-            >
-              <Sidebar/>
-            </Sider>
-            <Content style={contentStyle}>
+            {/* Desktop sidebar */}
+            {!isMobile && (
+              <Sider 
+                width="209px" 
+                collapsible
+                collapsed={collapsed}
+                trigger={null}
+                collapsedWidth={50}
+                style={siderStyle}
+              >
+                <Sidebar/>
+              </Sider>
+            )}
+            
+            {/* Mobile sidebar overlay */}
+            {isMobile && isMobileOpen && (
+              <div 
+                className="mobile-sidebar-overlay"
+                style={{
+                  position: 'fixed',
+                  top: 50, /* Start from the very top */
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'var(--bg-primary)',
+                  zIndex: 9999,
+                  overflow: 'auto',
+                  paddingTop: '64px' /* Add padding to push content below navbar */
+                }}
+              >
+                <Sidebar/>
+              </div>
+            )}
+            
+            <Content style={getContentStyle(collapsed)}>
               {children}
             </Content>
           </Layout>

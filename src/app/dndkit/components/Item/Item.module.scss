@@ -122,6 +122,14 @@ $focused-outline-color: #4c9ffe;
     background-color: var(--color);
   }
 
+  &.jucoSource {
+    background-color: rgba(135, 206, 250, 0.15); // Very light blue hue
+  }
+
+  &.prePortalSource {
+    background-color: rgba(255, 165, 0, 0.15); // Very light orange hue
+  }
+
   &:hover {
     .Remove {
       visibility: visible;

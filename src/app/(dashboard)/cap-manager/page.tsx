@@ -14,7 +14,7 @@ import Filters from "@/components/cap-manager/Filters";
 import Login from "@/components/login";
 import { fetchUserDetails } from "@/utils/utils";
 import Reports from '@/components/cap-manager/Reports';
-import EnhancedDepthChart from '@/components/depth-chart/EnhancedDepthChart';
+import DepthChart from '@/components/cap-manager/DepthChart';
 import { useZoom } from '@/contexts/ZoomContext';
 
 interface ScenarioWithPriority {
@@ -45,6 +45,7 @@ function CapManagerContent() {
   const [session, setSession] = useState<any>(null);
   const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
   const [selectedMonth, setSelectedMonth] = useState<string>('Jan');
+  const [numberOfMonths, setNumberOfMonths] = useState(12);
   const { zoom } = useZoom();
   const { 
     effectiveCompAccess, 
@@ -358,6 +359,28 @@ function CapManagerContent() {
               </div>
             </div>
           </div>
+
+          {activeOption === 'List' && effectiveCompAccess && (
+            <div className="relative inline-block">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-medium text-gray-600">Months:</span>
+                <select
+                  value={numberOfMonths}
+                  onChange={(e) => setNumberOfMonths(parseInt(e.target.value))}
+                  className="appearance-none bg-white border border-gray-300 rounded-md py-2 pl-3 pr-8 leading-tight focus:outline-none focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm"
+                >
+                  {Array.from({ length: 24 }, (_, i) => i + 1).map(num => (
+                    <option key={num} value={num}>{num}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700" style={{ right: "0.5rem" }}>
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         
         <div className="flex items-center space-x-4">
@@ -576,50 +599,52 @@ function CapManagerContent() {
           overflowY: "auto"
         }}
       >
-        <div className="kanban-board-container" style={{ 
-          position: 'relative',
-          transform: `scale(${zoom / 100})`,
-          transformOrigin: 'top left',
-          paddingBottom: '2rem',
-          paddingRight: zoom > 100 ? '5%' : '1rem',
-          minHeight: zoom > 100 ? `${zoom}vh` : 'auto', 
-          width: zoom > 100 ? `${Math.max(zoom, 120)}%` : '100%',
-          height: 'fit-content',
-          marginBottom: zoom > 100 ? '4rem' : '1rem',
-          boxShadow: zoom > 100 ? '10px 0 15px -5px rgba(0, 0, 0, 0.1)' : 'none'
-        }}>
-          {activeOption === 'Positional Ranking' && <KanbanBoard selectedYear={selectedYear} selectedMonth={selectedMonth} selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} zoom={zoom} activeFilters ={activeFilters as { [key: string]: string[] }} selectOption={selectOption} targetScenario={targetScenario} />}
-          {activeOption === 'By Year' && <YearView selectedYear={selectedYear} selectedMonth={selectedMonth} selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} activeFilters={activeFilters as { [key: string]: string[] }} targetScenario={targetScenario}/>}
-          {activeOption === 'List' && <ListView selectedYear={selectedYear} selectedMonth={selectedMonth} selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} activeFilters={activeFilters as { [key: string]: string[] }} targetScenario={targetScenario}/>}
-          {activeOption === 'Budget' && (
-            <Budget 
-              selectedYear={selectedYear}
-              selectedMonth={selectedMonth}
-              selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} 
-              activeFilters={activeFilters as { [key: string]: string[] }}
-              selectOption={selectOption}
-              targetScenario={targetScenario}
-            />
-          )}
-          {activeOption === 'Reports' && (
-            <Reports 
-              selectedYear={selectedYear}
-              selectedMonth={selectedMonth}
-              selectedScenario={scenariosForComponents.map(s => s.name).join(', ')}
-              activeFilters={activeFilters}
-            />
-          )}
-          {activeOption === 'Depth Chart' && (
-            <EnhancedDepthChart 
-              selectedYear={selectedYear}
-              selectedMonth={typeof selectedMonth === 'string' ? 
-                ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth) + 1 : 
-                selectedMonth}
-              selectedScenario={scenariosForComponents.map(s => s.name).join(', ')}
-              activeFilters={activeFilters}
-            />
-          )}
-        </div>
+        {activeOption === 'Depth Chart' ? (
+          <DepthChart 
+            selectedYear={selectedYear}
+            selectedMonth={typeof selectedMonth === 'string' ? 
+              ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(selectedMonth) + 1 : 
+              selectedMonth}
+            selectedScenario={scenariosForComponents.map(s => s.name).join(', ')}
+            activeFilters={activeFilters}
+            zoom={zoom}
+          />
+        ) : (
+          <div className="kanban-board-container" style={{ 
+            position: 'relative',
+            transform: `scale(${zoom / 100})`,
+            transformOrigin: 'top left',
+            paddingBottom: '2rem',
+            paddingRight: zoom > 100 ? '5%' : '1rem',
+            minHeight: zoom > 100 ? `${zoom}vh` : 'auto', 
+            width: zoom > 100 ? `${Math.max(zoom, 120)}%` : '100%',
+            height: 'fit-content',
+            marginBottom: zoom > 100 ? '4rem' : '1rem',
+            boxShadow: zoom > 100 ? '10px 0 15px -5px rgba(0, 0, 0, 0.1)' : 'none'
+          }}>
+            {activeOption === 'Positional Ranking' && <KanbanBoard selectedYear={selectedYear} selectedMonth={selectedMonth} selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} zoom={zoom} activeFilters ={activeFilters as { [key: string]: string[] }} selectOption={selectOption} targetScenario={targetScenario} />}
+            {activeOption === 'By Year' && <YearView selectedYear={selectedYear} selectedMonth={selectedMonth} selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} activeFilters={activeFilters as { [key: string]: string[] }} targetScenario={targetScenario}/>}
+            {activeOption === 'List' && <ListView selectedYear={selectedYear} selectedMonth={selectedMonth} selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} activeFilters={activeFilters as { [key: string]: string[] }} targetScenario={targetScenario} numberOfMonths={numberOfMonths}/>}
+            {activeOption === 'Budget' && (
+              <Budget 
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+                selectedScenario={scenariosForComponents.map(s => s.name).join(', ')} 
+                activeFilters={activeFilters as { [key: string]: string[] }}
+                selectOption={selectOption}
+                targetScenario={targetScenario}
+              />
+            )}
+            {activeOption === 'Reports' && (
+              <Reports 
+                selectedYear={selectedYear}
+                selectedMonth={selectedMonth}
+                selectedScenario={scenariosForComponents.map(s => s.name).join(', ')}
+                activeFilters={activeFilters}
+              />
+            )}
+          </div>
+        )}
         {teamId && (
           <Filters
             isOpen={isFilterMenuOpen}

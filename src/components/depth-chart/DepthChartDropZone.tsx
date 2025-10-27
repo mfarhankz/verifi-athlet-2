@@ -1,19 +1,29 @@
 import React from 'react';
-import { useDrop } from 'react-dnd';
+import { useDrop } from 'react-dnd/dist/hooks';
 import { PlusOutlined, UserAddOutlined } from '@ant-design/icons';
 import { DepthChartSubPosition, DepthChartAssignmentWithAthlete } from '@/types/depthChart';
 import { ATHLETE_DRAG_TYPE } from './DraggableAthleteCard';
 import DraggableAthleteCard from './DraggableAthleteCard';
 
+interface AthleteDropItem {
+  assignmentId: string;
+  athleteId: string;
+  currentSubPositionId: string;
+  currentRanking: number;
+}
+
 interface DepthChartDropZoneProps {
   subPosition: DepthChartSubPosition;
   assignments: DepthChartAssignmentWithAthlete[];
-  onDrop: (item: any, subPositionId: string) => void;
+  onDrop: (item: AthleteDropItem, subPositionId: string) => void;
   onMoveUp: (assignmentId: string) => void;
   onMoveDown: (assignmentId: string) => void;
   onRemove: (assignmentId: string) => void;
   onAddAthlete: (subPositionId: string) => void;
   onDeleteSubPosition?: (subPositionId: string) => void;
+  onAthleteDrop?: (draggedAthlete: AthleteDropItem, targetAthlete: AthleteDropItem) => void;
+  onAthleteInsert?: (draggedAthlete: AthleteDropItem, insertPosition: number) => void;
+  onCreateTie?: (draggedAthlete: AthleteDropItem, targetAthlete: AthleteDropItem) => void;
   isDropping?: boolean;
 }
 
@@ -26,17 +36,53 @@ const DepthChartDropZone: React.FC<DepthChartDropZoneProps> = ({
   onRemove,
   onAddAthlete,
   onDeleteSubPosition,
+  onAthleteDrop,
+  onAthleteInsert,
+  onCreateTie,
   isDropping = false
 }) => {
 
-  const [{ isOver, canDrop }, drop] = useDrop(() => ({
+  const [{ isOver, canDrop, draggedItem }, drop] = useDrop<AthleteDropItem, void, { isOver: boolean; canDrop: boolean; draggedItem: AthleteDropItem | null }>(() => ({
     accept: ATHLETE_DRAG_TYPE,
-    drop: (item) => onDrop(item, subPosition.id),
-    collect: (monitor) => ({
+    drop: (item: AthleteDropItem) => {
+      // Only drop to sub-position if it's from a different position
+      if (item.currentSubPositionId !== subPosition.id) {
+        console.log('🎯 [ATHLETE DROP] Dropping athlete onto position:', {
+          athlete: {
+            id: item.athleteId,
+            assignmentId: item.assignmentId,
+            fromPosition: item.currentSubPositionId,
+            currentRanking: item.currentRanking
+          },
+          targetPosition: {
+            id: subPosition.id,
+            name: subPosition.name,
+            currentAthletes: assignments.length,
+            newRanking: assignments.length + 1
+          }
+        });
+        onDrop(item, subPosition.id);
+      }
+    },
+    canDrop: (item: AthleteDropItem) => {
+      // Only allow drops from different positions
+      return item.currentSubPositionId !== subPosition.id;
+    },
+    collect: (monitor: any) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
+      draggedItem: monitor.getItem(),
     }),
   }), [subPosition.id, onDrop]);
+
+  // Monitor if any athlete is being dragged from this position
+  const [{ isDraggingFromThisPosition }] = useDrop<AthleteDropItem, void, { isDraggingFromThisPosition: boolean }>(() => ({
+    accept: ATHLETE_DRAG_TYPE,
+    collect: (monitor: any) => ({
+      isDraggingFromThisPosition: monitor.getItem()?.currentSubPositionId === subPosition.id,
+    }),
+  }), [subPosition.id]);
+
 
   const sortedAssignments = [...assignments].sort((a, b) => a.ranking - b.ranking);
 
@@ -61,14 +107,57 @@ const DepthChartDropZone: React.FC<DepthChartDropZoneProps> = ({
     groupedAssignments.push(currentGroup);
   }
 
+  // Component for insertion drop zones
+  const InsertionDropZone: React.FC<{ insertPosition: number }> = ({ insertPosition }) => {
+    const [{ isOver, canDrop }, drop] = useDrop<AthleteDropItem, void, { isOver: boolean; canDrop: boolean }>(() => ({
+      accept: ATHLETE_DRAG_TYPE,
+      drop: (draggedItem: AthleteDropItem) => {
+        // Only allow drops from the same position
+        if (draggedItem.currentSubPositionId === subPosition.id) {
+          onAthleteInsert?.(draggedItem, insertPosition);
+        }
+      },
+      canDrop: (draggedItem: AthleteDropItem) => {
+        // Can drop if it's from the same position
+        return draggedItem.currentSubPositionId === subPosition.id;
+      },
+      collect: (monitor: any) => ({
+        isOver: monitor.isOver(),
+        canDrop: monitor.canDrop(),
+      }),
+    }), [subPosition.id, onAthleteInsert, insertPosition]);
+
+    return (
+      <div
+        ref={drop as unknown as React.RefObject<HTMLDivElement>}
+        className={`
+          mx-2 my-1 rounded transition-all duration-200 relative z-10
+          ${isOver && canDrop 
+            ? 'h-3 bg-green-400 border-2 border-green-500 shadow-lg' 
+            : isDraggingFromThisPosition
+              ? 'h-3 bg-gray-100 border border-gray-300 hover:bg-gray-200 hover:border-gray-400'
+              : 'h-0 bg-transparent border border-transparent'
+          }
+        `}
+      >
+        {isOver && canDrop && (
+          <div className="h-full bg-green-400 rounded flex items-center justify-center shadow-lg">
+            <div className="bg-green-600 text-white px-3 py-1 rounded text-xs font-medium shadow-md">
+              Insert here
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div 
       className="absolute"
       style={{
         left: `${subPosition.x_coord}px`,
         top: `${subPosition.y_coord}px`,
-        transform: 'translate(-50%, -50%)',
-        minWidth: '200px',
+        width: '240px',
         zIndex: 10
       }}
     >
@@ -105,22 +194,27 @@ const DepthChartDropZone: React.FC<DepthChartDropZoneProps> = ({
 
       {/* Drop zone for athletes */}
       <div
-        ref={drop as any}
+        ref={isDraggingFromThisPosition ? null : drop as unknown as React.RefObject<HTMLDivElement>}
         className={`
-          ${assignments.length > 0 ? 'min-h-32 p-3' : 'min-h-8 p-2'} bg-white border-2 border-dashed rounded-b-lg
+          ${assignments.length > 0 ? 'min-h-32' : 'min-h-8'} bg-white border-2 border-dashed rounded-b-lg
           transition-all duration-200
-          ${isOver && canDrop
-            ? 'border-green-400 bg-green-50' 
-            : isOver && !canDrop 
-              ? 'border-red-400 bg-red-50'
-              : 'border-gray-300'
+          ${isDraggingFromThisPosition 
+            ? 'border-gray-300' // No special styling when dragging within same position
+            : isOver && canDrop
+              ? 'border-green-400 bg-green-50' 
+              : isOver && !canDrop
+                ? 'border-red-400 bg-red-50'
+                : 'border-gray-300'
           }
           ${isDropping ? 'animate-pulse' : ''}
         `}
       >
         {/* Athletes list */}
         {groupedAssignments.length > 0 ? (
-          <div className="space-y-2">
+          <div className="w-full">
+            {/* Insertion zone at the top */}
+            <InsertionDropZone insertPosition={1} />
+            
             {groupedAssignments.map((group, groupIndex) => (
               <div key={`group-${groupIndex}`}>
                 {group.length === 1 ? (
@@ -129,34 +223,31 @@ const DepthChartDropZone: React.FC<DepthChartDropZoneProps> = ({
                     assignment={group[0]}
                     index={groupIndex}
                     totalAthletes={sortedAssignments.length}
-                    onMoveUp={() => onMoveUp(group[0].id)}
-                    onMoveDown={() => onMoveDown(group[0].id)}
                     onRemove={() => onRemove(group[0].id)}
+                    onAthleteDrop={onAthleteDrop}
+                    onCreateTie={onCreateTie}
                   />
                 ) : (
                   // Tied athletes - display side by side
-                  <div className="space-y-1">
-                    <div className="text-xs text-gray-500 font-medium">
-                      Tied for {group[0].ranking === 1 ? '1st' : 
-                               group[0].ranking === 2 ? '2nd' : 
-                               group[0].ranking === 3 ? '3rd' : 
-                               `${group[0].ranking}th`}:
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {group.map((assignment, athleteIndex) => (
-                        <DraggableAthleteCard
-                          key={assignment.id}
-                          assignment={assignment}
-                          index={groupIndex}
-                          totalAthletes={sortedAssignments.length}
-                          onMoveUp={() => onMoveUp(assignment.id)}
-                          onMoveDown={() => onMoveDown(assignment.id)}
-                          onRemove={() => onRemove(assignment.id)}
-                        />
-                      ))}
-                    </div>
+                  <div className="flex gap-1">
+                    {group.map((assignment, athleteIndex) => (
+                      <DraggableAthleteCard
+                        key={assignment.id}
+                        assignment={assignment}
+                        index={groupIndex}
+                        totalAthletes={sortedAssignments.length}
+                        onRemove={() => onRemove(assignment.id)}
+                        onAthleteDrop={onAthleteDrop}
+                        onCreateTie={onCreateTie}
+                        isTied={true}
+                        tiedCount={group.length}
+                      />
+                    ))}
                   </div>
                 )}
+                
+                {/* Insertion zone after each group */}
+                <InsertionDropZone insertPosition={group[0].ranking + 1} />
               </div>
             ))}
           </div>
@@ -170,7 +261,7 @@ const DepthChartDropZone: React.FC<DepthChartDropZoneProps> = ({
           </div>
         )}
 
-        {/* Drop indicator when hovering */}
+        {/* Drop indicator when hovering - only show for cross-position drops */}
         {isOver && canDrop && (
           <div className="absolute inset-0 bg-green-100 border-2 border-green-400 border-dashed rounded-b-lg flex items-center justify-center">
             <div className="bg-green-600 text-white px-3 py-1 rounded text-sm font-medium">

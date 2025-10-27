@@ -21,6 +21,9 @@ interface SidebarContextType {
   setCurrentMenuTitle: (title: string) => void;
   userPackages: number[];
   isLoading: boolean;
+  isMobileOpen: boolean;
+  toggleMobileOpen: () => void;
+  setMobileOpen: (isOpen: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType>({
@@ -31,6 +34,9 @@ const SidebarContext = createContext<SidebarContextType>({
   setCurrentMenuTitle: () => {},
   userPackages: [],
   isLoading: true,
+  isMobileOpen: false,
+  toggleMobileOpen: () => {},
+  setMobileOpen: () => {},
 });
 
 export const SidebarProvider = ({ children }: { children: React.ReactNode }) => {
@@ -38,9 +44,18 @@ export const SidebarProvider = ({ children }: { children: React.ReactNode }) => 
   const [currentMenuTitle, setCurrentMenuTitle] = useState('');
   const [userPackages, setUserPackages] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const toggleCollapsed = () => {
     setCollapsed(!collapsed);
+  };
+
+  const toggleMobileOpen = () => {
+    setIsMobileOpen(!isMobileOpen);
+  };
+
+  const setMobileOpen = (isOpen: boolean) => {
+    setIsMobileOpen(isOpen);
   };
 
   // Fetch user packages when the component mounts
@@ -74,7 +89,10 @@ export const SidebarProvider = ({ children }: { children: React.ReactNode }) => 
       currentMenuTitle, 
       setCurrentMenuTitle,
       userPackages,
-      isLoading
+      isLoading,
+      isMobileOpen,
+      toggleMobileOpen,
+      setMobileOpen
     }}>
       {children}
     </SidebarContext.Provider>

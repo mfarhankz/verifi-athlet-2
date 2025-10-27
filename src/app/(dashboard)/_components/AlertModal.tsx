@@ -80,31 +80,75 @@ const SURVEY_DATA_TYPE_IDS = [
 const convertDisplayNamesToDataTypes = (filterString: string): string => {
   const displayToDataTypeMap: { [key: string]: string } = {
     'Division:': 'division:',
-    'Home State:': 'hometown_state:',
-    'Hometown State:': 'hometown_state:',
+    'Home State:': 'address_state:',
+    'Hometown State:': 'address_state:',
     'Year:': 'year:',
     'Position:': 'primary_position:',
     'Status:': 'm_status:',
     'Athletic Aid:': 'is_receiving_athletic_aid:',
     'Date Entered:': 'initiated_date:',
+    // Map GP/GS display tokens to column names
     'GP:': 'gp:',
     'GS:': 'gs:',
     'Goals:': 'goals:',
     'Assists:': 'assists:',
-    'GK Min:': 'goalkeeperMinutes:',
     'Survey Completed:': 'survey_completed:',
+    'International:': 'address_state:',
     'Div:': 'division:', // Handle "Div:" variant
+    'college:': 'college:', // Handle college filter
+    'Schools:': 'college:', // Handle old Schools filter format
+    'conference:': 'conference:', // Handle conference filter
   };
 
   let convertedFilter = filterString;
   
+  // Convert baseball stat category prefixes (e.g., "Hitting - HR Min: 4" to "hr Min: 4")
+  // This handles the special baseball display format with category prefixes
+  // Remove the category prefix and convert stat name to lowercase, but keep comparison intact
+  convertedFilter = convertedFilter.replace(/(Hitting|Pitching|Fielding)\s*-\s*([^:]+):/gi, (match, category, statName) => {
+    // Convert stat name to lowercase but keep the rest intact
+    return `${statName.toLowerCase()}:`;
+  });
+  
+  // Normalize Grad Student boolean to is_transfer_graduate_student TRUE/FALSE
+  convertedFilter = convertedFilter
+    .replace(/Grad Student:\s*Yes/gi, 'is_transfer_graduate_student: TRUE')
+    .replace(/Grad Student:\s*No/gi, 'is_transfer_graduate_student: FALSE');
+
+  // Do not remove GS; we persist it as gs
+
+  // Normalize GK Min variants to g_min_played Min: value
+  // e.g., "| GK Min Min: 100" or "| GK Min: 100" -> "| g_min_played Min: 100"
+  convertedFilter = convertedFilter
+    .replace(/(^|\|)\s*GK\s*Min\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} g_min_played Min: ${val.trim()}`)
+    .replace(/(^|\|)\s*GK\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} g_min_played Min: ${val.trim()}`);
+
+  // Normalize Min variants to min_played Min: value
+  // e.g., "| Min Min: 100" or "| Min: 100" -> "| min_played Min: 100"
+  convertedFilter = convertedFilter
+    .replace(/(^|\|)\s*Min\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} min_played Min: ${val.trim()}`)
+    .replace(/(^|\|)\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} min_played Min: ${val.trim()}`);
+
   // Convert statistical comparison filters (e.g., "fld_pct: greater 0.1" to "fld_pct Min: .1")
-  convertedFilter = convertedFilter.replace(/([a-zA-Z_]+):\s*(greater|less)\s+(\d*\.?\d+)/gi, (match, statName, comparison, value) => {
+  // Only match patterns that have "greater" or "less" after the colon, not "Min:" or "Max:"
+  // Use word boundaries to ensure we don't match "hr Min: 4" as "hr Min: greater 4"
+  convertedFilter = convertedFilter.replace(/\b([a-zA-Z_]+):\s*(greater|less)\s+(\d*\.?\d+)\b/gi, (match, statName, comparison, value) => {
+    // Skip if the statName already contains "Min" or "Max" (already converted)
+    if (statName.includes('Min') || statName.includes('Max')) {
+      return match;
+    }
     const comparisonLabel = comparison.toLowerCase() === 'greater' ? 'Min' : 'Max';
     // Remove leading zero from decimal values (0.1 becomes .1)
     const formattedValue = value.replace(/^0\./, '.');
     return `${statName} ${comparisonLabel}: ${formattedValue}`;
   });
+
+  // After comparison normalization, convert GP/GS tokens to lowercase column keys
+  convertedFilter = convertedFilter
+    .replace(/\bGP\s+(Min|Max):/g, (m, mm) => `gp ${mm}:`)
+    .replace(/\bGS\s+(Min|Max):/g, (m, mm) => `gs ${mm}:`)
+    .replace(/(^|\|)\s*GP:/g, (m, sep) => `${sep} gp:`)
+    .replace(/(^|\|)\s*GS:/g, (m, sep) => `${sep} gs:`);
   
   // Convert display names to data_type names
   Object.entries(displayToDataTypeMap).forEach(([displayName, dataTypeName]) => {
@@ -113,43 +157,45 @@ const convertDisplayNamesToDataTypes = (filterString: string): string => {
     convertedFilter = convertedFilter.replace(regex, dataTypeName);
   });
 
+  // Fallback: default any remaining labels to snake_case column keys
+  // Example: "GK Saves:" -> "gk_saves:" if not caught by explicit map
+  convertedFilter = convertedFilter.replace(/(^|\|)\s*([A-Za-z][A-Za-z ]+):/g, (match, sep, label) => {
+    const trimmed = label.trim();
+    // Skip already-converted or known labels we intentionally map elsewhere
+    const lower = trimmed.toLowerCase();
+    if (lower.endsWith(' min') || lower === 'date entered' || lower === 'international' || lower === 'div' || lower === 'division') {
+      return match; // handled elsewhere or removed
+    }
+    // If label already looks like a column (has underscore or lowercase letters only), keep
+    if (/^[a-z_]+$/.test(trimmed)) {
+      return match;
+    }
+    const snake = trimmed
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z_]/g, '')
+      .toLowerCase();
+    return `${sep} ${snake}:`;
+  });
+
+  // Ensure canonical minutes format: when we have "min_played:" or "g_min_played:" without Min/Max, add Min:
+  convertedFilter = convertedFilter
+    .replace(/(^|\|)\s*(min_played|g_min_played):\s*([^|\s][^|]*)(?=\||$)/gi, (m, sep, col, val) => `${sep} ${col} Min: ${val.trim()}`);
+
+  // Clean up separators and whitespace
+  convertedFilter = convertedFilter
+    .replace(/\s*\|\s*\|\s*/g, ' | ') // collapse double separators
+    .replace(/\|\s*$/g, '') // remove trailing |
+    .replace(/^\s*\|\s*/g, '') // remove leading |
+    .replace(/\s{2,}/g, ' ') // collapse whitespace
+    .trim();
+
   return convertedFilter;
 };
 
 // Function to determine if an alert should be marked as a survey alert
 const determineSurveyAlert = async (customerId: string, filterString: string): Promise<boolean> => {
   try {
-    // First, check if the customer is assigned to a school with non-NCAA data_type_id
-    const { data: customerData, error: customerError } = await supabase
-      .from('customer')
-      .select('school_id')
-      .eq('id', customerId)
-      .single();
-
-    if (customerError) {
-      console.error('Error fetching customer data:', customerError);
-      return false;
-    }
-
-    if (customerData?.school_id) {
-      // Check if the school has school_fact with data_type_id = 118 but value != 'NCAA'
-      const { data: schoolFactData, error: schoolFactError } = await supabase
-        .from('school_fact')
-        .select('value')
-        .eq('school_id', customerData.school_id)
-        .eq('data_type_id', 118)
-        .neq('value', 'NCAA')
-        .limit(1);
-
-      if (schoolFactError) {
-        console.error('Error fetching school_fact data:', schoolFactError);
-      } else if (schoolFactData && schoolFactData.length > 0) {
-        // Customer is assigned to a school with non-NCAA value for data_type_id 118
-        return true;
-      }
-    }
-
-    // Second, check if the filter includes survey-related data
+    // Check if the filter includes survey-related data
     // Parse the filter string to look for survey-related terms
     const filterLower = filterString.toLowerCase();
     
@@ -214,6 +260,12 @@ const AlertModal: React.FC<AlertModalProps> = ({
   }, [initialValues, form, open]);
 
   const handleFinish = async (values: any) => {
+    // Validate that recipients are selected when "Select Individuals" is chosen
+    if (values.recipientType === "individual" && (!values.selectedIds || values.selectedIds.length === 0)) {
+      message.error("Please select at least one recipient");
+      return;
+    }
+
     setSaving(true);
     if (mode === "add") {
       // Add mode: insert new alert
@@ -428,7 +480,21 @@ const AlertModal: React.FC<AlertModalProps> = ({
           />
         </Form.Item>
         {recipientType === "individual" && (
-          <Form.Item name="selectedIds" required>
+          <Form.Item 
+            name="selectedIds" 
+            required
+            rules={[
+              {
+                required: true,
+                validator: (_, value) => {
+                  if (!value || value.length === 0) {
+                    return Promise.reject('Please select at least one recipient');
+                  }
+                  return Promise.resolve();
+                }
+              }
+            ]}
+          >
             <Select
               mode="multiple"
               style={{ width: "100%" }}

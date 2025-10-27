@@ -16,6 +16,7 @@ import { fetchActiveAlerts, fetchUserDetailsByIds, fetchUserDetails, fetchUsersF
 import type { Alert } from "@/types/database";
 import AlertModal from "../../_components/AlertModal";
 import { supabase } from "@/lib/supabaseClient";
+import { useCustomer } from "@/contexts/CustomerContext";
 
 export default function Alerts() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -24,16 +25,22 @@ export default function Alerts() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [teamUsers, setTeamUsers] = useState<any[]>([]);
   const [editLoading, setEditLoading] = useState(false);
+  const { activeCustomerId } = useCustomer();
 
   // Fetch alerts
   useEffect(() => {
+    if (!activeCustomerId) return; // Don't fetch if no active customer
+    
     setLoading(true);
     fetchActiveAlerts()
       .then(async (data) => {
+        // Filter alerts by the active customer ID
+        const filteredAlerts = data.filter(alert => alert.customer_id === activeCustomerId);
+        
         // Collect all unique user IDs from recipient fields
         const allIds = Array.from(
           new Set(
-            data
+            filteredAlerts
               .filter(a => a.recipient !== "entire_staff")
               .flatMap(a => a.recipient.split(",").map(id => id.trim()))
               .filter(Boolean)
@@ -43,7 +50,7 @@ export default function Alerts() {
         const idToName = await fetchUserDetailsByIds(allIds);
 
         // Add a new field to each alert for display
-        const alertsWithNames = data.map(alert => ({
+        const alertsWithNames = filteredAlerts.map(alert => ({
           ...alert,
           recipient_names:
             alert.recipient === "entire_staff"
@@ -57,7 +64,7 @@ export default function Alerts() {
       })
       .catch(() => message.error("Failed to load alerts"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeCustomerId]);
 
   // Open edit modal
   const onEdit = async (alert: Alert) => {
@@ -80,16 +87,19 @@ export default function Alerts() {
       // Refresh alerts list after edit
       await fetchActiveAlerts()
         .then(async (data) => {
+          // Filter alerts by the active customer ID
+          const filteredAlerts = data.filter(alert => alert.customer_id === activeCustomerId);
+          
           const allIds = Array.from(
             new Set(
-              data
+              filteredAlerts
                 .filter(a => a.recipient !== "entire_staff")
                 .flatMap(a => a.recipient.split(",").map(id => id.trim()))
                 .filter(Boolean)
             )
           );
           const idToName = await fetchUserDetailsByIds(allIds);
-          const alertsWithNames = data.map(alert => ({
+          const alertsWithNames = filteredAlerts.map(alert => ({
             ...alert,
             recipient_names:
               alert.recipient === "entire_staff"
@@ -120,16 +130,19 @@ export default function Alerts() {
       // Refresh alerts list after delete
       await fetchActiveAlerts()
         .then(async (data) => {
+          // Filter alerts by the active customer ID
+          const filteredAlerts = data.filter(alert => alert.customer_id === activeCustomerId);
+          
           const allIds = Array.from(
             new Set(
-              data
+              filteredAlerts
                 .filter(a => a.recipient !== "entire_staff")
                 .flatMap(a => a.recipient.split(",").map(id => id.trim()))
                 .filter(Boolean)
             )
           );
           const idToName = await fetchUserDetailsByIds(allIds);
-          const alertsWithNames = data.map(alert => ({
+          const alertsWithNames = filteredAlerts.map(alert => ({
             ...alert,
             recipient_names:
               alert.recipient === "entire_staff"
@@ -161,6 +174,25 @@ export default function Alerts() {
       title: "Rule Name",
       dataIndex: "rule",
       key: "rule",
+      render: (rule: string, record: Alert) => (
+        <Flex align="center" gap={8}>
+          <span>{rule}</span>
+          {record.survey_alert && (
+            <span 
+              style={{
+                backgroundColor: '#1890ff',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                fontWeight: '500'
+              }}
+            >
+              Survey
+            </span>
+          )}
+        </Flex>
+      ),
     },
     {
       title: "Recipient",
@@ -171,15 +203,23 @@ export default function Alerts() {
       title: "Actions",
       key: "actions",
       render: (_: any, record: Alert) => (
-        <Flex gap={8}>
-          <Button size="small" onClick={() => onEdit(record)}>
+        <Flex gap={8} align="center">
+          <Button 
+            size="small" 
+            onClick={() => onEdit(record)}
+            style={{ height: '24px' }}
+          >
             Edit
           </Button>
           <Popconfirm
             title="Are you sure to delete this alert?"
             onConfirm={() => onDelete(record.id)}
           >
-            <Button size="small" danger>
+            <Button 
+              size="small" 
+              danger
+              style={{ height: '24px' }}
+            >
               Delete
             </Button>
           </Popconfirm>

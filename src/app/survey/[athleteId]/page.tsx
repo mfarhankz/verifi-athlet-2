@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { SurveyAuthProvider } from '@/contexts/SurveyAuthContext';
+import '../survey.css';
 import SurveyContent from '../_components/SurveyContent';
 import SurveyLogin from '../_components/SurveyLogin';
 import { useSurveyAuth } from '@/contexts/SurveyAuthContext';
@@ -47,10 +48,12 @@ function SurveyPageContent() {
 // Main component wrapped with Suspense and Auth Provider
 export default function SurveyPage() {
   return (
-    <SurveyAuthProvider>
-      <Suspense fallback={<div>Loading survey...</div>}>
-        <SurveyPageContent />
-      </Suspense>
-    </SurveyAuthProvider>
+    <div className="survey-page">
+      <SurveyAuthProvider>
+        <Suspense fallback={<div>Loading survey...</div>}>
+          <SurveyPageContent />
+        </Suspense>
+      </SurveyAuthProvider>
+    </div>
   );
 } 

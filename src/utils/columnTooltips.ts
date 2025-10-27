@@ -1,9 +1,9 @@
 // Define tooltip text for specific columns
 export const COLUMN_TOOLTIPS: Record<string, string> = {
-  'VIS': 'Verified Impact Score - a single score that quantifies a player\'s impact using a formula based solely on their box score data - 10+ = All-time season | 8+ = MVP season | 6+ = All-conference season | 4+ = consideration for all-conference season | 2+ = role player/contributor | 0+ = not a regular contributor',
-  'VPR': 'Verified Player Rating - A single score that takes a players Verified Impact Score and adjusts for competition level, allowing D1, D2 and D3 players to be accurately compared — rated on a 50–100 scale, with 100 as the top score.',
-  'TGb': 'TrueGrade Batting - A single score that adjusts wOBA (weighted on-base average) for competition level, allowing D1, D2 and D3 players to be accurately compared — rated on a 50–100 scale, with 100 as the top score. (min 50 AB)',
-  'TGp': 'TrueGrade Pitching - A single score that adjusts FIP (Fielding Independent Pitching) for competition level, allowing D1, D2 and D3 players to be accurately compared — rated on a 50–100 scale, with 100 as the top score. (min 20 IP)'
+  'IS': 'Verified Impact Score - a single score that quantifies a player\'s impact using a formula based solely on their box score data - 10+ = All-time season | 8+ = MVP season | 6+ = All-conference season | 4+ = consideration for all-conference season | 2+ = role player/contributor | 0+ = not a regular contributor',
+  'V': 'Verified Player Rating - A single score that takes a players Verified Impact Score and adjusts for competition level, allowing D1, D2 and D3 players to be accurately compared — rated on a 50–100 scale, with 100 as the top score.',
+  'V(b)': 'Verified Rating - Batting - A single score that adjusts wOBA (weighted on-base average) for competition level, allowing D1, D2 and D3 players to be accurately compared — rated on a 50–100 scale, with 100 as the top score. (min 50 AB)',
+  'V(p)': 'Verified Rating - Pitching - A single score that adjusts FIP (Fielding Independent Pitching) for competition level, allowing D1, D2 and D3 players to be accurately compared — rated on a 50–100 scale, with 100 as the top score. (min 20 IP)'
 };
 
 /**

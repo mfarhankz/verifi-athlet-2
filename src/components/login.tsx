@@ -31,7 +31,9 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       if (error) {
         // Handle specific email confirmation error
         if (error.message.includes('Email not confirmed') || error.message.includes('email_confirmed')) {
-          setError("Your email address has not been confirmed. Please check your email for a confirmation link, or click 'Resend Confirmation' below.");
+          setError("Your email address has not been confirmed. Reach out using the chat in the bottom right corner of the screen.");
+        } else if (error.message.includes('Invalid login credentials') || error.message.includes('invalid login credentials')) {
+          setError("If this is your first time to the new website. Please click Forgot Password. Invalid login credentials.");
         } else {
           setError(error.message);
         }

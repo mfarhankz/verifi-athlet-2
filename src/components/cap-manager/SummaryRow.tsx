@@ -76,6 +76,7 @@ export const SummaryRow: React.FC<SummaryRowProps> = ({
           </div>
         )}
       </span>
+      <span className={summaryStyles.caret}></span>
     </div>
   );
 }; 

@@ -95,6 +95,7 @@ export type GenericSurvey = {
 export type AthleteHonor = {
   id: string;
   athlete_id: string;
+  team: string;
   award: string;
   award_year: string;
 };
@@ -166,6 +167,7 @@ export interface AthleteData {
   gpa?: string;
   birthday?: string;
   pref_contact?: string;
+  when_transfer?: string;
   help_decision?: string;
   contact_info?: string;
   cell_phone?: string;
@@ -186,13 +188,27 @@ export interface AthleteData {
   weight?: number | null;
   twitter?: string;
   roster_link?: string;
+  stats_link?: string;
   bio?: string;
   major?: string;
   hand?: string;
   perfect_game?: string;
   prep_baseball_report?: string;
   tfrrs_link?: string;
+  wtn_link?: string;
+  utr_link?: string;
   game_logs?: any[];
+  
+  // JUCO specific fields
+  school_region?: string;
+  school_division?: string;
+  current_school_id?: string; // School ID used for school_fact queries
+
+  // Highlight field for video icon
+  highlight?: string;
+
+  // Athlete videos
+  athlete_videos?: AthleteVideo[];
 
   // Dynamic stats based on sport_stat_config
   [key: string]: any; // Allow dynamic stat fields like stat_98, stat_99, etc.
@@ -272,16 +288,32 @@ export interface AthleteData {
     male_to_female?: string;
     hbcu?: string;
     faith_based_name?: string;
-    pref_d1_name?: string;
-    pref_d2_name?: string;
-    pref_d3_name?: string;
-    pref_naia_name?: string;
+  pref_d1_name?: string;
+  pref_d2_name?: string;
+  pref_d3_name?: string;
+  pref_naia_name?: string;
+  scholarship_from_fact?: string;
+  email?: string;
+  agent?: string;
+  hc_name?: string;
+  hc_email?: string;
+  hc_number?: string;
+  hs_gpa?: string;
+  military_school_yesno?: string;
+  pell_eligible?: string;
+  nil_importance?: string;
+  nil_amount?: string;
+  facilities_vs_championship?: string;
+  nfl_vs_facilities?: string;
+  championship_vs_level?: string;
+  recent_vs_winning?: string;
   }];
   msoc_survey?: [{
     best_pos?: string;
   }];
   athlete_honor?: [{
     id: string;
+    team: string;
     award: string;
     award_year: string;
   }];
@@ -350,6 +382,7 @@ export interface Alert {
   recipient: string;
   ended_date: string | null;
   survey_alert?: boolean;
+  customer_id: string;
 }
 
 // Sport Stat Config types
@@ -361,6 +394,9 @@ export interface SportStatConfig {
   display_order: number;
   stat_category: string;
   search_column_display?: number; // Order for transfer page table columns
+  juco_search_column_display?: number; // Order for juco page table columns
+  juco_stat?: boolean; // Whether this stat is available for JUCO data source
+  pre_portal_default_sort?: 'ascending' | 'descending'; // Default sort order for pre-portal and juco
   data_type_name?: string; // Name of the connected data_type
   sanitized_column_name?: string; // Sanitized column name for SQL queries
   decimal_places?: number; // Number of decimal places to display (default: 2)
@@ -421,4 +457,34 @@ export interface RecruitingBoardData {
   ratingName: string | null;
   ratingColor: string | null;
   rank: number | null;
+  source: string | null;
+}
+
+// High School data type
+export interface HighSchoolData {
+  id: string;
+  high_school_id: string;
+  school: string;
+  school_type?: string;
+  conference?: string;
+}
+
+// Sport Season Selector type
+export interface SportSeasonSelector {
+  id: string;
+  sport_id: number;
+  is_juco: boolean;
+  season: number;
+}
+
+// Athlete Video type
+export interface AthleteVideo {
+  id: string;
+  athlete_id: string;
+  video_link: string;
+  video_type: string;
+  time?: string;
+  event?: string;
+  created_at: string;
+  updated_at: string;
 }

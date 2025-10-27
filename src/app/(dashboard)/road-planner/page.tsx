@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { School } from './types';
 import { useUser } from "@/contexts/CustomerContext";
 import { useZoom } from '@/contexts/ZoomContext';
+import { getPackageIdsBySport } from '@/lib/queries';
 
 // Define a constant for the SELECT statement
 const SELECT_FIELDS = `
@@ -75,6 +76,11 @@ export default function RoadPlannerPage() {
   const [coachSearchQuery, setCoachSearchQuery] = useState('');
   const userDetails = useUser();
   const { zoom } = useZoom();
+  
+  // Check if user has any football package to determine if coach info should be shown
+  const footballPackageIds = getPackageIdsBySport('fb');
+  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) => Number(pkg));
+  const hasFootballPackage = footballPackageIds.some(id => userPackageNumbers.includes(id));
 
   // Derived state
   const filteredAddresses = highSchools;
@@ -705,7 +711,7 @@ export default function RoadPlannerPage() {
     : uniqueCountyStates;
 
   return (
-    <div className="w-full h-full overflow-auto">
+    <div className="w-full h-full">
       <div 
         style={{ 
           transform: `scale(${zoom / 100})`,
@@ -717,7 +723,7 @@ export default function RoadPlannerPage() {
           marginBottom: zoom > 100 ? '4rem' : '0'
         }}
       >
-        <div className="flex flex-col h-screen">
+        <div className="flex flex-col h-[calc(100vh-100px)]">
           {/* Fixed header section - make it more compact */}
           <div className="p-4 pb-3 border-b border-gray-200 bg-white">       
         <div className="mb-2">
@@ -1175,7 +1181,7 @@ export default function RoadPlannerPage() {
                     </div>
                   </div>
                   <div className="text-gray-600 mb-1 text-left">{item.address}</div>
-                  {(item.head_coach_first || item.head_coach_last) && (
+                  {(item.head_coach_first || item.head_coach_last) && hasFootballPackage && (
                     <div className="text-gray-700 text-left">
                       <span className="font-medium">Coach:</span> {item.head_coach_first} {item.head_coach_last}
                     </div>
@@ -1234,7 +1240,7 @@ export default function RoadPlannerPage() {
         </div>
 
         {/* Bottom selection area - fixed to bottom of the relative container */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-16 z-20">
+        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
           <div className="flex flex-row justify-between items-center max-w-full">
             <div className="flex-1 flex items-center overflow-hidden">
               <div className="flex-1 flex flex-wrap gap-2 min-h-[36px] overflow-x-auto pr-2 pb-2">

@@ -12,7 +12,7 @@ export default function SurveyLogin() {
         <div className="card">
           <Flex vertical className="w-[100%] m-auto">
             <Flex align="center" justify="center" className="mb-6">
-              <Image src={"/logo.svg"} alt={"logo"} height={31} width={192} />
+              <Image src={"/wide logo spelled out.webp"} alt={"Verified Athletics"} width={300} height={40} style={{ width: "auto", maxWidth: "100%", height: "40px", marginBottom: "3px" }} />
             </Flex>
             
                          <div className="text-center mb-6">

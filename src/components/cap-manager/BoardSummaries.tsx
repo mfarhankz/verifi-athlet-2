@@ -112,20 +112,22 @@ const BoardSummaries: React.FC<BoardSummariesProps> = ({
         <span className={`${summaryStyles.diff} ${isCompensation ? compColor : ''}`}>
           <div className={summaryStyles.diffContainer}>
             <span className={`${isCompensation ? compColor : ''}`}>{`${diffPrefix}${formatValue(absDiff, isCompensation)}`}</span>
-            {additionalFields.length > 0 && effectiveCompAccess && isCompensation && (
-              <button 
-                className={summaryStyles.expandCollapseButtonInline}
-                onClick={() => setShowSubBudgets(!showSubBudgets)}
-                aria-label={showSubBudgets ? "Collapse budget details" : "Expand budget details"}
-              >
-                {showSubBudgets ? <FaChevronUp /> : <FaChevronDown />}
-              </button>
-            )}
           </div>
           {isCompensation && showPercentages && (
             <div className={`${summaryStyles.percentage} ${compColor}`}>
               {calculatePercentage(absDiff, target)}%
             </div>
+          )}
+        </span>
+        <span className={summaryStyles.caret}>
+          {additionalFields.length > 0 && effectiveCompAccess && isCompensation && (
+            <button 
+              className={summaryStyles.expandCollapseButtonInline}
+              onClick={() => setShowSubBudgets(!showSubBudgets)}
+              aria-label={showSubBudgets ? "Collapse budget details" : "Expand budget details"}
+            >
+              {showSubBudgets ? <FaChevronUp /> : <FaChevronDown />}
+            </button>
           )}
         </span>
       </div>
@@ -248,6 +250,7 @@ const BoardSummaries: React.FC<BoardSummariesProps> = ({
               <span className={summaryStyles.actual}>Actual</span>
               <span className={summaryStyles.target}>Budget</span>
               <span className={summaryStyles.diff}>Diff</span>
+              <span className={summaryStyles.caret}></span>
             </div>
             {(() => {
               const summary = calculateTeamSummary(tasks, budgetData, selectedYear, activeFilters, deadMoney);
@@ -265,6 +268,7 @@ const BoardSummaries: React.FC<BoardSummariesProps> = ({
                 <span className={summaryStyles.actual}>Actual</span>
                 <span className={summaryStyles.target}>Budget</span>
                 <span className={summaryStyles.diff}>Diff</span>
+                <span className={summaryStyles.caret}></span>
               </div>
               {(() => {
                 const summary = calculateCategorySummary(tasks, budgetData, category, selectedYear, activeFilters, positionOrder, deadMoney);

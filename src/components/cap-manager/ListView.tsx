@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { supabase } from '../../lib/supabaseClient';
 import styles from './ListView.module.css';
 import { Player } from '../../types/Player';
-import { FaFilter, FaPlus, FaMinus } from 'react-icons/fa';
+import { FaFilter, FaPlus, FaMinus, FaLayerGroup, FaCalendarAlt } from 'react-icons/fa';
 import Details from './Details';
 import { 
   fetchAdjustedPlayers, 
@@ -16,6 +16,9 @@ import {
 } from "../../utils/utils";
 import { useEffectiveCompAccess } from '../../utils/compAccessUtils';
 import { useCustomer } from "@/contexts/CustomerContext";
+import { CommentService } from '../../lib/commentService';
+import { Comment } from '@/types/database';
+import CommentsModal from './CommentsModal';
 
 export interface ListViewProps {
     selectedYear: number;
@@ -23,6 +26,7 @@ export interface ListViewProps {
     selectedScenario: string;
     activeFilters: { [key: string]: string[] };
     targetScenario?: string;
+    numberOfMonths?: number;
 }
 
 const formatPayment = (amount: number): string => {
@@ -59,7 +63,7 @@ const getMonthlyValue = (player: Player, month: string): number => {
   return (player.compensation || 0) / 12;
 };
 
-const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, selectedScenario, activeFilters, targetScenario }) => {
+const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, selectedScenario, activeFilters, targetScenario, numberOfMonths = 12 }) => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [filters, setFilters] = useState<{ [key: string]: Set<string> }>({});
   const [sortColumn, setSortColumn] = useState<string>('name__last');
@@ -75,6 +79,11 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
   const [categoryMap, setCategoryMap] = useState<Record<string, string>>({});
   const [positionOrder, setPositionOrder] = useState<Array<{position: string, category: string}>>([]);
   const [showMonthlyBreakdown, setShowMonthlyBreakdown] = useState(false);
+  const [showBucketBreakdown, setShowBucketBreakdown] = useState(false);
+  const [showBuckets, setShowBuckets] = useState(false);
+  const [showPayMainMonthly, setShowPayMainMonthly] = useState(false);
+  const [expandedBucketMonths, setExpandedBucketMonths] = useState<Set<string>>(new Set());
+  const [availableBuckets, setAvailableBuckets] = useState<string[]>([]);
   const selectedScenarioTemp = selectedScenario || "aiuhgahfaoiuhfkjnq";
   const [editingCell, setEditingCell] = useState<{ playerId: string, field: string } | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -85,6 +94,9 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
   const [totalBudgetedCompensation, setTotalBudgetedCompensation] = useState(0);
   const [columns, setColumns] = useState<{ [key: string]: Player[] }>({});
   const [loading, setLoading] = useState(true);
+  const [playerComments, setPlayerComments] = useState<Record<string, Comment[]>>({});
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalAthlete, setModalAthlete] = useState<{ id: string; name: string } | null>(null);
   const { activeCustomerId } = useCustomer();
   const showScholarshipDollars = useShowScholarshipDollars();
 
@@ -108,20 +120,20 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
       // Look for our target player for debugging
       const targetPlayer = adjustedPlayers.find(p => p.athlete_id === TEST_ATHLETE_ID);
       if (targetPlayer) {
-        console.log('DEBUG-LISTVIEW: Target player data from fetchAdjustedPlayers:');
-        console.log('Player:', targetPlayer.name__first, targetPlayer.name__last);
-        console.log('monthlyCompensation:', targetPlayer.monthlyCompensation);
-        console.log('Type:', typeof targetPlayer.monthlyCompensation);
+        // Debug log removed('DEBUG-LISTVIEW: Target player data from fetchAdjustedPlayers:');
+        // Debug log removed('Player:', targetPlayer.name__first, targetPlayer.name__last);
+        // Debug log removed('monthlyCompensation:', targetPlayer.monthlyCompensation);
+        // Debug log removed('Type:', typeof targetPlayer.monthlyCompensation);
         if (typeof targetPlayer.monthlyCompensation === 'object') {
-          console.log('monthlyCompensation Keys:', Object.keys(targetPlayer.monthlyCompensation));
-          console.log('monthlyCompensation Values:', Object.values(targetPlayer.monthlyCompensation));
+          // Debug log removed('monthlyCompensation Keys:', Object.keys(targetPlayer.monthlyCompensation));
+          // Debug log removed('monthlyCompensation Values:', Object.values(targetPlayer.monthlyCompensation));
         }
-        console.log('Total compensation:', targetPlayer.compensation);
+        // Debug log removed('Total compensation:', targetPlayer.compensation);
         
         // Log the athlete's entire structure to see all available fields
-        console.log('FULL TARGET PLAYER DATA:', JSON.stringify(targetPlayer, null, 2));
+        // Debug log removed('FULL TARGET PLAYER DATA:', JSON.stringify(targetPlayer, null, 2));
       } else {
-        console.log('DEBUG-LISTVIEW: Target player not found in adjustedPlayers');
+        // Debug log removed('DEBUG-LISTVIEW: Target player not found in adjustedPlayers');
       }
       
       // Filter out future players
@@ -140,7 +152,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
   
       // Calculate compensation totals only for current players
       const totalTeamCompensation = currentPlayers.reduce((sum, player) => sum + player.compensation, 0);
-      console.log('Total Team Compensation:', totalTeamCompensation);
+      // Debug log removed('Total Team Compensation:', totalTeamCompensation);
       // Fetch all compensation data for the team for both current and next year
       // to cover the entire fiscal year
       const { data: allTeamCompData, error: compError } = await supabase
@@ -157,8 +169,8 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
         const isTargetPlayer = player.athlete_id === TEST_ATHLETE_ID;
         
         if (isTargetPlayer) {
-          console.log('DEBUG-PROCESSING: Processing player in formattedPlayers:', player.name__first, player.name__last);
-          console.log('DEBUG-PROCESSING: Initial monthlyCompensation:', player.monthlyCompensation);
+          // Debug log removed('DEBUG-PROCESSING: Processing player in formattedPlayers:', player.name__first, player.name__last);
+          // Debug log removed('DEBUG-PROCESSING: Initial monthlyCompensation:', player.monthlyCompensation);
         }
         
         const slotNumber = player.pos_rank + 1;
@@ -187,12 +199,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
           // monthlyCompensation is already set in the player object from fetchAdjustedPlayers
         };
         
-        if (isTargetPlayer) {
-          console.log('DEBUG-PROCESSING: Final result for target player:', {
-            compensation: result.compensation,
-            monthlyCompensation: result.monthlyCompensation
-          });
-        }
+
         
         return result;
       }));
@@ -208,18 +215,23 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
       setTotalTeamCompensation(totalTeamComp);
       setPositionCompensation(positionComp);
       setBudgetData(budgetData || []);
+      
+      // Detect available compensation buckets
+      const buckets = detectAvailableBuckets(sortedPlayers);
+      setAvailableBuckets(buckets);
+      
       setLoading(false);
 
       // After setting players state, immediately check if our target player is correctly formatted
       const postTargetPlayer = sortedPlayers.find(p => p.athlete_id === TEST_ATHLETE_ID);
       if (postTargetPlayer) {
-        console.log('DEBUG-LISTVIEW: Target player after formatting:');
-        console.log('Player:', postTargetPlayer.name__first, postTargetPlayer.name__last);
-        console.log('monthlyCompensation:', postTargetPlayer.monthlyCompensation);
-        console.log('Type:', typeof postTargetPlayer.monthlyCompensation);
+        // Debug log removed('DEBUG-LISTVIEW: Target player after formatting:');
+        // Debug log removed('Player:', postTargetPlayer.name__first, postTargetPlayer.name__last);
+        // Debug log removed('monthlyCompensation:', postTargetPlayer.monthlyCompensation);
+        // Debug log removed('Type:', typeof postTargetPlayer.monthlyCompensation);
         if (typeof postTargetPlayer.monthlyCompensation === 'object') {
-          console.log('monthlyCompensation Keys:', Object.keys(postTargetPlayer.monthlyCompensation));
-          console.log('monthlyCompensation Values:', Object.values(postTargetPlayer.monthlyCompensation));
+          // Debug log removed('monthlyCompensation Keys:', Object.keys(postTargetPlayer.monthlyCompensation));
+          // Debug log removed('monthlyCompensation Values:', Object.values(postTargetPlayer.monthlyCompensation));
         }
       }
     } catch (error) {
@@ -257,6 +269,76 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
     return fiscalYearMonths;
   };
 
+  // Get the selected number of months from the fiscal year
+  const getSelectedMonths = (): string[] => {
+    const allFiscalYearMonths = getFiscalYearMonths(selectedMonth);
+    return allFiscalYearMonths.slice(0, numberOfMonths);
+  };
+
+  // Calculate main pay only (base compensation for selected months)
+  const getMainPayForSelectedMonths = (player: Player): number => {
+    const selectedMonths = getSelectedMonths();
+    return selectedMonths.reduce((total, monthWithYear) => {
+      const [month] = monthWithYear.split(' ');
+      const monthlyValue = getMonthlyValue(player, month);
+      return total + monthlyValue;
+    }, 0);
+  };
+
+  // Calculate total pay (sum of all buckets including main)
+  const getTotalPayForSelectedMonths = (player: Player): number => {
+    const mainPay = getMainPayForSelectedMonths(player);
+    const bucketTotals = availableBuckets.reduce((sum, bucketKey) => {
+      return sum + getBucketTotalForSelectedMonths(player, bucketKey);
+    }, 0);
+    return mainPay + bucketTotals;
+  };
+
+  // Get total for a specific compensation bucket for selected months
+  const getBucketTotalForSelectedMonths = (player: Player, bucketKey: string): number => {
+    const selectedMonths = getSelectedMonths();
+    return selectedMonths.reduce((total, monthWithYear) => {
+      const [month] = monthWithYear.split(' ');
+      const monthlyValue = getMonthlyValue(player, month);
+      // For now, distribute bucket amount evenly across months
+      // This could be enhanced to have monthly breakdowns for buckets too
+      const bucketAmount = (player[bucketKey as keyof Player] as number) || 0;
+      const monthlyBucketAmount = bucketAmount / 12;
+      return total + monthlyBucketAmount;
+    }, 0);
+  };
+
+  // Get main budget amount for selected months
+  const getMainBudgetForSelectedMonths = (player: Player): number => {
+    const selectedMonths = getSelectedMonths();
+    return selectedMonths.reduce((total, monthWithYear) => {
+      const [month] = monthWithYear.split(' ');
+      // Get the budget amount for this player's position and slot
+      const slotNumber = player.pos_rank + 1;
+      const budgetForSlot = budgetData?.find(
+        (item: any) => item.position === player.position && item.slot === slotNumber
+      );
+      const amount = budgetForSlot ? (budgetForSlot as any).amount : 0;
+      return total + (amount / 12); // Distribute budget evenly across months
+    }, 0);
+  };
+
+  // Detect available compensation buckets
+  const detectAvailableBuckets = (players: Player[]): string[] => {
+    const buckets = new Set<string>();
+    players.forEach(player => {
+      Object.keys(player).forEach(key => {
+        if (key.startsWith('comp_') && key !== 'compensation') {
+          const value = player[key as keyof Player] as number;
+          if (value && value > 0) {
+            buckets.add(key);
+          }
+        }
+      });
+    });
+    return Array.from(buckets).sort();
+  };
+
   const handleSort = (column: string) => {
     const direction = sortColumn === column && sortDirection === 'asc' ? 'desc' : 'asc';
     setSortColumn(column);
@@ -268,15 +350,31 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
         const posB = positionOrder.findIndex(p => p.position === b.position);
         return direction === 'asc' ? posA - posB : posB - posA;
       } else {
-        let aValue = a[column as keyof Player];
-        let bValue = b[column as keyof Player];
+        let aValue, bValue;
 
-        if (column === 'compensation' || column === 'teamPercentage' || column === 'budgetDifference') {
+        // Handle special column cases
+        if (column === 'totalPay') {
+          aValue = getTotalPayForSelectedMonths(a);
+          bValue = getTotalPayForSelectedMonths(b);
+        } else if (column === 'mainPay') {
+          aValue = getMainPayForSelectedMonths(a);
+          bValue = getMainPayForSelectedMonths(b);
+        } else if (column === 'budget') {
+          aValue = getMainBudgetForSelectedMonths(a);
+          bValue = getMainBudgetForSelectedMonths(b);
+        } else if (availableBuckets.includes(column)) {
+          aValue = getBucketTotalForSelectedMonths(a, column);
+          bValue = getBucketTotalForSelectedMonths(b, column);
+        } else {
+          aValue = a[column as keyof Player];
+          bValue = b[column as keyof Player];
+        }
+
+        if (column === 'compensation' || column === 'teamPercentage' || column === 'budgetDifference' || 
+            column === 'totalPay' || column === 'mainPay' || column === 'budget' || 
+            availableBuckets.includes(column)) {
           aValue = Number(aValue);
           bValue = Number(bValue);
-        } else if (column === 'notes') {
-          aValue = aValue || '';
-          bValue = bValue || '';
         }
 
         if (aValue === undefined || aValue === null) aValue = '';
@@ -284,14 +382,26 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
 
         if (aValue < bValue) return direction === 'asc' ? -1 : 1;
         if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+        return 0;
       }
-      return 0;
     });
     setPlayers(sortedPlayers);
   };
 
   const toggleFilter = (column: string) => {
     setActiveFilter(activeFilter === column ? null : column);
+  };
+
+  const toggleBucketMonthlyExpansion = (bucketKey: string) => {
+    setExpandedBucketMonths(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(bucketKey)) {
+        newSet.delete(bucketKey);
+      } else {
+        newSet.add(bucketKey);
+      }
+      return newSet;
+    });
   };
 
   const handleFilterChange = (column: string, value: string, checked: boolean) => {
@@ -355,8 +465,6 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
           return values.has(formatPercentage(player.positionPercentage || 0));
         } else if (column === 'budgetDifference') {
           return values.has(formatBudgetDifference(player.budgetDifference || 0));
-        } else if (column === 'notes') {
-          return values.has(player.notes || '');
         }
         return values.has(String((player as any)[column] ?? ''));
       })
@@ -364,22 +472,39 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
     return filtered;
   }, [playersWithPositionPercentage, filters]);
 
-  const getUniqueValues = (column: keyof Player) => {
+  const getUniqueValues = (column: string) => {
     const values = Array.from(new Set(players.map(player => {
-      const value = player[column];
-      if (column === 'compensation') {
-        return formatPayment(value as number);
-      } else if (column === 'teamPercentage') {
-        return formatPercentage(value as number);
-      } else if (column === 'budgetDifference') {
-        return formatBudgetDifference(value as number);
-      } else if (column === 'notes') {
-        return value || '';
+      let value;
+      
+      // Handle special column cases
+      if (column === 'totalPay') {
+        value = getTotalPayForSelectedMonths(player);
+        return formatPayment(value);
+      } else if (column === 'mainPay') {
+        value = getMainPayForSelectedMonths(player);
+        return formatPayment(value);
+      } else if (column === 'budget') {
+        value = getMainBudgetForSelectedMonths(player);
+        return formatPayment(value);
+      } else if (availableBuckets.includes(column)) {
+        value = getBucketTotalForSelectedMonths(player, column);
+        return formatPayment(value);
+      } else {
+        value = player[column as keyof Player];
+        if (column === 'compensation') {
+          return formatPayment(value as number);
+        } else if (column === 'teamPercentage') {
+          return formatPercentage(value as number);
+        } else if (column === 'budgetDifference') {
+          return formatBudgetDifference(value as number);
+        }
+        return String(value);
       }
-      return String(value);
     })));
     
-    if (column === 'compensation' || column === 'teamPercentage' || column === 'budgetDifference') {
+    if (column === 'compensation' || column === 'teamPercentage' || column === 'budgetDifference' || 
+        column === 'totalPay' || column === 'mainPay' || column === 'budget' || 
+        availableBuckets.includes(column)) {
       return values.sort((a, b) => {
         const aNum = parseFloat(String(a).replace(/[^0-9.-]+/g, ""));
         const bNum = parseFloat(String(b).replace(/[^0-9.-]+/g, ""));
@@ -390,7 +515,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
     }
   };
 
-  const renderFilterDropdown = (column: keyof Player) => {
+  const renderFilterDropdown = (column: string) => {
     const uniqueValues = getUniqueValues(column);
     const allSelected = filters[column]?.size === uniqueValues.length;
 
@@ -498,38 +623,25 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
   }, [showDetails]);
 
   const summaryData = useMemo(() => {
-    // Calculate total pay including all additional compensation fields
+    // Calculate total pay for selected months only
     const totalPay = filteredPlayers.reduce((sum, player) => {
-      const totalPlayerCompensation = player.compensation + 
-        Object.entries(player)
-          .filter(([key]) => key.startsWith('comp_'))
-          .reduce((compSum, [_, value]) => compSum + (value as number || 0), 0);
-      return sum + totalPlayerCompensation;
+      return sum + getTotalPayForSelectedMonths(player);
     }, 0);
     
     const totalTeamPercentage = filteredPlayers.reduce((sum, player) => sum + (player.teamPercentage || 0), 0);
     const totalBudgetDifference = filteredPlayers.reduce((sum, player) => sum + (player.budgetDifference || 0), 0);
     const totalScholarship = filteredPlayers.reduce((sum, player) => sum + player.scholarship_perc, 0);
 
-    // Calculate monthly pay totals by summing up each player's monthly compensation values
-    const monthlyPay = Array(12).fill(0);
+    // Calculate monthly pay totals for selected months only
+    const selectedMonths = getSelectedMonths();
+    const monthlyPay = Array(numberOfMonths).fill(0);
     
     filteredPlayers.forEach(player => {
-      if (player.monthlyCompensation) {
-        for (let i = 0; i < 12; i++) {
-          monthlyPay[i] += (player.monthlyCompensation[i] || 0);
-        }
-      } else if (player.compensation) {
-        // If player doesn't have monthly data, distribute their total compensation evenly across months
-        const totalPlayerCompensation = player.compensation + 
-          Object.entries(player)
-            .filter(([key]) => key.startsWith('comp_'))
-            .reduce((compSum, [_, value]) => compSum + (value as number || 0), 0);
-        const monthlyAmount = totalPlayerCompensation / 12;
-        for (let i = 0; i < 12; i++) {
-          monthlyPay[i] += monthlyAmount;
-        }
-      }
+      selectedMonths.forEach((monthWithYear, index) => {
+        const [month] = monthWithYear.split(' ');
+        const monthlyValue = getMonthlyValue(player, month);
+        monthlyPay[index] += monthlyValue;
+      });
     });
 
     return {
@@ -539,7 +651,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
       totalScholarship,
       monthlyPay
     };
-  }, [filteredPlayers]);
+  }, [filteredPlayers, numberOfMonths, selectedMonth]);
 
   const groupedAndFilteredPlayers = useMemo(() => {
     let players = filteredPlayers;
@@ -605,20 +717,24 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
         group,
         players: grouped[group],
         summary: {
-          totalPay: grouped[group].reduce((sum, p) => sum + (p.compensation || 0), 0),
+          totalPay: grouped[group].reduce((sum, p) => sum + getTotalPayForSelectedMonths(p), 0),
           totalTeamPercentage: grouped[group].reduce((sum, p) => sum + (p.teamPercentage || 0), 0),
           totalBudgetDifference: grouped[group].reduce((sum, p) => sum + (p.budgetDifference || 0), 0),
           totalScholarship: grouped[group].reduce((sum, p) => sum + (p.scholarship_perc || 0), 0),
-          monthlyPay: Array(12).fill(0).map((_, i) => {
-            return grouped[group].reduce((sum, p) => {
-              if (p.monthlyCompensation && p.monthlyCompensation[i]) {
-                return sum + p.monthlyCompensation[i];
-              } else if (p.compensation) {
-                return sum + p.compensation / 12;
-              }
-              return sum;
-            }, 0);
-          })
+          monthlyPay: (() => {
+            const selectedMonths = getSelectedMonths();
+            const monthlyPay = Array(numberOfMonths).fill(0);
+            
+            grouped[group].forEach(player => {
+              selectedMonths.forEach((monthWithYear, index) => {
+                const [month] = monthWithYear.split(' ');
+                const monthlyValue = getMonthlyValue(player, month);
+                monthlyPay[index] += monthlyValue;
+              });
+            });
+            
+            return monthlyPay;
+          })()
         }
       }));
     }
@@ -800,7 +916,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
         );
       } else if (field === 'year') {
         const displayValue = tempEditValue || editValue;
-        console.log('displayValue', displayValue);
+        // Debug log removed('displayValue', displayValue);
         const redshirtStatus = displayValue.charAt(0);
         const academicYear = displayValue.slice(1);
         input = (
@@ -892,10 +1008,18 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
     }
   };
 
-  const renderTable = (players: Player[], summary: typeof summaryData, groupHeader: string) => (
+  const renderTable = (players: Player[], summary: typeof summaryData, groupHeader: string) => {
+    const bucketColumns = showBuckets ? availableBuckets.length : 0;
+    const expandedBucketMonthlyColumns = Array.from(expandedBucketMonths).length * numberOfMonths;
+    const payMainMonthlyColumns = showPayMainMonthly ? numberOfMonths : 0;
+    const totalColumns = effectiveCompAccess 
+      ? (showMonthlyBreakdown ? 23 : 11) + 1 + bucketColumns + expandedBucketMonthlyColumns + payMainMonthlyColumns
+      : 7;
+    
+    return (
     <table className={styles.table}>
       <thead>
-        <tr><th colSpan={effectiveCompAccess ? (showMonthlyBreakdown ? 23 : 11) : 7}>{groupHeader}</th></tr>
+        <tr><th colSpan={totalColumns}>{groupHeader}</th></tr>
         <tr>
           <th>
             <div className={styles.columnHeader}>
@@ -985,25 +1109,33 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
             <>
               <th>
                 <div className={styles.columnHeader}>
-                  <span onClick={() => handleSort('compensation')}>Pay</span>
+                  <span onClick={() => handleSort('totalPay')}>Pay</span>
                   <FaFilter 
-                    onClick={() => toggleFilter('compensation')} 
-                    className={isFilterActive('compensation') ? styles.activeFilter : styles.inactiveFilter}
+                    onClick={() => toggleFilter('totalPay')} 
+                    className={isFilterActive('totalPay') ? styles.activeFilter : styles.inactiveFilter}
                   />
-                  {activeFilter === 'compensation' && (
+                  {activeFilter === 'totalPay' && (
                     <div ref={filterRef}>
-                      {renderFilterDropdown('compensation')}
+                      {renderFilterDropdown('totalPay')}
                     </div>
                   )}
                   <button 
+                    onClick={() => setShowBuckets(!showBuckets)}
+                    className={styles.toggleButton}
+                    title={showBuckets ? "Hide Bucket Columns" : "Show Bucket Columns"}
+                  >
+                    {showBuckets ? <FaMinus color="red" /> : <FaLayerGroup color="green" />}
+                  </button>
+                  <button 
                     onClick={() => setShowMonthlyBreakdown(!showMonthlyBreakdown)}
                     className={styles.toggleButton}
+                    title={showMonthlyBreakdown ? "Hide Monthly Columns" : "Show Monthly Columns"}
                   >
-                    {showMonthlyBreakdown ? <FaMinus color="red" /> : <FaPlus color="green" />}
+                    {showMonthlyBreakdown ? <FaMinus color="red" /> : <FaCalendarAlt color="green" />}
                   </button>
                 </div>
               </th>
-              {showMonthlyBreakdown && getFiscalYearMonths(selectedMonth).map((monthWithYear) => {
+              {showMonthlyBreakdown && getSelectedMonths().map((monthWithYear) => {
                 // Split the month and year
                 const [month, year] = monthWithYear.split(' ');
                 // Format as short month + last 2 digits of year (e.g., "Feb 25")
@@ -1013,6 +1145,88 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
                   <th key={monthWithYear}>{month} {shortYear}</th>
                 );
               })}
+              {showBuckets && (
+                <th>
+                  <div className={styles.columnHeader}>
+                    <span onClick={() => handleSort('mainPay')}>Pay Main</span>
+                    <FaFilter 
+                      onClick={() => toggleFilter('mainPay')} 
+                      className={isFilterActive('mainPay') ? styles.activeFilter : styles.inactiveFilter}
+                    />
+                    {activeFilter === 'mainPay' && (
+                      <div ref={filterRef}>
+                        {renderFilterDropdown('mainPay')}
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => setShowPayMainMonthly(!showPayMainMonthly)}
+                      className={styles.toggleButton}
+                      title={showPayMainMonthly ? "Hide Monthly Breakdown" : "Show Monthly Breakdown"}
+                    >
+                      {showPayMainMonthly ? <FaMinus color="red" /> : <FaCalendarAlt color="green" />}
+                    </button>
+                  </div>
+                </th>
+              )}
+              {showPayMainMonthly && getSelectedMonths().map((monthWithYear) => {
+                // Split the month and year
+                const [month, year] = monthWithYear.split(' ');
+                // Format as short month + last 2 digits of year (e.g., "Feb 25")
+                const shortYear = year.slice(-2);
+                
+                return (
+                  <th key={`paymain-${monthWithYear}`}>Main {month} {shortYear}</th>
+                );
+              })}
+              {showBuckets && availableBuckets.map(bucketKey => (
+                <th key={bucketKey}>
+                  <div className={styles.columnHeader}>
+                    <span onClick={() => handleSort(bucketKey)}>{bucketKey.replace('comp_', 'Pay ')}</span>
+                    <FaFilter 
+                      onClick={() => toggleFilter(bucketKey)} 
+                      className={isFilterActive(bucketKey) ? styles.activeFilter : styles.inactiveFilter}
+                    />
+                    {activeFilter === bucketKey && (
+                      <div ref={filterRef}>
+                        {renderFilterDropdown(bucketKey)}
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => toggleBucketMonthlyExpansion(bucketKey)}
+                      className={styles.toggleButton}
+                      title={expandedBucketMonths.has(bucketKey) ? "Hide Monthly Breakdown" : "Show Monthly Breakdown"}
+                    >
+                      {expandedBucketMonths.has(bucketKey) ? <FaMinus color="red" /> : <FaCalendarAlt color="green" />}
+                    </button>
+                  </div>
+                </th>
+              ))}
+              {availableBuckets.map(bucketKey => 
+                expandedBucketMonths.has(bucketKey) ? 
+                  getSelectedMonths().map((monthWithYear) => {
+                    const [month, year] = monthWithYear.split(' ');
+                    const shortYear = year.slice(-2);
+                    return (
+                      <th key={`${bucketKey}-${monthWithYear}`}>
+                        {bucketKey.replace('comp_', '')} {month} {shortYear}
+                      </th>
+                    );
+                  }) : []
+              ).flat()}
+              <th>
+                <div className={styles.columnHeader}>
+                  <span onClick={() => handleSort('budget')}>Budget</span>
+                  <FaFilter 
+                    onClick={() => toggleFilter('budget')} 
+                    className={isFilterActive('budget') ? styles.activeFilter : styles.inactiveFilter}
+                  />
+                  {activeFilter === 'budget' && (
+                    <div ref={filterRef}>
+                      {renderFilterDropdown('budget')}
+                    </div>
+                  )}
+                </div>
+              </th>
               <th>
                 <div className={styles.columnHeader}>
                   <span onClick={() => handleSort('teamPercentage')}>Team %</span>
@@ -1059,16 +1273,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
           )}
           <th>
             <div className={styles.columnHeader}>
-              <span onClick={() => handleSort('notes')}>Notes</span>
-              <FaFilter 
-                onClick={() => toggleFilter('notes')} 
-                className={isFilterActive('notes') ? styles.activeFilter : styles.inactiveFilter}
-              />
-              {activeFilter === 'notes' && (
-                <div ref={filterRef}>
-                  {renderFilterDropdown('notes')}
-                </div>
-              )}
+              <span>Notes</span>
             </div>
           </th>
         </tr>
@@ -1079,8 +1284,8 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
           const isTargetPlayer = player.athlete_id === TEST_ATHLETE_ID;
           
           if (isTargetPlayer) {
-            console.log(`Debug: Found target player ${player.name__first} ${player.name__last}`);
-            console.log(`Debug: monthlyCompensation:`, player.monthlyCompensation);
+            // Debug log removed(`Debug: Found target player ${player.name__first} ${player.name__last}`);
+            // Debug log removed(`Debug: monthlyCompensation:`, player.monthlyCompensation);
           }
           
           return (
@@ -1098,8 +1303,8 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
               <td>{renderEditableCell(player, 'scholarship_perc')}</td>
               {effectiveCompAccess && (
                 <>
-                  <td>{formatPayment(player.compensation || 0)}</td>
-                  {showMonthlyBreakdown && getFiscalYearMonths(selectedMonth).map((monthWithYear) => {
+                  <td>{formatPayment(getTotalPayForSelectedMonths(player))}</td>
+                  {showMonthlyBreakdown && getSelectedMonths().map((monthWithYear) => {
                     // Split the month and year
                     const [month, year] = monthWithYear.split(' ');
                     
@@ -1108,7 +1313,7 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
                     
                     // Debug logs for the target player
                     if (isTargetPlayer && monthlyValue > 0) {
-                      console.log(`Debug: ${month} ${year} value = ${monthlyValue}`);
+                      // Debug log removed(`Debug: ${month} ${year} value = ${monthlyValue}`);
                     }
                     
                     return (
@@ -1117,6 +1322,41 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
                       </td>
                     );
                   })}
+                  {showBuckets && (
+                    <td>{formatPayment(getMainPayForSelectedMonths(player))}</td>
+                  )}
+                  {showPayMainMonthly && getSelectedMonths().map((monthWithYear) => {
+                    // Split the month and year
+                    const [month, year] = monthWithYear.split(' ');
+                    
+                    // Get the monthly value for Pay Main (same as main monthly breakdown)
+                    const monthlyValue = getMonthlyValue(player, month);
+                    
+                    return (
+                      <td key={`paymain-${monthWithYear}`}>
+                        {formatPayment(monthlyValue)}
+                      </td>
+                    );
+                  })}
+                  {showBuckets && availableBuckets.map(bucketKey => (
+                    <td key={bucketKey}>
+                      {formatPayment(getBucketTotalForSelectedMonths(player, bucketKey))}
+                    </td>
+                  ))}
+                  {availableBuckets.map(bucketKey => 
+                    expandedBucketMonths.has(bucketKey) ? 
+                      getSelectedMonths().map((monthWithYear) => {
+                        const [month] = monthWithYear.split(' ');
+                        const bucketAmount = (player[bucketKey as keyof Player] as number) || 0;
+                        const monthlyBucketAmount = bucketAmount / 12;
+                        return (
+                          <td key={`${bucketKey}-${monthWithYear}`}>
+                            {formatPayment(monthlyBucketAmount)}
+                          </td>
+                        );
+                      }) : []
+                  ).flat()}
+                  <td>{formatPayment(getMainBudgetForSelectedMonths(player))}</td>
                   <td>{formatPercentage(player.teamPercentage || 0)}</td>
                   <td>{formatPercentage(player.positionPercentage || 0)}</td>
                   <td style={{ color: Math.abs(player.budgetDifference || 0) < 500 ? 'black' : ((player.budgetDifference || 0) > 0 ? 'red' : 'green') }}>
@@ -1124,7 +1364,36 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
                   </td>
                 </>
               )}
-              <td>{player.notes || ''}</td>
+              <td>
+                <div 
+                  className={styles.commentPreview} 
+                  onClick={() => handleOpenCommentsModal(player)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  {player.athlete_id && playerComments[player.athlete_id]?.length > 0 ? (
+                    <>
+                      <div className={styles.commentContent}>
+                        {playerComments[player.athlete_id][0].content}
+                      </div>
+                      <div className={styles.commentMeta}>
+                        <span className={styles.commentAuthor}>
+                          {playerComments[player.athlete_id][0].user_detail.name_first} {playerComments[player.athlete_id][0].user_detail.name_last}
+                        </span>
+                        <span className={styles.commentDate}>
+                          {new Date(playerComments[player.athlete_id][0].created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {playerComments[player.athlete_id].length > 1 && (
+                        <div className={styles.commentCount}>
+                          +{playerComments[player.athlete_id].length - 1} more
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className={styles.noCommentsText}>Click to add comment</div>
+                  )}
+                </div>
+              </td>
             </tr>
           );
         })}
@@ -1134,10 +1403,10 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
           {effectiveCompAccess && (
             <>
               <td>{formatPayment(summary.totalPay)}</td>
-              {showMonthlyBreakdown && getFiscalYearMonths(selectedMonth).map((monthWithYear, index) => {
-                const monthlyValue = summary.monthlyPay && summary.monthlyPay.length >= 12 
+              {showMonthlyBreakdown && getSelectedMonths().map((monthWithYear, index) => {
+                const monthlyValue = summary.monthlyPay && summary.monthlyPay.length >= numberOfMonths 
                   ? summary.monthlyPay[index] 
-                  : (summary.totalPay || 0) / 12;
+                  : (summary.totalPay || 0) / numberOfMonths;
                 
                 return (
                   <td key={monthWithYear}>
@@ -1145,6 +1414,53 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
                   </td>
                 );
               })}
+              {showBuckets && (
+                <td>{formatPayment(
+                  players.reduce((sum, player) => 
+                    sum + getMainPayForSelectedMonths(player), 0
+                  )
+                )}</td>
+              )}
+              {showPayMainMonthly && getSelectedMonths().map((monthWithYear, index) => {
+                const monthlyValue = summary.monthlyPay && summary.monthlyPay.length >= numberOfMonths 
+                  ? summary.monthlyPay[index] 
+                  : (summary.totalPay || 0) / numberOfMonths;
+                
+                return (
+                  <td key={`paymain-${monthWithYear}`}>
+                    {formatPayment(monthlyValue || 0)}
+                  </td>
+                );
+              })}
+              {showBuckets && availableBuckets.map(bucketKey => (
+                <td key={bucketKey}>
+                  {formatPayment(
+                    players.reduce((sum, player) => 
+                      sum + getBucketTotalForSelectedMonths(player, bucketKey), 0
+                    )
+                  )}
+                </td>
+              ))}
+              {availableBuckets.map(bucketKey => 
+                expandedBucketMonths.has(bucketKey) ? 
+                  getSelectedMonths().map((monthWithYear) => {
+                    const [month] = monthWithYear.split(' ');
+                    const bucketTotal = players.reduce((sum, player) => {
+                      const bucketAmount = (player[bucketKey as keyof Player] as number) || 0;
+                      return sum + (bucketAmount / 12);
+                    }, 0);
+                    return (
+                      <td key={`${bucketKey}-${monthWithYear}`}>
+                        {formatPayment(bucketTotal)}
+                      </td>
+                    );
+                  }) : []
+              ).flat()}
+              <td>{formatPayment(
+                players.reduce((sum, player) => 
+                  sum + getMainBudgetForSelectedMonths(player), 0
+                )
+              )}</td>
               <td>{formatPercentage(summary.totalTeamPercentage)}</td>
               <td></td>
               <td style={{ color: Math.abs(summary.totalBudgetDifference) < 500 ? 'black' : (summary.totalBudgetDifference > 0 ? 'red' : 'green') }}>
@@ -1156,40 +1472,93 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
         </tr>
       </tbody>
     </table>
-  );
+    );
+  };
 
   // Update debug logs in useEffect to use the new target player ID
+  // Fetch comments for all players
+  useEffect(() => {
+    const fetchAllComments = async () => {
+      const commentsMap: Record<string, Comment[]> = {};
+      for (const player of players) {
+        if (player.athlete_id) {
+          try {
+            const comments = await CommentService.getCommentsForAthlete(player.athlete_id);
+            commentsMap[player.athlete_id] = comments;
+          } catch (error) {
+            console.error('Error fetching comments for player:', player.athlete_id, error);
+          }
+        }
+      }
+      setPlayerComments(commentsMap);
+    };
+
+    if (players.length > 0) {
+      fetchAllComments();
+    }
+  }, [players]);
+
   useEffect(() => {
     if (!loading && players.length > 0) {
-      console.log("DEBUG-LISTVIEW: After setting players state");
+      // Debug log removed("DEBUG-LISTVIEW: After setting players state");
       
       // Try to find our target player for debugging
       const targetPlayer = players.find(p => p.athlete_id === TEST_ATHLETE_ID);
       if (targetPlayer) {
-        console.log("DEBUG-LISTVIEW: Found target player in state:", targetPlayer.name__first, targetPlayer.name__last);
-        console.log("Total compensation:", targetPlayer.compensation);
+        // Debug log removed("DEBUG-LISTVIEW: Found target player in state:", targetPlayer.name__first, targetPlayer.name__last);
+        // Debug log removed("Total compensation:", targetPlayer.compensation);
         
         // Log raw monthly compensation object for the target player
-        console.log("Raw monthlyCompensation object:", targetPlayer.monthlyCompensation);
+        // Debug log removed("Raw monthlyCompensation object:", targetPlayer.monthlyCompensation);
         
         // Log monthly values one by one
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        console.log("Monthly values by month:");
+        // Debug log removed("Monthly values by month:");
         months.forEach((month) => {
           const value = getMonthlyValue(targetPlayer, month);
-          console.log(`${month}: ${value}`);
+          // Debug log removed(`${month}: ${value}`);
         });
         
         // Also log the fiscal year months
-        console.log("Fiscal year monthly values:");
+        // Debug log removed("Fiscal year monthly values:");
         getFiscalYearMonths(selectedMonth).forEach((monthWithYear) => {
           const [month] = monthWithYear.split(' ');
           const value = getMonthlyValue(targetPlayer, month);
-          console.log(`${monthWithYear}: ${value}`);
+          // Debug log removed(`${monthWithYear}: ${value}`);
         });
       }
     }
   }, [loading, players, selectedMonth]);
+
+  const handleOpenCommentsModal = (player: Player) => {
+    // Debug log removed('Opening comments modal for player:', player);
+    setModalAthlete({
+      id: player.athlete_id || '',
+      name: `${player.name__first} ${player.name__last}`
+    });
+    setModalOpen(true);
+  };
+
+  const handleCloseCommentsModal = () => {
+    setModalOpen(false);
+    setModalAthlete(null);
+    // Refresh comments when modal closes
+    const fetchAllComments = async () => {
+      const commentsMap: Record<string, Comment[]> = {};
+      for (const player of players) {
+        if (player.athlete_id) {
+          try {
+            const comments = await CommentService.getCommentsForAthlete(player.athlete_id);
+            commentsMap[player.athlete_id] = comments;
+          } catch (error) {
+            console.error('Error fetching comments for player:', player.athlete_id, error);
+          }
+        }
+      }
+      setPlayerComments(commentsMap);
+    };
+    fetchAllComments();
+  };
 
   if (loading) {
     return <div>Loading...</div>;
@@ -1217,10 +1586,21 @@ const ListView: React.FC<ListViewProps> = ({ selectedYear, selectedMonth, select
           fetchTasks={() => fetchPlayers(team)}
           team={team}
           selectedYear={selectedYear}
-          effectiveYear={Math.max(selectedYear, selectedAthlete.starting_season)}
+          effectiveYear={Math.max(selectedYear, selectedAthlete?.starting_season || selectedYear)}
           selectedScenario={selectedScenario}
           targetScenario={targetScenario || ''}
         />
+      )}
+      
+      {modalOpen && modalAthlete && (
+        <>
+          <CommentsModal
+            isOpen={modalOpen}
+            onClose={handleCloseCommentsModal}
+            athleteId={modalAthlete?.id || ''}
+            athleteName={modalAthlete?.name || ''}
+          />
+        </>
       )}
     </div>
   );

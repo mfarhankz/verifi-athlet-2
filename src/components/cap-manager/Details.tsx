@@ -13,6 +13,8 @@ import Select from 'react-select'; // Import react-select
 import { DollarInput } from '../../utils/DollarInput';
 import { EndingSeasonModal } from './EndingSeasonModal';
 import { useShowScholarshipDollars } from "@/utils/utils";
+import { CommentService } from '../../lib/commentService';
+import { Comment } from '@/types/database';
 
 declare global {
   interface Window {
@@ -105,6 +107,72 @@ const Details: React.FC<DetailsProps> = ({
   const [detailsPortal, setDetailsPortal] = useState<HTMLDivElement | null>(null);
   const showScholarshipDollars = useShowScholarshipDollars();
   const [scholarshipInput, setScholarshipInput] = useState<number>(0);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [showCommentHistory, setShowCommentHistory] = useState(false);
+  const [showAddComment, setShowAddComment] = useState(false);
+
+  // Fetch comments when athlete changes
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!athlete?.athlete_id) return;
+      try {
+        const comments = await CommentService.getCommentsForAthlete(athlete.athlete_id);
+        setComments(comments);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+      }
+    };
+    fetchComments();
+  }, [athlete?.athlete_id]);
+
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !athlete?.athlete_id) return;
+
+    try {
+      const { data: userDetails } = await supabase.auth.getUser();
+      if (!userDetails?.user?.id) {
+        console.error('No user ID found');
+        return;
+      }
+
+      await CommentService.createComment({
+        content: newComment,
+        athlete_id: athlete.athlete_id,
+        user_id: userDetails.user.id,
+        customer_id: team
+      });
+
+      // Refresh comments
+      const comments = await CommentService.getCommentsForAthlete(athlete.athlete_id);
+      setComments(comments);
+      setNewComment('');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+
+    try {
+      const { data: userDetails } = await supabase.auth.getUser();
+      if (!userDetails?.user?.id) {
+        console.error('No user ID found');
+        return;
+      }
+
+      await CommentService.deleteComment(commentId, userDetails.user.id);
+      
+      // Refresh comments
+      if (athlete?.athlete_id) {
+        const comments = await CommentService.getCommentsForAthlete(athlete.athlete_id);
+        setComments(comments);
+      }
+    } catch (error) {
+      console.error('Error deleting comment:', error);
+    }
+  };
 
   useEffect(() => {
     if (athlete) {
@@ -402,7 +470,6 @@ const Details: React.FC<DetailsProps> = ({
       .from('athletes')
       .update({ 
         image_url: image_url, 
-        notes: updateData.notes,
         name__first: formData.name__first,
         name__last: formData.name__last
       })
@@ -838,7 +905,7 @@ const Details: React.FC<DetailsProps> = ({
               <input className={styles.fileInput} type="file" accept="image/*" onChange={handleFileChange} />
             </div>
           </div>
-          <div>
+          <div className={styles.halfWidth}>
             <label>Position</label>
             <select
               name="position"
@@ -853,8 +920,8 @@ const Details: React.FC<DetailsProps> = ({
               ))}
             </select>
           </div>
-          <div>
-            <label className={styles.eligibilityRemaining}>Eligibility Remaining</label>
+          <div className={styles.halfWidth}>
+            <label>Elig</label>
             <select name="elig_remaining" value={formData.elig_remaining || ''} onChange={handleChange}>
               <option value="1">1</option>
               <option value="2">2</option>
@@ -863,7 +930,7 @@ const Details: React.FC<DetailsProps> = ({
               <option value="5">5</option>
             </select>
           </div>
-          <div>
+          <div className={styles.halfWidth}>
             <label>Year</label>
             <select name="year" value={formData.year || ''} onChange={handleChange}>
               <option value="FR">FR</option>
@@ -873,11 +940,11 @@ const Details: React.FC<DetailsProps> = ({
               <option value="GR">GR</option>
             </select>
           </div>
-          <div>
-            <label>Redshirt Status</label>
+          <div className={styles.halfWidth}>
+            <label>Redshirt</label>
             <select name="redshirt_status" value={formData.redshirt_status || ''} onChange={handleChange}>
-              <option value="has">Has Not Used</option>
-              <option value="used">Has Used</option>
+              <option value="has">Not Used</option>
+              <option value="used">Used</option>
             </select>
           </div>
           <div>
@@ -992,8 +1059,124 @@ const Details: React.FC<DetailsProps> = ({
             </div>
           )}
           <div>
-            <label>Notes</label>
-            <textarea name="notes" value={formData.notes || ''} onChange={handleChange} />
+            <label>Comments</label>
+            <div className={styles.commentsSection}>
+              {/* Most Recent Comment */}
+              {comments.length > 0 && (
+                <>
+                  <div className={styles.mostRecentComment}>
+                    <div className={styles.commentItem}>
+                      <div className={styles.commentHeader}>
+                        <div className={styles.commentAuthorInfo}>
+                          <span className={styles.commentAuthor}>
+                            {comments[0].user_detail.name_first} {comments[0].user_detail.name_last}
+                          </span>
+                          <span className={styles.commentDate}>
+                            {new Date(comments[0].created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteComment(comments[0].id)}
+                          className={styles.deleteCommentButton}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className={styles.commentContent}>{comments[0].content}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Comment Actions - Side by Side */}
+                  <div className={styles.commentActions}>
+                    <span
+                      onClick={() => setShowAddComment(!showAddComment)}
+                      className={styles.addCommentLink}
+                    >
+                      Add comment
+                    </span>
+                    {comments.length > 1 && (
+                      <span
+                        onClick={() => setShowCommentHistory(!showCommentHistory)}
+                        className={styles.commentHistoryToggle}
+                      >
+                        {showCommentHistory ? 'Hide' : 'More'}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {/* Add New Comment Section */}
+              {showAddComment && (
+                <div className={styles.addCommentSection}>
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment..."
+                    className={styles.commentInput}
+                  />
+                  <button
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                    className={styles.addCommentButton}
+                  >
+                    Add Comment
+                  </button>
+                </div>
+              )}
+
+              {/* Show Add Comment if no comments exist */}
+              {comments.length === 0 && (
+                <div className={styles.addCommentSection}>
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="Add a comment..."
+                    className={styles.commentInput}
+                  />
+                  <button
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                    className={styles.addCommentButton}
+                  >
+                    Add Comment
+                  </button>
+                </div>
+              )}
+
+              {/* Comment History Section */}
+              {comments.length > 1 && showCommentHistory && (
+                <div className={styles.commentHistorySection}>
+                  
+                  {/* Comment History */}
+                  {showCommentHistory && (
+                    <div className={styles.commentHistory}>
+                      {comments.slice(1).map((comment) => (
+                        <div key={comment.id} className={styles.commentItem}>
+                          <div className={styles.commentHeader}>
+                            <div className={styles.commentAuthorInfo}>
+                              <span className={styles.commentAuthor}>
+                                {comment.user_detail.name_first} {comment.user_detail.name_last}
+                              </span>
+                              <span className={styles.commentDate}>
+                                {new Date(comment.created_at).toLocaleDateString()}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteComment(comment.id)}
+                              className={styles.deleteCommentButton}
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <div className={styles.commentContent}>{comment.content}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className={styles.injuryContainer}>
             <label>

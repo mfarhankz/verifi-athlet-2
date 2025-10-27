@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import MultipleContainers from "@/app/dndkit/presets/Sortable/MultipleContainers";
-import { Flex, Typography, Spin, Alert, message } from "antd";
+import { Flex, Typography, Spin, Alert, message, Button } from "antd";
 import { fetchRecruitingBoardData, fetchRecruitingBoardPositions, createRecruitingBoardPosition, endRecruitingBoardPosition, updateRecruitingBoardRanks, endRecruitingBoardAthlete } from "@/lib/queries";
 import { RecruitingBoardData, RecruitingBoardPosition } from "@/types/database";
 import { fetchUserDetails } from "@/utils/utils";
@@ -17,9 +17,73 @@ export default function RecruitingBoard() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [renderChunkSize, setRenderChunkSize] = useState(50); // Start with 50 athletes
   const [visibleData, setVisibleData] = useState<RecruitingBoardData[]>([]);
+  
+  // Source filter toggles
+  const [sourceFilters, setSourceFilters] = useState({
+    portal: true,
+    juco: true,
+    prePortal: true,
+    highSchool: true
+  });
 
   const { zoom } = useZoom();
   const { activeCustomerId, customers, userDetails: contextUserDetails, isReady: contextReady } = useCustomer();
+
+  // Analyze data to determine which source types exist
+  const sourceAnalysis = useMemo(() => {
+    const sources = {
+      portal: 0,
+      juco: 0,
+      prePortal: 0,
+      highSchool: 0,
+      none: 0
+    };
+
+    data.forEach(athlete => {
+      if (athlete.source === 'portal') {
+        sources.portal++;
+      } else if (athlete.source === 'juco') {
+        sources.juco++;
+      } else if (athlete.source === 'pre-portal') {
+        sources.prePortal++;
+      } else if (athlete.source === 'high_school') {
+        sources.highSchool++;
+      } else {
+        sources.none++;
+      }
+    });
+
+    const totalSourceTypes = [sources.portal, sources.juco, sources.prePortal, sources.highSchool].filter(count => count > 0).length;
+    
+    return {
+      counts: sources,
+      hasMultipleSourceTypes: totalSourceTypes > 1,
+      availableSources: {
+        portal: sources.portal > 0,
+        juco: sources.juco > 0,
+        prePortal: sources.prePortal > 0,
+        highSchool: sources.highSchool > 0
+      }
+    };
+  }, [data]);
+
+  // Filter data based on source toggles
+  const filteredData = useMemo(() => {
+    return data.filter(athlete => {
+      if (athlete.source === 'portal') {
+        return sourceFilters.portal;
+      } else if (athlete.source === 'juco') {
+        return sourceFilters.juco;
+      } else if (athlete.source === 'pre-portal') {
+        return sourceFilters.prePortal;
+      } else if (athlete.source === 'high_school') {
+        return sourceFilters.highSchool;
+      } else {
+        // For athletes with no source, show them by default
+        return true;
+      }
+    });
+  }, [data, sourceFilters]);
 
   const loadData = useCallback(async () => {
     // Don't proceed if CustomerContext is not ready
@@ -46,13 +110,6 @@ export default function RecruitingBoard() {
         
         setPositions(positionData);
         setData(recruitingBoardData);
-        
-        // Start with progressive rendering for large datasets
-        if (recruitingBoardData.length > 50) {
-          setVisibleData(recruitingBoardData.slice(0, renderChunkSize));
-        } else {
-          setVisibleData(recruitingBoardData);
-        }
       }
       
     } catch (err) {
@@ -122,18 +179,29 @@ export default function RecruitingBoard() {
     }
   }, [loadData, contextReady]);
 
-  // Progressive rendering effect for large datasets
+  // Progressive rendering effect for large datasets using filtered data
   useEffect(() => {
-    if (data.length > 50 && visibleData.length < data.length) {
+    if (filteredData.length > 50 && visibleData.length < filteredData.length) {
       const timer = setTimeout(() => {
-        const nextChunkSize = Math.min(visibleData.length + 25, data.length);
-        const nextVisibleData = data.slice(0, nextChunkSize);
+        const nextChunkSize = Math.min(visibleData.length + 25, filteredData.length);
+        const nextVisibleData = filteredData.slice(0, nextChunkSize);
         setVisibleData(nextVisibleData);
       }, 50); // Small delay to prevent blocking
       
       return () => clearTimeout(timer);
+    } else if (filteredData.length <= 50) {
+      setVisibleData(filteredData);
     }
-  }, [data, visibleData]);
+  }, [filteredData, visibleData]);
+
+  // Reset visible data when filters change
+  useEffect(() => {
+    if (filteredData.length <= 50) {
+      setVisibleData(filteredData);
+    } else {
+      setVisibleData(filteredData.slice(0, renderChunkSize));
+    }
+  }, [sourceFilters]);
 
   if (loading) {
     return (
@@ -182,12 +250,130 @@ export default function RecruitingBoard() {
 
           <Typography.Paragraph
             style={{ marginBottom: 0 }}
-            className="flex items-center justify-center"
+            className="flex items-center justify-center mr-6"
           >
             <span className="bg-[#FF24BA] w-[20px] h-[20px] flex mr-2"></span>
             Tier 3
           </Typography.Paragraph>
+
+          {sourceAnalysis.availableSources.juco && (
+            <Typography.Paragraph
+              style={{ marginBottom: 0 }}
+              className="flex items-center justify-center mr-6"
+            >
+              <span className="w-[20px] h-[20px] flex mr-2" style={{ backgroundColor: 'rgba(135, 206, 250, 0.15)', border: '1px solid rgba(135, 206, 250, 0.5)' }}></span>
+              JUCO
+            </Typography.Paragraph>
+          )}
+
+          {sourceAnalysis.availableSources.prePortal && (
+            <Typography.Paragraph
+              style={{ marginBottom: 0 }}
+              className="flex items-center justify-center mr-6"
+            >
+              <span className="w-[20px] h-[20px] flex mr-2" style={{ backgroundColor: 'rgba(255, 165, 0, 0.15)', border: '1px solid rgba(255, 165, 0, 0.5)' }}></span>
+              Pre-Portal
+            </Typography.Paragraph>
+          )}
+
+          {sourceAnalysis.availableSources.portal && (
+            <Typography.Paragraph
+              style={{ marginBottom: 0 }}
+              className="flex items-center justify-center mr-6"
+            >
+              <span className="w-[20px] h-[20px] flex mr-2" style={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', border: '1px solid rgba(0, 0, 0, 0.2)' }}></span>
+              Portal
+            </Typography.Paragraph>
+          )}
+
+          {sourceAnalysis.availableSources.highSchool && (
+            <Typography.Paragraph
+              style={{ marginBottom: 0 }}
+              className="flex items-center justify-center mr-6"
+            >
+              <span className="w-[20px] h-[20px] flex mr-2" style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', border: '1px solid rgba(34, 197, 94, 0.5)' }}></span>
+              High School
+            </Typography.Paragraph>
+          )}
         </Flex>
+
+        {/* Source Filter Toggles - only show if there are multiple source types */}
+        {sourceAnalysis.hasMultipleSourceTypes && (
+          <Flex gap={8}>
+            {sourceAnalysis.availableSources.portal && (
+              <Button
+                size="small"
+                type={sourceFilters.portal ? "primary" : "default"}
+                onClick={() => setSourceFilters(prev => ({ ...prev, portal: !prev.portal }))}
+                style={{
+                  fontSize: '11px',
+                  height: '24px',
+                  padding: '0 8px',
+                  borderRadius: '12px',
+                  border: sourceFilters.portal ? 'none' : '1px solid #d9d9d9',
+                  backgroundColor: sourceFilters.portal ? '#1890ff' : '#fff',
+                  color: sourceFilters.portal ? '#fff' : '#666'
+                }}
+              >
+                Portal
+              </Button>
+            )}
+            {sourceAnalysis.availableSources.juco && (
+              <Button
+                size="small"
+                type={sourceFilters.juco ? "primary" : "default"}
+                onClick={() => setSourceFilters(prev => ({ ...prev, juco: !prev.juco }))}
+                style={{
+                  fontSize: '11px',
+                  height: '24px',
+                  padding: '0 8px',
+                  borderRadius: '12px',
+                  border: sourceFilters.juco ? 'none' : '1px solid #d9d9d9',
+                  backgroundColor: sourceFilters.juco ? '#1890ff' : '#fff',
+                  color: sourceFilters.juco ? '#fff' : '#666'
+                }}
+              >
+                JUCO
+              </Button>
+            )}
+            {sourceAnalysis.availableSources.prePortal && (
+              <Button
+                size="small"
+                type={sourceFilters.prePortal ? "primary" : "default"}
+                onClick={() => setSourceFilters(prev => ({ ...prev, prePortal: !prev.prePortal }))}
+                style={{
+                  fontSize: '11px',
+                  height: '24px',
+                  padding: '0 8px',
+                  borderRadius: '12px',
+                  border: sourceFilters.prePortal ? 'none' : '1px solid #d9d9d9',
+                  backgroundColor: sourceFilters.prePortal ? '#1890ff' : '#fff',
+                  color: sourceFilters.prePortal ? '#fff' : '#666'
+                }}
+              >
+                Pre-Portal
+              </Button>
+            )}
+            {sourceAnalysis.availableSources.highSchool && (
+              <Button
+                size="small"
+                type={sourceFilters.highSchool ? "primary" : "default"}
+                onClick={() => setSourceFilters(prev => ({ ...prev, highSchool: !prev.highSchool }))}
+                style={{
+                  fontSize: '11px',
+                  height: '24px',
+                  padding: '0 8px',
+                  borderRadius: '12px',
+                  border: sourceFilters.highSchool ? 'none' : '1px solid #d9d9d9',
+                  backgroundColor: sourceFilters.highSchool ? '#1890ff' : '#fff',
+                  color: sourceFilters.highSchool ? '#fff' : '#666'
+                }}
+              >
+                High School
+              </Button>
+            )}
+          </Flex>
+        )}
       </Flex>
       <div className="w-[100%] overflow-auto h-[calc(100vh-155px)]">
         <div 

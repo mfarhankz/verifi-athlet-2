@@ -4,9 +4,10 @@ import type { MenuProps } from "antd";
 import { Input, Dropdown, Typography, Avatar, Flex, Button, Image } from "antd";
 import Link from 'next/link'
 import { useSidebar } from './SidebarContext';
-import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons';
+import { MenuFoldOutlined, MenuUnfoldOutlined, MenuOutlined } from '@ant-design/icons';
 import CustomerSelector from './CustomerSelector';
 import { useZoom } from '@/contexts/ZoomContext';
+import { useState, useEffect } from 'react';
 
 const { Paragraph } = Typography;
 
@@ -28,21 +29,49 @@ const items: MenuProps["items"] = [
 const { Search } = Input;
 
 export default function Navbar() {
-  const { collapsed, toggleCollapsed, currentMenuTitle } = useSidebar();
+  const { collapsed, toggleCollapsed, currentMenuTitle, toggleMobileOpen } = useSidebar();
   const { handleZoomIn, handleZoomOut } = useZoom();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   return (
     <Flex align="center" justify="space-between" className="navbar">
-      <Button 
-        type="text"
-        icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-        onClick={toggleCollapsed}
-        style={{ fontSize: '16px', marginRight: '10px' }}
-      />
+      {/* Desktop sidebar toggle */}
+      {!isMobile && (
+        <Button 
+          type="text"
+          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={toggleCollapsed}
+          style={{ fontSize: '16px', marginRight: '10px' }}
+        />
+      )}
 
-      <Paragraph style={{ margin: "0" }} className="player-list">
-        <span>{currentMenuTitle}</span>
-      </Paragraph>
+      {/* Mobile sidebar toggle - top left */}
+      {isMobile && (
+        <Button 
+          type="text"
+          icon={<MenuOutlined />}
+          onClick={toggleMobileOpen}
+          style={{ fontSize: '16px', marginRight: '10px' }}
+        />
+      )}
+
+      {/* Screen title - hidden on mobile */}
+      {!isMobile && (
+        <Paragraph style={{ margin: "0" }} className="player-list">
+          <span>{currentMenuTitle}</span>
+        </Paragraph>
+      )}
 
       <div style={{ flex: 1 }} />
 

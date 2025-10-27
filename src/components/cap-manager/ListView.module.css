@@ -137,10 +137,14 @@
   .summaryRow {
     font-weight: bold;
     background-color: #f0f0f0;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
   }
 
   .summaryRow td {
     border-top: 2px solid #333;
+    background-color: #f0f0f0;
   }
 
   .positionGroup {
@@ -266,4 +270,53 @@
     padding: 2px 4px;
     font-size: 12px;
     margin-left: 2px;
+  }
+
+  .commentPreview {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+
+  .commentContent {
+    color: #333;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 300px;
+  }
+
+  .commentMeta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85em;
+    color: #666;
+  }
+
+  .commentAuthor {
+    font-weight: 500;
+  }
+
+  .commentDate {
+    color: #888;
+  }
+
+  .commentCount {
+    font-size: 0.8em;
+    color: #007bff;
+    margin-top: 2px;
+  }
+
+  .noCommentsText {
+    color: #999;
+    font-size: 0.8em;
+    font-style: italic;
+    text-align: center;
+    padding: 8px;
   }

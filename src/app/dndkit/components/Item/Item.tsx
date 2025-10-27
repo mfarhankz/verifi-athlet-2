@@ -200,7 +200,9 @@ export const Item = React.memo(
                 handle && styles.withHandle,
                 dragOverlay && styles.dragOverlay,
                 disabled && styles.disabled,
-                player?.tierColor && styles.color
+                player?.tierColor && styles.color,
+                player?.source === 'juco' && styles.jucoSource,
+                player?.source === 'pre-portal' && styles.prePortalSource
               )}
               style={style}
               data-cypress="draggable-item"

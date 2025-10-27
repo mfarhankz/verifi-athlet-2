@@ -10,10 +10,12 @@ import {
   Divider,
   Space,
   Typography,
+  Skeleton,
 } from "antd";
 import Image from "next/image";
 import type { TableColumnsType } from "antd";
 import CommentBox from "./CommentBox";
+import VideoComponent from "./VideoComponent";
 import { AthleteData } from "@/types/database";
 import type { GameLog } from "@/types/database";
 import { useEffect, useState } from "react";
@@ -21,7 +23,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/contexts/CustomerContext";
 import type { SportStatConfig } from "@/types/database";
 import type { StatCategory } from "@/types/database";
-import { formatStatDecimal } from "@/utils/utils";
+import { formatStatDecimal, formatPhoneNumber } from "@/utils/utils";
 import { fetchSportColumnConfig } from "@/lib/queries";
 import { calculateFormula, hasValidDependencies } from "@/utils/formulaCalculator";
 
@@ -44,6 +46,204 @@ interface AthleteComment {
 const onChange = (key: string) => {
   console.log(key);
 };
+
+// Helper function to check if a value is valid and meaningful
+const isValidValue = (value: any): boolean => {
+  if (value === null || value === undefined) return false;
+  
+  // Convert to string for consistent checking
+  const stringValue = String(value).trim();
+  
+  // Filter out common invalid values
+  const invalidValues = [
+    "", 
+    "not specified", 
+    "not available", 
+    "undefined", 
+    "null", 
+    "n/a", 
+    "na"
+  ];
+  
+  return !invalidValues.includes(stringValue.toLowerCase());
+};
+
+// Helper function to check if there are actual leaving reasons to display
+const hasActualLeavingContent = (athlete: AthleteData | null): boolean => {
+  if (!athlete?.generic_survey?.[0]) return false;
+  
+  const leavingEntries = Object.entries(athlete.generic_survey[0]).filter(
+    ([key, value]) => key.startsWith("leaving_") && isValidValue(value)
+  );
+  
+  const inTheirOwnWordsEntry = leavingEntries.find(([key]) => key === "leaving_other");
+  const filteredLeavingEntries = leavingEntries.filter(([key]) => key !== "leaving_other");
+  
+  const majorReasons: Array<{ key: string; label: string; value: string }> = [];
+  const minorReasons: Array<{ key: string; label: string; value: string }> = [];
+  const otherReasons: Array<{ key: string; label: string; value: string }> = [];
+  
+  filteredLeavingEntries.forEach(([key, value]) => {
+    const val = String(value);
+    if (/not a reason/i.test(val)) {
+      return; // Skip Not a Reason entries
+    } else if (/major reason/i.test(val)) {
+      majorReasons.push({ key, label: key.replace("leaving_", "").replace(/_/g, " "), value: val });
+    } else if (/minor reason/i.test(val)) {
+      minorReasons.push({ key, label: key.replace("leaving_", "").replace(/_/g, " "), value: val });
+    } else {
+      otherReasons.push({ key, label: key.replace("leaving_", "").replace(/_/g, " "), value: val });
+    }
+  });
+  
+  return !!inTheirOwnWordsEntry || majorReasons.length > 0 || minorReasons.length > 0 || otherReasons.length > 0;
+};
+
+// Helper function to check if there are actual "What they are looking for?" fields with valid data
+const hasActualLookingForContent = (athlete: AthleteData | null): boolean => {
+  if (!athlete?.generic_survey?.[0]) return false;
+  
+  return isValidValue(athlete.generic_survey[0].important) ||
+    isValidValue(athlete.generic_survey[0].nil_importance) ||
+    isValidValue(athlete.generic_survey[0].nil_amount) ||
+    isValidValue(athlete.generic_survey[0].walk_on_t25) ||
+    isValidValue(athlete.msoc_survey?.[0]?.best_pos) ||
+    isValidValue(athlete.when_transfer) ||
+    isValidValue(athlete.generic_survey[0].ideal_division) ||
+    isValidValue(athlete.generic_survey[0].full_scholarship_only) ||
+    isValidValue(athlete.generic_survey[0].distance_from_home) ||
+    isValidValue(athlete.generic_survey[0].ideal_campus_size) ||
+    isValidValue(athlete.generic_survey[0].campus_location_type) ||
+    isValidValue(athlete.generic_survey[0].cost_vs_acad_rep) ||
+    isValidValue(athlete.generic_survey[0].winning_vs_location) ||
+    isValidValue(athlete.generic_survey[0].playing_vs_championship) ||
+    isValidValue(athlete.generic_survey[0].cost_vs_campus_type) ||
+    isValidValue(athlete.generic_survey[0].playing_vs_size) ||
+    isValidValue(athlete.generic_survey[0].winning_vs_academics) ||
+    isValidValue(athlete.generic_survey[0].facilities_vs_championship) ||
+    isValidValue(athlete.generic_survey[0].nfl_vs_facilities) ||
+    isValidValue(athlete.generic_survey[0].championship_vs_level) ||
+    isValidValue(athlete.generic_survey[0].recent_vs_winning) ||
+    isValidValue(athlete.generic_survey[0].championship_vs_location) ||
+    isValidValue(athlete.generic_survey[0].party_vs_academics) ||
+    isValidValue(athlete.generic_survey[0].party_vs_winning) ||
+    isValidValue(athlete.generic_survey[0].type_of_staff_preferred) ||
+    isValidValue(athlete.generic_survey[0].male_to_female) ||
+    isValidValue(athlete.generic_survey[0].hbcu) ||
+    isValidValue(athlete.generic_survey[0].military_school_yesno) ||
+    isValidValue(athlete.generic_survey[0].pell_eligible) ||
+    isValidValue(athlete.generic_survey[0].faith_based_name) ||
+    isValidValue(athlete.generic_survey[0].pref_d1_name) ||
+    isValidValue(athlete.generic_survey[0].pref_d2_name) ||
+    isValidValue(athlete.generic_survey[0].pref_d3_name) ||
+    isValidValue(athlete.generic_survey[0].pref_naia_name);
+};
+
+// Configuration for different data sources
+type DataSource = 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes';
+
+interface DataSourceConfig {
+  tabs: {
+    bio: boolean;
+    videos: boolean;
+    stats: boolean;
+    gameLog: boolean;
+    survey: boolean;
+    notes: boolean;
+  };
+  bioFields: {
+    contactInfo: boolean;
+    academicDetails: boolean;
+    collegeRosterBio: boolean;
+    transferInfo: boolean;
+  };
+}
+
+const DATA_SOURCE_CONFIGS: Record<DataSource, DataSourceConfig> = {
+  transfer_portal: {
+    tabs: {
+      bio: true,
+      videos: false, // Currently commented out anyway
+      stats: true,
+      gameLog: true,
+      survey: true,
+      notes: true,
+    },
+    bioFields: {
+      contactInfo: true,
+      academicDetails: true,
+      collegeRosterBio: true,
+      transferInfo: true,
+    },
+  },
+  all_athletes: {
+    tabs: {
+      bio: true,
+      videos: false,
+      stats: true,
+      gameLog: true,
+      survey: false, // Hide survey for general athletes
+      notes: true,
+    },
+    bioFields: {
+      contactInfo: false, // Hide contact information for all_athletes
+      academicDetails: false, // Hide academic details for all_athletes
+      collegeRosterBio: true,
+      transferInfo: false, // Hide transfer-specific info
+    },
+  },
+  juco: {
+    tabs: {
+      bio: false, // Hide bio tab for JUCO
+      videos: false,
+      stats: true,
+      gameLog: false, // JUCO might not have game logs
+      survey: false, // Hide survey for JUCO
+      notes: true,
+    },
+    bioFields: {
+      contactInfo: true,
+      academicDetails: true,
+      collegeRosterBio: true,
+      transferInfo: false, // JUCO athletes aren't transfers
+    },
+  },
+  high_schools: {
+    tabs: {
+      bio: false, // Hide bio tab for high schools
+      videos: false,
+      stats: false,
+      gameLog: false,
+      survey: false,
+      notes: false,
+    },
+    bioFields: {
+      contactInfo: false,
+      academicDetails: false,
+      collegeRosterBio: false,
+      transferInfo: false,
+    },
+  },
+  hs_athletes: {
+    tabs: {
+      bio: true,
+      videos: true, // Enable videos for hs_athletes
+      stats: true,
+      gameLog: true,
+      survey: false, // Hide survey for hs_athletes
+      notes: true,
+    },
+    bioFields: {
+      contactInfo: true,
+      academicDetails: true,
+      collegeRosterBio: true,
+      transferInfo: false, // Hide transfer-specific info for hs_athletes
+    },
+  },
+};
+
+// Default config when no dataSource is provided
+const DEFAULT_CONFIG: DataSourceConfig = DATA_SOURCE_CONFIGS.transfer_portal;
 
 interface DataType {
   key: string;
@@ -301,7 +501,7 @@ interface AthleteSchool {
   };
 }
 
-const Bio = ({ athlete }: { athlete: AthleteData | null }) => {
+const Bio = ({ athlete, config }: { athlete: AthleteData | null; config: DataSourceConfig }) => {
   // Helper function to check if a value is available
   const isAvailable = (value: any) => {
     return (
@@ -366,339 +566,480 @@ const Bio = ({ athlete }: { athlete: AthleteData | null }) => {
       <div className="flex pt-5 pb-6 gap-10">
       </div> */}
       <div className="grid grid-cols-2 gap-5">
+        {config.bioFields.contactInfo && (
         <div>
           <h4>Contact Information</h4>
           <div className="grid grid-cols-2 p-5 gap-5">
-            {isAvailable(athlete?.cell_phone) &&
+            {!athlete ? (
+              <div>
+                <h6>Cell Phone</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.cell_phone) &&
               athlete?.details_tp_page?.[0]?.ok_to_contact && (
                 <div>
                   <h6>Cell Phone</h6>
-                  <h5>{athlete?.cell_phone}</h5>
+                  <h5>{formatPhoneNumber(athlete?.cell_phone)}</h5>
                 </div>
-              )}
+              )
+            )}
             <div>
               <h6>OK to Contact</h6>
               <h5 className="flex">
-                {athlete?.details_tp_page?.[0]?.ok_to_contact ? (
-                  <Image
-                    className="mr-1"
-                    src={"/tick.svg"}
-                    alt={"Tick"}
-                    width={20}
-                    height={20}
-                    style={{ width: "auto" }}
+                {!athlete ? (
+                  <Skeleton.Input
+                    active
+                    size="small"
+                    style={{ width: 60 }}
                   />
                 ) : (
-                  <div
-                    className="mr-1 flex items-center justify-center bg-red-500 text-white rounded"
-                    style={{ width: "20px", height: "20px", fontSize: "12px" }}
-                  >
-                    ✕
-                  </div>
+                  <>
+                    {athlete?.details_tp_page?.[0]?.ok_to_contact ? (
+                      <Image
+                        className="mr-1"
+                        src={"/tick.svg"}
+                        alt={"Tick"}
+                        width={20}
+                        height={20}
+                        style={{ width: "auto" }}
+                      />
+                    ) : (
+                      <div
+                        className="mr-1 flex items-center justify-center bg-red-500 text-white rounded"
+                        style={{ width: "20px", height: "20px", fontSize: "12px" }}
+                      >
+                        ✕
+                      </div>
+                    )}
+                    {athlete?.details_tp_page?.[0]?.ok_to_contact ? "Yes" : "No"}
+                  </>
                 )}
-                {athlete?.details_tp_page?.[0]?.ok_to_contact ? "Yes" : "No"}
               </h5>
             </div>
-            {isAvailable(athlete?.details_tp_page?.[0]?.email) &&
+            {!athlete ? (
+              <div>
+                <h6>Email Address</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 160 }}
+                />
+              </div>
+            ) : (
+              (() => {
+                // Prioritize athlete_fact email value over details_tp_page
+                const athleteFactEmail = (athlete?.generic_survey?.[0] as any)?.email;
+                const detailsTpPageEmail = athlete?.details_tp_page?.[0]?.email;
+                const okToContact = athlete?.details_tp_page?.[0]?.ok_to_contact;
+                
+                // If athlete_fact has a value, use it directly
+                if (athleteFactEmail && athleteFactEmail.trim() !== "") {
+                  return (
+                    <div>
+                      <h6>Email Address</h6>
+                      <h5>
+                        <a href={`mailto:${athleteFactEmail}`}>
+                          {athleteFactEmail}
+                        </a>
+                      </h5>
+                    </div>
+                  );
+                }
+                
+                // Otherwise, use the value from details_tp_page if available and ok_to_contact is true
+                if (isAvailable(detailsTpPageEmail) && okToContact) {
+                  return (
+                    <div>
+                      <h6>Email Address</h6>
+                      <h5>
+                        <a href={`mailto:${detailsTpPageEmail}`}>
+                          {detailsTpPageEmail}
+                        </a>
+                      </h5>
+                    </div>
+                  );
+                }
+                
+                return null;
+              })()
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Date of Birth</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 100 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.birthday) && (
+                <div>
+                  <h6>Date of Birth</h6>
+                  <h5>{athlete?.birthday}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div className="col-span-2">
+                <h6>Preferred Contact Way</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 140 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.pref_contact) &&
+              athlete?.details_tp_page?.[0]?.ok_to_contact && (
+                <div className="col-span-2">
+                  <h6>Preferred Contact Way</h6>
+                  <h5>{athlete?.pref_contact}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Helping with Decision</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.help_decision) &&
               athlete?.details_tp_page?.[0]?.ok_to_contact && (
                 <div>
-                  <h6>Email Address</h6>
+                  <h6>Helping with Decision</h6>
+                  <h5>{athlete?.help_decision}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Contact Info</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.contact_info) &&
+              athlete?.details_tp_page?.[0]?.ok_to_contact && (
+                <div>
+                  <h6>Contact Info</h6>
+                  <h5>{athlete?.contact_info}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Eligibility Remaining</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 80 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.eligibility_remaining) && (
+                <div>
+                  <h6>Eligibility Remaining</h6>
+                  <h5>{athlete?.eligibility_remaining}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Club Team</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.club) && (
+                <div>
+                  <h6>Club Team</h6>
+                  <h5 className="flex mb-0">
+                    {athlete?.club}
+                  </h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>What games should a coach watch when evaluating you?</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 180 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.game_eval) && (
+                <div>
+                  <h6>What games should a coach watch when evaluating you?</h6>
+                  <h5 className="flex mb-0">
+                    {athlete?.game_eval}
+                  </h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Summer League</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.summer_league) && (
+                <div>
+                  <h6>Summer League</h6>
+                  <h5 className="flex mb-0">
+                    {athlete?.summer_league}
+                  </h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div className="col-span-2">
+                <h6>Address</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 200 }}
+                />
+              </div>
+            ) : (
+              address && athlete?.details_tp_page?.[0]?.ok_to_contact && (
+                <div className="col-span-2">
+                  <h6>Address</h6>
+                  <h5 style={{ whiteSpace: "pre-line" }}>{address}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div className="col-span-2">
+                <h6>Comments</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 240 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.details_tp_page?.[0]?.comments) && (
+                <div className="col-span-2">
+                  <h6>Comments</h6>
+                  <h5 style={{ whiteSpace: "pre-line" }}>{athlete?.details_tp_page?.[0]?.comments}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>Agent Contact Info</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.generic_survey?.[0]?.agent) && (
+                <div>
+                  <h6>Agent Contact Info</h6>
+                  <h5>{athlete?.generic_survey?.[0]?.agent}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>HS Head Coach</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.generic_survey?.[0]?.hc_name) && (
+                <div>
+                  <h6>HS Head Coach</h6>
+                  <h5>{athlete?.generic_survey?.[0]?.hc_name}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
+              <div>
+                <h6>HS Head Coach Email</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 160 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.generic_survey?.[0]?.hc_email) && (
+                <div>
+                  <h6>HS Head Coach Email</h6>
                   <h5>
-                    <a href={`mailto:${athlete?.details_tp_page?.[0]?.email}`}>
-                      {athlete?.details_tp_page?.[0]?.email}
+                    <a href={`mailto:${athlete?.generic_survey?.[0]?.hc_email}`}>
+                      {athlete?.generic_survey?.[0]?.hc_email}
                     </a>
                   </h5>
                 </div>
-              )}
-            {isAvailable(athlete?.birthday) && (
+              )
+            )}
+            {!athlete ? (
               <div>
-                <h6>Date of Birth</h6>
-                <h5>{athlete?.birthday}</h5>
+                <h6>HS HC Cell</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
               </div>
-            )}
-            {isAvailable(athlete?.pref_contact) && (
-              <div className="col-span-2">
-                <h6>Preferred Contact Way</h6>
-                <h5>{athlete?.pref_contact}</h5>
-              </div>
-            )}
-            {isAvailable(athlete?.help_decision) && (
-              <div>
-                <h6>Helping with Decision</h6>
-                <h5>{athlete?.help_decision}</h5>
-              </div>
-            )}
-            {isAvailable(athlete?.contact_info) && (
-              <div>
-                <h6>Contact Info</h6>
-                <h5>{athlete?.contact_info}</h5>
-              </div>
-            )}
-            {isAvailable(athlete?.eligibility_remaining) && (
-            <div>
-              <h6>Eligibility Remaining</h6>
-              <h5>{athlete?.eligibility_remaining}</h5>
-            </div>
-            )}
-            {isAvailable(athlete?.club) && (
-            <div>
-              <h6>Club Team</h6>
-              <h5 className="flex mb-0">
-                {athlete?.club}
-              </h5>
-            </div>
-            )}
-            {isAvailable(athlete?.game_eval) && (
-            <div>
-              <h6>What games should a coach watch when evaluating you?</h6>
-              <h5 className="flex mb-0">
-                {athlete?.game_eval}
-              </h5>
-            </div>
-            )}
-            {isAvailable(athlete?.summer_league) && (
-            <div>
-              <h6>Summer League</h6>
-              <h5 className="flex mb-0">
-                {athlete?.summer_league}
-              </h5>
-            </div>
-            )}
-            {address && (
-              <div className="col-span-2">
-                <h6>Address</h6>
-                <h5 style={{ whiteSpace: "pre-line" }}>{address}</h5>
-              </div>
+            ) : (
+              isAvailable(athlete?.generic_survey?.[0]?.hc_number) && (
+                <div>
+                  <h6>HS HC Cell</h6>
+                  <h5>{formatPhoneNumber(athlete?.generic_survey?.[0]?.hc_number)}</h5>
+                </div>
+              )
             )}
           </div>
         </div>
+        )}
+        {config.bioFields.academicDetails && (
         <div>
           <h4>Academic Details</h4>
           <div className="grid grid-cols-2 p-5 gap-5">
-            {isAvailable(athlete?.gpa) && (
+            {!athlete ? (
               <div className="col-span-2">
                 <h6>GPA</h6>
-                <h5>{athlete?.gpa}</h5>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 80 }}
+                />
               </div>
+            ) : (
+              isAvailable(athlete?.gpa) && (
+                <div className="col-span-2">
+                  <h6>GPA</h6>
+                  <h5>{athlete?.gpa}</h5>
+                </div>
+              )
             )}
-            {isAvailable(athlete?.major) && (
+            {!athlete ? (
+              <div>
+                <h6>HS GPA</h6>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 80 }}
+                />
+              </div>
+            ) : (
+              isAvailable(athlete?.generic_survey?.[0]?.hs_gpa) && (
+                <div>
+                  <h6>HS GPA</h6>
+                  <h5>{athlete?.generic_survey?.[0]?.hs_gpa}</h5>
+                </div>
+              )
+            )}
+            {!athlete ? (
               <div>
                 <h6>Major</h6>
-                <h5>{athlete?.major}</h5>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 120 }}
+                />
               </div>
+            ) : (
+              isAvailable(athlete?.major) && (
+                <div>
+                  <h6>Major</h6>
+                  <h5>{athlete?.major}</h5>
+                </div>
+              )
             )}
-            {isAvailable(athlete?.generic_survey?.[0]?.major_importance) && (
+            {!athlete ? (
               <div>
                 <h6>Major Importance</h6>
-                <h5>{athlete?.generic_survey?.[0]?.major_importance}</h5>
+                <Skeleton.Input
+                  active
+                  size="small"
+                  style={{ width: 100 }}
+                />
               </div>
+            ) : (
+              isAvailable(athlete?.generic_survey?.[0]?.major_importance) && (
+                <div>
+                  <h6>Major Importance</h6>
+                  <h5>{athlete?.generic_survey?.[0]?.major_importance}</h5>
+                </div>
+              )
             )}
           </div>
         </div>
-      </div>
-
-      <h4>College Roster Bio</h4>
-      <div className="px-3">
-        <p className="my-3">{athlete?.bio || "No bio available."}</p>
-        {athlete?.roster_link && (
-          <a
-            className="text-base font-semibold"
-            href={athlete.roster_link}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View full roster profile...
-          </a>
         )}
       </div>
-    </div>
-  );
-};
 
-const Videos = ({ athlete }: { athlete: AthleteData | null }) => {
-  // Helper function to check if a value is available
-  const achievements = [
-    { title: "DRILLS", time: "4:50", dec: "Rivals - Miami 1/3/2024" },
-    { title: "1 on 1", time: "2:10", dec: "NXGN - Atlanta 03/06/2025" },
-    { title: "1 on 1", time: "5:30", dec: "Atlanta - Miami 1/3/2024" },
-    { title: "1 on 1", time: "5:25", dec: "Atlanta - Miami 1/3/2024" },
-    { title: "1 on 1", time: "2:10", dec: "NXGN - Atlanta 03/06/2025" },
-    { title: "1 on 1", time: "5:30", dec: "Atlanta - Miami 1/3/2024" },
-    { title: "1 on 1", time: "5:25", dec: "Atlanta - Miami 1/3/2024" },
-  ];
-
-  const [checked, setChecked] = useState([false, false, false]);
-  const toggle = (idx: number) => {
-    setChecked((prev) => prev.map((val, i) => (i === idx ? !val : val)));
-  };
-
-  const [checked1, setChecked1] = useState(false); // for first instance
-  const [checked2, setChecked2] = useState(false);
-  const [checked3, setChecked3] = useState(false);
-
-  return (
-    <div className="bio">
-      <iframe
-        width="100%"
-        height="617px"
-        className="border-0"
-        src="https://www.youtube.com/embed/smnuRhNtT2E?si=eIdF-geNCZ6Mwak-"
-      ></iframe>
-
-      <div className="flex items-center overflow-auto">
-        {achievements.map((ach, idx) => (
-          <div key={idx} className="bg-[#f5f5f5] py-2 px-3 mr-1 min-w-[220px]">
-            <h6 className="flex items-center justify-between text-primary !text-[22px] !font-[700] !opacity-100 !mb-2">
-              {ach.title}{" "}
-              <span className="opacity-60 !text-[16px] !font-[400]">
-                {ach.time}
-              </span>
-            </h6>
-            <p className="mb-0">{ach.dec}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-4 mt-2 gap-1 border-solid border-[#e5e5e5] border-width-[1px] p-2 ">
-        <div></div>
-        {["All / Combine", "Drills", "1 on 1"].map((label, idx) => (
-          <div
-            key={idx}
-            className="!text-[24px] !font-[600] flex items-center justify-center"
-          >
-            <div
-              className="cursor-pointer flex items-center justify-center"
-              onClick={() => toggle(idx)}
-            >
-              <div
-                className={`checkbox-ui mr-2${checked[idx] ? " checked" : ""}`}
-              ></div>
-              {label}
+      {config.bioFields.collegeRosterBio && (
+      <>
+      <h4>College Roster Bio</h4>
+      <div className="px-3">
+        {!athlete ? (
+          <>
+            <div className="my-3">
+              <Skeleton.Input
+                active
+                size="small"
+                style={{ width: "100%", height: 60 }}
+              />
             </div>
-          </div>
-        ))}
+            <Skeleton.Input
+              active
+              size="small"
+              style={{ width: 180 }}
+            />
+          </>
+        ) : (
+          <>
+            <p className="my-3">{athlete?.bio || "No bio available."}</p>
+            {athlete?.roster_link && (
+              <a
+                className="text-base font-semibold"
+                href={athlete.roster_link}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                View full roster profile...
+              </a>
+            )}
+          </>
+        )}
       </div>
-
-      <div className="grid grid-cols-4 mt-1 gap-1">
-        <div className="flex items-center border-t-0 border-l-0 border-r-0 border-solid border-[#f5f5f5] border-width-[1px]">
-          <div
-            className="flex cursor-pointer"
-            onClick={() => setChecked1((prev) => !prev)}
-          >
-            <div
-              className={`checkbox-ui mt-[7px] mr-[7px]${
-                checked1 ? " checked" : ""
-              }`}
-            ></div>
-            <h6 className="!text-[16px] !font-[500] !opacity-100 !leading-[30px] !mb-0">
-              <span className="block w-full">Rivals - Miami</span>
-              <span className="block w-full">1/3/2024</span>
-            </h6>
-          </div>
-        </div>
-        <button className="select-btn">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">1</i> Selected
-          </span>
-        </button>
-        <button className="select-btn selected">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">4</i> Selected
-          </span>
-        </button>
-        <button className="select-btn selected">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">1</i> Selected
-          </span>
-        </button>
-      </div>
-      <div className="grid grid-cols-4 mt-1 gap-1">
-        <div className="flex items-center border-t-0 border-l-0 border-r-0 border-solid border-[#f5f5f5] border-width-[1px]">
-          <div
-            className="flex cursor-pointer"
-            onClick={() => setChecked2((prev) => !prev)}
-          >
-            <div
-              className={`checkbox-ui mt-[7px] mr-[7px]${
-                checked2 ? " checked" : ""
-              }`}
-            ></div>
-
-            <h6 className="!text-[16px] !font-[500] !opacity-100 !leading-[30px] !mb-0">
-              <span className="block w-full">Rivals - Miami</span>
-              <span className="block w-full">1/3/2024</span>
-            </h6>
-          </div>
-        </div>
-        <button className="select-btn">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">1</i> Selected
-          </span>
-        </button>
-        <button className="select-btn">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">1</i> Selected
-          </span>
-        </button>
-        <button className="select-btn selected">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">2</i> Selected
-          </span>
-        </button>
-      </div>
-      <div className="grid grid-cols-4 mt-1 gap-1">
-        <div className="flex items-center border-t-0 border-l-0 border-r-0 border-solid border-[#f5f5f5] border-width-[1px]">
-          <div
-            className="flex cursor-pointer"
-            onClick={() => setChecked3((prev) => !prev)}
-          >
-            <div
-              className={`checkbox-ui mt-[7px] mr-[7px]${
-                checked3 ? " checked" : ""
-              }`}
-            ></div>
-            <h6 className="!text-[16px] !font-[500] !opacity-100 !leading-[30px] !mb-0">
-              <span className="block w-full">Rivals - Miami</span>
-              <span className="block w-full">1/3/2024</span>
-            </h6>
-          </div>
-        </div>
-        <button className="select-btn">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">1</i> Selected
-          </span>
-        </button>
-        <button className="select-btn">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">1</i> Selected
-          </span>
-        </button>
-        <button className="select-btn selected">
-          <span className="first">Select</span>
-          <span className="second">
-            <i className="number-ss mr-2">3</i> Selected
-          </span>
-        </button>
-      </div>
-      <div className="flex items-center">
-        <a
-          href="javascript:void(0)"
-          className="text-primary underline mt-3 mb-5 !text-[18px] !font-[500] !opacity-100 !leading-[30px]"
-        >
-          Download Complete Playlist 1.4GB
-        </a>
-      </div>
+      </>
+      )}
     </div>
   );
 };
+
 
 const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
   const [statConfigs, setStatConfigs] = useState<SportStatConfig[]>([]);
@@ -780,7 +1121,7 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
         // Get stat configs for the sport using fetchSportColumnConfig
         let configData;
         try {
-          configData = await fetchSportColumnConfig(sportId, true); // Get all stats, not just those with search_column_display
+          configData = await fetchSportColumnConfig(sportId, true, false); // Get all stats without deduplication for proper category display
         } catch (configError) {
           console.error("Error fetching stat configs:", configError);
           throw configError;
@@ -795,12 +1136,25 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
 
         setStatConfigs(configData);
 
+
+
+
         // Get stats for the athlete
-        const { data: statsData, error: statsError } = await supabase
+        // For track and field, golf, tennis, and swimming sports, don't filter by season
+        // mtaf: 16, wtaf: 17, mglf: 10, wglf: 11, mten: 14, wten: 15, mswm: 18, wswm: 19
+        const isTrackAndField = sportId === 16 || sportId === 17 || sportId === 10 || sportId === 11 || sportId === 14 || sportId === 15 || sportId === 18 || sportId === 19;
+        
+        let query = supabase
           .from("stat")
           .select("*")
-          .eq("athlete_id", athlete.id)
-          .gt("season", 2000)
+          .eq("athlete_id", athlete.id);
+        
+        // Only apply season filter for sports not in the bypass list
+        if (!isTrackAndField) {
+          query = query.gt("season", 2000);
+        }
+        
+        const { data: statsData, error: statsError } = await query
           .order("season", { ascending: false });
 
         if (statsError) {
@@ -826,6 +1180,8 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
             data_type_id: number;
             value: any;
           }) => {
+
+
             const seasonKey = `${stat.season}-${stat.name || "Unknown"}`;
             if (!statsBySeason.has(seasonKey)) {
               statsBySeason.set(seasonKey, {
@@ -840,15 +1196,18 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
 
 
         // Define the constant base columns that will always be first
+        // For track and field, golf, tennis, and swimming sports, hide the season and team columns
         const baseColumns = [
-          {
+          // Only include season column for sports not in the bypass list
+          ...(isTrackAndField ? [] : [{
             title: "Season",
             dataIndex: "season",
             key: "season",
             fixed: "left" as const,
             width: 80,
-          },
-          {
+          }]),
+          // Only include team column for sports not in the bypass list
+          ...(isTrackAndField ? [] : [{
             title: "Team",
             dataIndex: "name",
             key: "name",
@@ -888,16 +1247,16 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
                     <Image
                       src="/kisspng.svg"
                       alt={displayName}
-                      width={38}
-                      height={23}
-                      className="mr-2"
+                      width={24}
+                      height={24}
+                      className="mr-0"
                     />
                   )} */}
                   <span>{displayName}</span>
                 </div>
               );
             },
-          },
+          }]),
         ];
 
         // Filter configData to only include configurations with valid display_order numbers
@@ -914,6 +1273,8 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
 
         // Sort valid configurations by display_order
         const sortedConfigData = validConfigData.sort((a, b) => a.display_order - b.display_order);
+
+
 
         // Process each stat config
         sortedConfigData.forEach((config: SportStatConfig) => {
@@ -944,7 +1305,7 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
               columnWidth = 90;
               break;
             case 98: // GP
-            case 99: // GS
+            case 83: // GS
               columnWidth = 60;
               break;
             case 100: // Goals
@@ -955,6 +1316,8 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
               columnWidth = 80;
               break;
           }
+
+
 
           // Handle calculated columns differently
           if (config.is_calculated && config.formula) {
@@ -986,16 +1349,16 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
         categories.forEach((category: StatCategory) => {
           const categoryData = Array.from(statsBySeason.values());
 
-          // Check if there are any meaningful stats in this category (excluding GP and GS)
+          // Check if there are any meaningful stats in this category
           const hasMeaningfulStats = categoryData.some((seasonData) => {
-            // Check regular stats
+            // Check regular stats (excluding GP and GS for now)
             const hasRegularStats = Object.entries(seasonData).some(([key, value]) => {
               // Skip season, name, GP (98), and GS (83) stats
               if (
                 key === "season" ||
                 key === "name" ||
                 key === "stat_98" ||
-                key === "stat_83"
+                key === "stat_83" 
               ) {
                 return false;
               }
@@ -1017,8 +1380,37 @@ const Stats = ({ athlete }: { athlete: AthleteData | null }) => {
               return false;
             });
 
-            return hasRegularStats || hasCalculatedStats;
+            // Check if GP or GS have data and belong to this category (position-aware)
+            const hasGpGsStats = Object.entries(seasonData).some(([key, value]) => {
+              if (key === "stat_98" || key === "stat_83") {
+                const statTypeId = parseInt(key.replace("stat_", ""));
+                const statConfig = configData.find(
+                  (config: SportStatConfig) =>
+                    config.data_type_id === statTypeId &&
+                    config.stat_category === category.name
+                );
+                
+                // Position-specific logic for GP/GS
+                if (statConfig && value !== null && value !== undefined) {
+                  const isGoalie = athlete?.primary_position === "GK";
+                  
+                  // If player is a goalie, only count GP/GS as meaningful in goalie category
+                  if (isGoalie) {
+                    return category.name === 'goalie';
+                  } else {
+                    // If player is not a goalie, only count GP/GS as meaningful in field category
+                    return category.name === 'field';
+                  }
+                }
+              }
+              return false;
+            });
+
+            return hasRegularStats || hasCalculatedStats || hasGpGsStats;
           });
+
+
+
 
           if (hasMeaningfulStats) {
             category.data = categoryData;
@@ -1199,6 +1591,7 @@ const GameLog = ({ athlete }: { athlete: AthleteData | null }) => {
 };
 
 const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
+
   // Add debug logging
   console.log("Survey Data:", {
     hasSurvey: !!athlete?.generic_survey?.[0],
@@ -1207,18 +1600,14 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
       ? Object.values(athlete.generic_survey[0])
       : [],
     hasAnyValue: athlete?.generic_survey?.[0]
-      ? Object.values(athlete.generic_survey[0]).some(
-          (value) => value !== null && value !== "Not specified" && value !== ""
-        )
+      ? Object.values(athlete.generic_survey[0]).some(isValidValue)
       : false,
   });
 
   // Check if any survey questions are answered
   const hasSurveyData =
     athlete?.generic_survey?.[0] &&
-    Object.values(athlete.generic_survey[0]).some(
-      (value) => value !== null && value !== "Not specified" && value !== ""
-    );
+    Object.values(athlete.generic_survey[0]).some(isValidValue);
 
   if (!hasSurveyData) {
     return null;
@@ -1229,10 +1618,7 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
     athlete?.generic_survey?.[0] || {}
   ).filter(
     ([key, value]) =>
-      key.startsWith("leaving_") &&
-      value !== null &&
-      value !== "Not specified" &&
-      value !== ""
+      key.startsWith("leaving_") && isValidValue(value)
   );
 
   // Extract 'leaving_other' if present
@@ -1295,13 +1681,11 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
 
   // Check if there are any "What they are looking for?" answers
   const hasLookingForData =
-    athlete?.generic_survey?.[0] &&
+    (athlete?.generic_survey?.[0] &&
     Object.entries(athlete.generic_survey[0]).some(
       ([key, value]) =>
         !key.startsWith("leaving_") &&
-        value !== null &&
-        value !== "Not specified" &&
-        value !== "" &&
+        isValidValue(value) &&
         key !== "cell" &&
         key !== "pref_contact" &&
         key !== "help_decision" &&
@@ -1309,7 +1693,13 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
         key !== "major_importance" &&
         key !== "highlight" &&
         key !== "hs_highlight"
-    );
+    )) ||
+    isValidValue(athlete?.when_transfer) ||
+    isValidValue(athlete?.msoc_survey?.[0]?.best_pos);
+
+  // Use shared helper functions
+  const hasActualLookingForContentValue = hasActualLookingForContent(athlete);
+  const hasActualLeavingContentValue = hasActualLeavingContent(athlete);
 
   // If there's no leaving data and no looking for data, return null
   if (leavingEntries.length === 0 && !hasLookingForData) {
@@ -1318,7 +1708,7 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
 
   return (
     <div>
-      {leavingEntries.length > 0 && (
+      {hasActualLeavingContentValue && (
         <div>
           <h4>Why they are leaving?</h4>
           {/* In their own words always at the top */}
@@ -1376,55 +1766,82 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
         </div>
       )}
 
-      {hasLookingForData && (
+      {hasActualLookingForContentValue && (
         <div>
           <h4>What they are looking for?</h4>
-          {athlete?.generic_survey?.[0]?.important && (
+          {isValidValue(athlete?.generic_survey?.[0]?.important) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right text-2xl mr-2"></i>
               <div>
                 <h6>
                   What is important to you as you look for your next school?
                 </h6>
-                <p>{athlete.generic_survey[0].important}</p>
+                <p>{athlete?.generic_survey?.[0]?.important}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.walk_on_t25 && (
+          {isValidValue(athlete?.generic_survey?.[0]?.nil_importance) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>NIL Importance</h6>
+                <p>{athlete?.generic_survey?.[0]?.nil_importance}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.nil_amount) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>NIL expected amount</h6>
+                <p>{athlete?.generic_survey?.[0]?.nil_amount}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.walk_on_t25) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Are you open to walking on at a top program?</h6>
-                <p>{athlete.generic_survey[0].walk_on_t25}</p>
+                <p>{athlete?.generic_survey?.[0]?.walk_on_t25}</p>
               </div>
             </div>
           )}
-          {athlete?.msoc_survey?.[0]?.best_pos && (
+          {isValidValue(athlete?.msoc_survey?.[0]?.best_pos) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Preferred position</h6>
-                <p>{athlete.msoc_survey[0].best_pos}</p>
+                <p>{athlete?.msoc_survey?.[0]?.best_pos}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.ideal_division && (
+          {isValidValue(athlete?.when_transfer) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>When are you looking to transfer?</h6>
+                <p>{athlete?.when_transfer}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.ideal_division) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Ideal division</h6>
-                <p>{athlete.generic_survey[0].ideal_division}</p>
+                <p>{athlete?.generic_survey?.[0]?.ideal_division}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.full_scholarship_only && (
+          {isValidValue(athlete?.generic_survey?.[0]?.full_scholarship_only) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Full scholarship only</h6>
                 <p>
                   {String(
-                    athlete.generic_survey[0].full_scholarship_only
+                    athlete?.generic_survey?.[0]?.full_scholarship_only
                   ).toLowerCase() === "true"
                     ? "Yes"
                     : "No"}
@@ -1432,183 +1849,237 @@ const Survey = ({ athlete }: { athlete: AthleteData | null }) => {
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.distance_from_home && (
+          {isValidValue(athlete?.generic_survey?.[0]?.distance_from_home) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Distance from home</h6>
-                <p>{athlete.generic_survey[0].distance_from_home}</p>
+                <p>{athlete?.generic_survey?.[0]?.distance_from_home}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.ideal_campus_size && (
+          {isValidValue(athlete?.generic_survey?.[0]?.ideal_campus_size) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Ideal campus size</h6>
-                <p>{athlete.generic_survey[0].ideal_campus_size}</p>
+                <p>{athlete?.generic_survey?.[0]?.ideal_campus_size}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.campus_location_type && (
+          {isValidValue(athlete?.generic_survey?.[0]?.campus_location_type) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Campus location type</h6>
-                <p>{athlete.generic_survey[0].campus_location_type}</p>
+                <p>{athlete?.generic_survey?.[0]?.campus_location_type}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.cost_vs_acad_rep && (
+          {isValidValue(athlete?.generic_survey?.[0]?.cost_vs_acad_rep) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Cost vs academic reputation</h6>
-                <p>{athlete.generic_survey[0].cost_vs_acad_rep}</p>
+                <p>{athlete?.generic_survey?.[0]?.cost_vs_acad_rep}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.winning_vs_location && (
+          {isValidValue(athlete?.generic_survey?.[0]?.winning_vs_location) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Winning vs location</h6>
-                <p>{athlete.generic_survey[0].winning_vs_location}</p>
+                <p>{athlete?.generic_survey?.[0]?.winning_vs_location}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.playing_vs_championship && (
+          {isValidValue(athlete?.generic_survey?.[0]?.playing_vs_championship) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Playing time vs championship</h6>
-                <p>{athlete.generic_survey[0].playing_vs_championship}</p>
+                <p>{athlete?.generic_survey?.[0]?.playing_vs_championship}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.cost_vs_campus_type && (
+          {isValidValue(athlete?.generic_survey?.[0]?.cost_vs_campus_type) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Cost vs campus type</h6>
-                <p>{athlete.generic_survey[0].cost_vs_campus_type}</p>
+                <p>{athlete?.generic_survey?.[0]?.cost_vs_campus_type}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.playing_vs_size && (
+          {isValidValue(athlete?.generic_survey?.[0]?.playing_vs_size) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Playing time vs size</h6>
-                <p>{athlete.generic_survey[0].playing_vs_size}</p>
+                <p>{athlete?.generic_survey?.[0]?.playing_vs_size}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.winning_vs_academics && (
+          {isValidValue(athlete?.generic_survey?.[0]?.winning_vs_academics) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Winning vs academics</h6>
-                <p>{athlete.generic_survey[0].winning_vs_academics}</p>
+                <p>{athlete?.generic_survey?.[0]?.winning_vs_academics}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.championship_vs_location && (
+          {isValidValue(athlete?.generic_survey?.[0]?.facilities_vs_championship) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>Facilities vs championship</h6>
+                <p>{athlete?.generic_survey?.[0]?.facilities_vs_championship}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.nfl_vs_facilities) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>Produce NFL players vs facilities</h6>
+                <p>{athlete?.generic_survey?.[0]?.nfl_vs_facilities}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.championship_vs_level) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>Championship vs highest level</h6>
+                <p>{athlete?.generic_survey?.[0]?.championship_vs_level}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.recent_vs_winning) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>Recent winning vs winning tradition</h6>
+                <p>{athlete?.generic_survey?.[0]?.recent_vs_winning}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.championship_vs_location) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Championship vs location</h6>
-                <p>{athlete.generic_survey[0].championship_vs_location}</p>
+                <p>{athlete?.generic_survey?.[0]?.championship_vs_location}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.party_vs_academics && (
+          {isValidValue(athlete?.generic_survey?.[0]?.party_vs_academics) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Party vs academics</h6>
-                <p>{athlete.generic_survey[0].party_vs_academics}</p>
+                <p>{athlete?.generic_survey?.[0]?.party_vs_academics}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.party_vs_winning && (
+          {isValidValue(athlete?.generic_survey?.[0]?.party_vs_winning) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Party vs winning</h6>
-                <p>{athlete.generic_survey[0].party_vs_winning}</p>
+                <p>{athlete?.generic_survey?.[0]?.party_vs_winning}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.type_of_staff_preferred && (
+          {isValidValue(athlete?.generic_survey?.[0]?.type_of_staff_preferred) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Type of staff discipline preferred</h6>
-                <p>{athlete.generic_survey[0].type_of_staff_preferred}</p>
+                <p>{athlete?.generic_survey?.[0]?.type_of_staff_preferred}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.male_to_female && (
+          {isValidValue(athlete?.generic_survey?.[0]?.male_to_female) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Male to female</h6>
-                <p>{athlete.generic_survey[0].male_to_female}</p>
+                <p>{athlete?.generic_survey?.[0]?.male_to_female}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.hbcu && (
+          {isValidValue(athlete?.generic_survey?.[0]?.hbcu) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>HBCU</h6>
-                <p>{athlete.generic_survey[0].hbcu}</p>
+                <p>{athlete?.generic_survey?.[0]?.hbcu}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.faith_based_name && (
+          {isValidValue(athlete?.generic_survey?.[0]?.military_school_yesno) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>Would Consider Military School</h6>
+                <p>{athlete?.generic_survey?.[0]?.military_school_yesno}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.pell_eligible) && (
+            <div className="flex items-start survey mb-5">
+              <i className="icon-arrow-right mr-2"></i>
+              <div>
+                <h6>Pell eligible?</h6>
+                <p>{athlete?.generic_survey?.[0]?.pell_eligible}</p>
+              </div>
+            </div>
+          )}
+          {isValidValue(athlete?.generic_survey?.[0]?.faith_based_name) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Faith-based names</h6>
-                <p>{athlete.generic_survey[0].faith_based_name}</p>
+                <p>{athlete?.generic_survey?.[0]?.faith_based_name}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.pref_d1_name && (
+          {isValidValue(athlete?.generic_survey?.[0]?.pref_d1_name) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Preferred D1 name</h6>
-                <p>{athlete.generic_survey[0].pref_d1_name}</p>
+                <p>{athlete?.generic_survey?.[0]?.pref_d1_name}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.pref_d2_name && (
+          {isValidValue(athlete?.generic_survey?.[0]?.pref_d2_name) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Preferred D2 name</h6>
-                <p>{athlete.generic_survey[0].pref_d2_name}</p>
+                <p>{athlete?.generic_survey?.[0]?.pref_d2_name}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.pref_d3_name && (
+          {isValidValue(athlete?.generic_survey?.[0]?.pref_d3_name) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Preferred D3 name</h6>
-                <p>{athlete.generic_survey[0].pref_d3_name}</p>
+                <p>{athlete?.generic_survey?.[0]?.pref_d3_name}</p>
               </div>
             </div>
           )}
-          {athlete?.generic_survey?.[0]?.pref_naia_name && (
+          {isValidValue(athlete?.generic_survey?.[0]?.pref_naia_name) && (
             <div className="flex items-start survey mb-5">
               <i className="icon-arrow-right mr-2"></i>
               <div>
                 <h6>Preferred NAIA name</h6>
-                <p>{athlete.generic_survey[0].pref_naia_name}</p>
+                <p>{athlete?.generic_survey?.[0]?.pref_naia_name}</p>
               </div>
             </div>
           )}
@@ -1909,7 +2380,7 @@ const Notes = ({ athlete }: { athlete: AthleteData | null }) => {
   );
 };
 
-const items = (athlete: AthleteData | null): TabsProps["items"] => {
+const items = (athlete: AthleteData | null, config: DataSourceConfig, dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null): TabsProps["items"] => {
   // Add more detailed logging for survey data
   const surveyData = athlete?.generic_survey?.[0];
   const hasSurveyData = !!surveyData;
@@ -1926,81 +2397,128 @@ const items = (athlete: AthleteData | null): TabsProps["items"] => {
 
       // Handle string values
       if (typeof value === "string") {
-        return (
-          value.trim() !== "" &&
-          value !== "Not specified" &&
-          value !== "null" &&
-          value !== "undefined"
-        );
+        const stringValue = value.trim();
+        const invalidValues = [
+          "", 
+          "not specified", 
+          "not available", 
+          "undefined", 
+          "null", 
+          "n/a", 
+          "na"
+        ];
+        return !invalidValues.includes(stringValue.toLowerCase());
       }
 
       // Handle other values
       return value !== null && value !== undefined;
     });
 
-  // More precise disabled logic
-  const surveyDisabled = !hasSurveyData || !hasValidSurveyResponses;
+  // More precise disabled logic - disable if no survey data OR no actual content for either section
+  const surveyDisabled = !hasSurveyData || !hasValidSurveyResponses || (!hasActualLeavingContent(athlete) && !hasActualLookingForContent(athlete));
 
   // Comment out or remove the Survey Tab State logging
   // console.log('Survey Tab State:', { hasSurveyData, hasValidSurveyResponses, disabled, surveyDataKeys, surveyDataValues });
 
-  return [
-    {
+  const tabs = [];
+
+  if (config.tabs.bio) {
+    tabs.push({
       key: "1",
       label: "Bio",
-      children: <Bio athlete={athlete} />,
-    },
-    // {
-    //   key: "2",
-    //   label: "Videos",
-    //   children: <Videos athlete={athlete} />,
-    // },
-    {
+      children: <Bio athlete={athlete} config={config} />,
+    });
+  }
+
+  if (config.tabs.videos) {
+    tabs.push({
+      key: "2",
+      label: "Videos",
+      children: <VideoComponent athlete={athlete} />,
+    });
+  }
+
+  if (config.tabs.stats) {
+    tabs.push({
       key: "3",
       label: "Stats",
       children: <Stats athlete={athlete} />,
-      // disabled: !athlete?.stats_msoc_players?.length && !athlete?.stats_msoc_goalies?.length,
-      // className: (!athlete?.stats_msoc_players?.length && !athlete?.stats_msoc_goalies?.length) ? 'disabled-tab' : '',
-    },
-    {
+    });
+  }
+
+  // For JUCO data source, add Notes tab right after Stats
+  if (dataSource === 'juco' && config.tabs.notes) {
+    tabs.push({
+      key: "6",
+      label: "Notes",
+      children: <Notes athlete={athlete} />,
+    });
+  }
+
+  if (config.tabs.gameLog) {
+    tabs.push({
       key: "4",
       label: "Game Log",
       children: <GameLog athlete={athlete} />,
       disabled: !athlete?.game_logs?.length,
       className: !athlete?.game_logs?.length ? "disabled-tab" : "",
-    },
-    {
+    });
+  }
+
+  if (config.tabs.survey) {
+    tabs.push({
       key: "5",
       label: "Survey",
       children: <Survey athlete={athlete} />,
       disabled: surveyDisabled,
       className: surveyDisabled ? "disabled-tab" : "",
-    },
-    {
+    });
+  }
+
+  // For non-JUCO data sources, add Notes tab at the end
+  if (dataSource !== 'juco' && config.tabs.notes) {
+    tabs.push({
       key: "6",
       label: "Notes",
       children: <Notes athlete={athlete} />,
-    },
-  ];
+    });
+  }
+
+  return tabs;
 };
 
 export default function PlayerInformation({
   athlete,
+  dataSource = null,
 }: {
   athlete: AthleteData | null;
+  dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null;
 }) {
+  // Get the appropriate configuration for the data source
+  const config = dataSource && DATA_SOURCE_CONFIGS[dataSource] ? DATA_SOURCE_CONFIGS[dataSource] : DEFAULT_CONFIG;
   return (
     <>
       <style jsx global>{`
         .ant-tabs-tab-disabled .ant-tabs-tab-btn {
           color: #999 !important;
         }
+        .player-information.juco-tabs .ant-tabs-nav {
+          width: auto !important;
+        }
+        .player-information.juco-tabs .ant-tabs-nav-list {
+          width: auto !important;
+          flex: none !important;
+        }
+        .player-information.juco-tabs .ant-tabs-tab {
+          flex: none !important;
+          width: auto !important;
+        }
       `}</style>
       <Tabs
         defaultActiveKey="1"
-        items={items(athlete)}
+        items={items(athlete, config, dataSource)}
         onChange={onChange}
-        className="player-information"
+        className={`player-information ${dataSource === 'juco' ? 'juco-tabs' : ''}`}
       />
     </>
   );

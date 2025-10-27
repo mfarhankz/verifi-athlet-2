@@ -11,12 +11,13 @@ function AthleteProfileWrapper() {
   const params = useSearchParams();
   const athleteId = params?.get("id");
   const mainTpPageId = params?.get("main_tp_page_id");
+  const dataSource = params?.get("dataSource") as 'transfer_portal' | 'all_athletes' | 'juco' | null;
 
   // If main_tp_page_id is provided, use it; otherwise use the athlete_id
   if (mainTpPageId) {
-    return <AthleteProfileContent mainTpPageId={mainTpPageId} />;
+    return <AthleteProfileContent mainTpPageId={mainTpPageId} dataSource={dataSource} />;
   } else if (athleteId) {
-    return <AthleteProfileContent athleteId={athleteId} />;
+    return <AthleteProfileContent athleteId={athleteId} dataSource={dataSource} />;
   } else {
     return <div>No athlete ID or main transfer portal page ID provided</div>;
   }

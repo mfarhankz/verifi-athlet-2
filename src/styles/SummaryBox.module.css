@@ -74,6 +74,12 @@
   position: relative;
 }
 
+.summaryHeader .caret {
+  flex: 0 0 auto;
+  width: 20px;
+  text-align: center;
+}
+
 .summaryRow {
   display: flex;
   justify-content: space-between;
@@ -90,9 +96,20 @@
 .position,
 .actual,
 .target,
-.diff {
+.diff,
+.caret {
   flex: 1;
   padding: 1px 2px;
+}
+
+.diff {
+  text-align: center;
+}
+
+.caret {
+  flex: 0 0 auto;
+  width: 20px;
+  text-align: center;
 }
 
 .position {
@@ -259,8 +276,7 @@
 .diffContainer {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 4px;
+  justify-content: center;
   width: 100%;
 }
 
@@ -273,10 +289,14 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  margin-left: 4px;
   font-size: 0.8em;
   color: #666;
   transition: all 0.2s ease;
+}
+
+/* Position summary specific caret styling */
+.positionSummary .expandCollapseButtonInline {
+  margin-left: -5px;
 }
 
 .expandCollapseButtonInline:hover {

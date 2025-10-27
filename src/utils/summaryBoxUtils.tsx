@@ -392,19 +392,21 @@ export const renderPositionSummary = (
           <span className={`${summaryStyles.diff}`}>
             <div className={`${summaryStyles.diffContainer}`}>
               <span className={`${compColor}`}>{`${diffPrefix}${formatCompensation(absDiff)}`}</span>
-              {hasAdditionalFields && toggleSubBudgets && (
-                <button 
-                  className={summaryStyles.expandCollapseButtonInline}
-                  onClick={toggleSubBudgets}
-                  aria-label={showSubBudgets ? "Collapse budget details" : "Expand budget details"}
-                >
-                  {showSubBudgets ? <FaChevronUp /> : <FaChevronDown />}
-                </button>
-              )}
             </div>
             <div className={`${summaryStyles.percentage} ${compColor}`}>
               {calculatePercentage(absDiff, targetTotal)}%
             </div>
+          </span>
+          <span className={summaryStyles.caret}>
+            {hasAdditionalFields && toggleSubBudgets && (
+              <button 
+                className={summaryStyles.expandCollapseButtonInline}
+                onClick={toggleSubBudgets}
+                aria-label={showSubBudgets ? "Collapse budget details" : "Expand budget details"}
+              >
+                {showSubBudgets ? <FaChevronUp /> : <FaChevronDown />}
+              </button>
+            )}
           </span>
         </div>
       );
@@ -418,6 +420,7 @@ export const renderPositionSummary = (
             <span className={summaryStyles.actual}>Actual</span>
             <span className={summaryStyles.target}>Budget</span>
             <span className={summaryStyles.diff}>Diff</span>
+            <span className={summaryStyles.caret}></span>
           </div>
           <SummaryRow 
             label="Players" 
