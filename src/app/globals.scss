@@ -217,19 +217,19 @@ body,
 
         .player-img {
           width: 100%;
-        
+
           ul {
             margin: 0;
             padding: 0;
             list-style: none;
-            
+
             li {
               text-align: left;
               display: flex;
               align-items: center;
               position: relative;
               font-size: 16px;
-              padding:10px;
+              padding: 10px;
               line-height: 17px;
               &:last-child {
                 border-bottom: none;
@@ -250,7 +250,6 @@ body,
                   display: none;
                 }
               }
-             
             }
           }
         }
@@ -258,19 +257,19 @@ body,
         .link-list {
           margin: 0;
           margin-bottom: 20px;
-            padding: 0;
-            list-style: none;
-            
-            li {
-              text-align: left;
-              display: flex;
-              align-items: center;
-              position: relative;
-              font-size: 14px;
-              font-weight: 400;
-              padding:5px;
-              line-height: 17px;
-            }
+          padding: 0;
+          list-style: none;
+
+          li {
+            text-align: left;
+            display: flex;
+            align-items: center;
+            position: relative;
+            font-size: 14px;
+            font-weight: 400;
+            padding: 5px;
+            line-height: 17px;
+          }
         }
 
         .players-list {
@@ -322,7 +321,7 @@ body,
                   }
                 }
               }
-             
+
               .ant-typography {
                 margin: 0;
                 display: flex;
@@ -374,18 +373,17 @@ body,
             padding: 10px 14px;
             justify-content: center;
             align-items: center;
-            border: 1px solid rgba(28, 29, 77, 0.20);
-            background: #FFF;
-            color: #1C1D4D !important;
+            border: 1px solid rgba(28, 29, 77, 0.2);
+            background: #fff;
+            color: #1c1d4d !important;
             font-size: 14px;
             font-style: italic;
             font-weight: 500;
             line-height: normal;
             &:hover {
-              background: rgba(28, 29, 77, 0.20);
+              background: rgba(28, 29, 77, 0.2);
             }
           }
-          
 
           h1 {
             font-style: italic;
@@ -435,7 +433,7 @@ body,
               display: flex;
               align-items: center;
               font-style: normal;
-              color: #126DB8;
+              color: #126db8;
               margin-bottom: 0;
               img {
                 margin-right: 5px;
@@ -443,8 +441,6 @@ body,
             }
           }
         }
-
-        
 
         .career-info {
           h6 {
@@ -499,13 +495,17 @@ body,
         width: 100%;
         display: block;
         margin-bottom: 5px;
-        background: linear-gradient(0deg, rgb(255 151 130 / 25%) 0%, rgb(255 151 130 / 25%) 100%);
-        color: #1C1D4D;
+        background: linear-gradient(
+          0deg,
+          rgb(255 151 130 / 25%) 0%,
+          rgb(255 151 130 / 25%) 100%
+        );
+        color: #1c1d4d;
         font-size: 22px;
         font-style: italic;
         font-weight: 500;
-        line-height: normal;    
-        display: flex;  
+        line-height: normal;
+        display: flex;
         align-items: center;
         justify-content: center;
         i {
@@ -517,8 +517,8 @@ body,
           display: flex;
           align-items: center;
           justify-content: center;
-          background: #FFF;
-          border: 1px solid rgba(28, 29, 77, 0.20);
+          background: #fff;
+          border: 1px solid rgba(28, 29, 77, 0.2);
           font-size: 16px;
           font-style: italic;
           font-weight: 500;
@@ -535,7 +535,11 @@ body,
         align-items: center;
         justify-content: space-between;
         margin-bottom: 10px;
-        background: linear-gradient(270deg, rgba(212, 249, 255, 0.5) 0%, rgba(238, 224, 255, 0.5) 100%);
+        background: linear-gradient(
+          270deg,
+          rgba(212, 249, 255, 0.5) 0%,
+          rgba(238, 224, 255, 0.5) 100%
+        );
         span {
           font-size: 16px;
           font-style: normal;
@@ -643,6 +647,39 @@ body,
 
 .icon-svg-green-tick {
   background: url(/svgicons/green-tick.svg) no-repeat center center;
+}
+
+.wave-badge {
+  background: url(/svgicons/wave-triangle.svg) no-repeat center center #2bb650;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  vertical-align: middle;
+  border: 1px solid rgba(28, 29, 77, 0.2);
+}
+
+.agreement-badge {
+  background: url(/svgicons/agreement-02.svg) no-repeat center center #126db8;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  vertical-align: middle;
+  border: 1px solid rgba(28, 29, 77, 0.2);
+}
+
+.star-badge {
+  background: url(/svgicons/start.svg) no-repeat 7px center #ff7525;
+  width: 70px;
+  height: 42px;
+  display: inline-flex;
+  vertical-align: middle;
+  border: 1px solid rgba(28, 29, 77, 0.2);
+  padding: 12px 0 0 35px;
+  color: #fff;
+  font-size: 14px;
+  font-style: italic;
+  font-weight: 500;
+  line-height: normal;
 }
 
 .ant-card-body {

@@ -1,14 +1,17 @@
 "use client";
 
-
 import type { TabsProps } from "antd";
-import { Flex, Table, Tabs } from "antd";
+import { Flex, Table, Tabs, Select } from "antd";
 import Image from "next/image";
 import type { TableColumnsType } from "antd";
 import CommentBox from "./CommentBox";
 
 const onChange = (key: string) => {
   console.log(key);
+};
+
+const handleChange = (value: string) => {
+  console.log(`selected ${value}`);
 };
 
 interface DataType {
@@ -510,42 +513,50 @@ const Stats = () => (
       <h4>
         Passing <span>89%</span>
       </h4>
-      <Table dataSource={dataSource} columns={columns} pagination={false} className="with-footer" />
+      <Table
+        dataSource={dataSource}
+        columns={columns}
+        pagination={false}
+        className="with-footer"
+      />
     </div>
     <div className="mb-10">
       <h4>
         Defense <span>49%</span>
       </h4>
-      <Table dataSource={dataSource} columns={columns} pagination={false} className="with-footer" />
+      <Table
+        dataSource={dataSource}
+        columns={columns}
+        pagination={false}
+        className="with-footer"
+      />
     </div>
     <div>
       <h4>
         Receiving <span>69%</span>
       </h4>
-      <Table dataSource={dataSource} columns={columns} pagination={false} className="with-footer" />
+      <Table
+        dataSource={dataSource}
+        columns={columns}
+        pagination={false}
+        className="with-footer"
+      />
     </div>
   </div>
 );
 const GameLog = () => (
   <div>
     <div className="mb-10">
-      <h4>Game Log</h4>
-      <div className="flex items-center my-3">
-        <Image
-          className="mr-1"
-          src={"/nfl.svg"}
-          alt={""}
-          width={29}
-          height={40}
-        />
-        <h5>NFL 2024 Fall Season</h5>
-      </div>
+      <h4>Raw Measureables</h4>
+      <Select
+        defaultValue="WR (0)"
+        onChange={handleChange}
+        options={[
+          { value: "jack", label: "Jack" },
+          { value: "lucy", label: "Lucy" },
+        ]}
+      />
       <Table dataSource={gameLog} columns={gameLogColumns} pagination={false} />{" "}
-    </div>
-    <div>
-      <h4>Defence</h4>
-      {/* <Table dataSource={gameLog} columns={gameLogColumns} pagination={false} /> */}
-      <Table dataSource={gameLog} columns={gameLogColumns} pagination={false} />
     </div>
   </div>
 );
@@ -553,80 +564,107 @@ const GameLog = () => (
 const Survey = () => (
   <div>
     <div>
-    <h4>Why they are leaving?</h4>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right text-2xl mr-2"></i>
-      <div>
-        <h6>In their own words</h6>
-        <p>My school fontbonne University is closing at the end of summer 2025 so I am looking to play my senior year 5th year</p>
+      <h4>Schools Athlete is Interested IN</h4>
+      <div className="text-[#1C1D4D] text-sm">
+        <div className="flex items-start space-x-4">
+          <Image src="/bull-img.png" alt="abc" width={79} height={73} />
+          <div>
+            <h2 className="font-semibold italic text-xl">
+              Bulls College New York
+            </h2>
+            <p className="italic">Walk ON</p>
+            <p className="m-0">Yes</p>
+          </div>
+        </div>
+
+        <p className="mt-4 text-xs">Showing 1-1 of 1</p>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Desire a higher level</h6>
-        <p>Major Reason</p>
-      </div>
-    </div>
     </div>
     <div>
-    <h4>What they are looking for?</h4>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right text-2xl mr-2"></i>
-      <div>
-        <h6>In their own words</h6>
-        <p>Strong academic program and student academic support student life</p>
+      <h4>High School Coach Data</h4>
+
+      <div className="mb-4">
+        <p className=" mb-6">
+          The data below has been provided by the high school coach and has not
+          been confirmed by Verified Athletics
+        </p>
+
+        <div className="grid grid-cols-4  font-semibold italic">
+          <div>Athletic Info</div>
+          <div>Coach Weight</div>
+          <div>Coach Height</div>
+          <div>Coach GPA</div>
+        </div>
+
+        <div className="grid grid-cols-4  mt-1 font-normal not-italic">
+          <div>some info</div>
+          <div>140lbs</div>
+          <div>6.1”</div>
+          <div>4.3</div>
+        </div>
       </div>
     </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Are you open to walking on at a top program?</h6>
-        <p>I would consider it for the right school</p>
+    <div>
+      <h4>Campus Information (Section F)</h4>
+      <div className="flex items-center survey mb-5">
+        <i className="icon-arrow-right text-2xl mr-2"></i>
+        <div>
+          <h6>
+            Do you prefer your campus location to have all four seasons or be
+            warm year round?
+          </h6>
+          <p className="m-0">No Preference</p>
+        </div>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Preferred position</h6>
-        <p>CenterBack</p>
+      <div className="flex items-center survey mb-5">
+        <i className="icon-arrow-right mr-2"></i>
+        <div>
+          <h6>
+            What is the ideal location for you to go to school? (At least enter
+            a state or enter None)
+          </h6>
+          <p className="m-0">New York, </p>
+        </div>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Ideal division</h6>
-        <p>D1 High Major, D1 Mid Major, D1 Low Major, D2/NAIA, D3</p>
+      <div className="flex items-center survey mb-5">
+        <i className="icon-arrow-right mr-2"></i>
+        <div>
+          <h6>
+            Within what distance do you want to be from your ideal location?
+          </h6>
+          <p className="m-0">California </p>
+        </div>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Full scholarship only</h6>
-        <p>No</p>
+      <div className="flex items-center survey mb-5">
+        <i className="icon-arrow-right mr-2"></i>
+        <div>
+          <h6>
+            What is your ideal campus size (# indicates full-time undergrads)? 
+          </h6>
+          <p className="m-0">Yes full-time </p>
+        </div>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Cost vs academic reputation</h6>
-        <p>Cost and academic reputation are equally important</p>
+      <div className="flex items-center survey mb-5">
+        <i className="icon-arrow-right mr-2"></i>
+        <div>
+          <h6>
+            Do you want to include military schools? (Army, Navy, Air Force,
+            Virginia Military Institute, Coast Guard Academy, Merchant Marine
+            Academy)
+          </h6>
+          <p className="m-0">No</p>
+        </div>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Winning vs location</h6>
-        <p>Winning tradition and location are equally important</p>
+      <div className="flex items-center survey mb-5">
+        <i className="icon-arrow-right mr-2"></i>
+        <div>
+          <h6>
+            Do you prefer to attend an HBCU (Historically Black College and
+            University)?
+          </h6>
+          <p className="m-0">LA University </p>
+        </div>
       </div>
-    </div>
-    <div className="flex items-center survey mb-5">
-      <i className="icon-arrow-right mr-2"></i>
-      <div>
-        <h6>Playing time vs championship</h6>
-        <p>Personal impact and the team competing for the national championship are equally important</p>
-      </div>
-    </div>
     </div>
   </div>
 );

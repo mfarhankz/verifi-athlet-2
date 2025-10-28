@@ -1,6 +1,6 @@
 "use client";
 
-import { Flex, Modal, Skeleton } from "antd";
+import { Button, Dropdown, Flex, MenuProps, Modal, Skeleton } from "antd";
 import React, { useState } from "react";
 import ImageWithAverage from "../_components/ImageWithAverage";
 import PlayerInformationOld from "../_components/PlayerInformationOld";
@@ -12,6 +12,26 @@ export default function NewPages() {
   const handleClosePlayerModal = () => {
     setIsPlayerModalVisible(false);
   };
+  const items: MenuProps["items"] = [
+    {
+      label: <a href="#">Follow Athlete Offers</a>,
+      key: "0",
+    },
+    {
+      type: "divider",
+    },
+    {
+      label: <a href="#">Front Rush</a>,
+      key: "1",
+    },
+    {
+      type: "divider",
+    },
+    {
+      label: <a href="#">+ Recruiting Board</a>,
+      key: "3",
+    },
+  ];
   return (
     <div>
       <Modal
@@ -138,9 +158,15 @@ export default function NewPages() {
                       <div className="flex items-center justify-between">
                         <h1>Jason Jonathon</h1>
                         <div className="ml-2 gap-1 flex">
-                          <button className="icon-edit-2 flex text-lg"></button>
-                          <button className="icon-edit-2 flex text-lg"></button>
-                          <button className="icon-edit-2 flex text-lg"></button>
+                          <div className="star-badge">3.7</div>
+                          <div className="agreement-badge"></div>
+                          <div className="wave-badge"></div>
+                          <button className="icon-edit-2 flex align-center justify-center text-lg bg-white border border-solid border-[#d2d2db] w-[42px]"></button>
+                          <Dropdown menu={{ items }} trigger={["click"]}>
+                            <Button className="select-dropdown !border-[#d2d2db] !shadow-none w-[42px]">
+                              <i className="icon-menu-1"></i>
+                            </Button>
+                          </Dropdown>
                         </div>
                       </div>
                       <div className="arrow-bg relative flex items-center justify-between">
@@ -256,12 +282,8 @@ export default function NewPages() {
 
                     <div className="w-[150px] mr-5 flex items-center justify-center card border border-black p-5">
                       <div className="">
-                        <h5 className="m-0 italic ">
-                          Current Projection
-                        </h5>
-                        <h4 className="italic text-[22px]">
-                          D3 - Top Half
-                        </h4>
+                        <h5 className="m-0 italic ">Current Projection</h5>
+                        <h4 className="italic text-[22px]">D3 - Top Half</h4>
                         <div className="">
                           <ProgressBar
                             value={85}
