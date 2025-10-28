@@ -567,17 +567,20 @@ const Survey = () => (
       <h4>Schools Athlete is Interested IN</h4>
       <div className="text-[#1C1D4D] text-sm">
         <div className="flex items-start space-x-4">
+          <div className="card">
           <Image src="/bull-img.png" alt="abc" width={79} height={73} />
+
+          </div>
           <div>
-            <h2 className="font-semibold italic text-xl">
+            <h5 className="mb-0 mt-1 !text-[22px] !font-[500]">
               Bulls College New York
-            </h2>
-            <p className="italic">Walk ON</p>
+            </h5>
+            <p className="italic font-[500] mt-2 mb-2">Walk ON</p>
             <p className="m-0">Yes</p>
           </div>
         </div>
 
-        <p className="mt-4 text-xs">Showing 1-1 of 1</p>
+        <p className="mt-6 text-xs">Showing 1-1 of 1</p>
       </div>
     </div>
     <div>
