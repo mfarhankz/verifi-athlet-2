@@ -660,8 +660,9 @@ export default function AthleteProfileContent({
                         <div className="">
                           <img src="/x-logo.svg" alt="X Feed" height={50} />
                         </div>
-                        <span>{athlete?.first_name} {athlete?.last_name}</span>
-                        <h1>@{athlete?.twitter}</h1>
+                        <span className="gray">Follow on X</span>
+                        <h3>{athlete?.first_name} {athlete?.last_name}</h3>
+                        <h6>@{athlete?.twitter}</h6>
                         <div className="white-skew-btn">
                           <a 
                             href={`https://x.com/${athlete.twitter}`} 
