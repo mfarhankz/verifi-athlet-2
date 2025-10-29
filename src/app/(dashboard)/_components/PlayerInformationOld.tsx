@@ -5,6 +5,7 @@ import { Flex, Table, Tabs, Select } from "antd";
 import Image from "next/image";
 import type { TableColumnsType } from "antd";
 import CommentBox from "./CommentBox";
+import ProgressBar from "@/components/ProgressBar";
 
 const onChange = (key: string) => {
   console.log(key);
@@ -808,38 +809,335 @@ const Bio = () => (
 
 const Matrics = () => (
   <div>
-    <div className="mb-10">
-      <h4>
-        Passing <span>89%</span>
-      </h4>
-      <Table
-        dataSource={dataSource}
-        columns={columns}
-        pagination={false}
-        className="with-footer"
-      />
-    </div>
-    <div className="mb-10">
-      <h4>
-        Defense <span>49%</span>
-      </h4>
-      <Table
-        dataSource={dataSource}
-        columns={columns}
-        pagination={false}
-        className="with-footer"
-      />
-    </div>
-    <div>
-      <h4>
-        Receiving <span>69%</span>
-      </h4>
-      <Table
-        dataSource={dataSource}
-        columns={columns}
-        pagination={false}
-        className="with-footer"
-      />
+    <h4>Matrics</h4>
+    <div className="container mx-auto px-4">
+      <div className="flex flex-wrap -mx-4 gap-1">
+        <div className="w-full md:w-1/2 card px-4">
+          <div className="rounded-md ">
+            <div className="flex-1 px-2">
+              <h4 className="mb-3 !bg-none italic">Athletic Projection</h4>
+
+              <div className=" mr-5 flex items-center justify-center  border-black p-5">
+                <div className="">
+                  <h5 className="m-0 italic text-center">Current Projection</h5>
+                  <h3 className="italic text-center ">D3 - Top Half</h3>
+                  <ProgressBar
+                    value={83}
+                    height={55}
+                    color="#2BB650"
+                    label=""
+                    labelSize="14"
+                    labelWeight={400}
+                    labelWidth={120}
+                  />
+                  <p className="mt-4">
+                    The above current projection is calculated based on the
+                    following statistics
+                  </p>
+                </div>
+              </div>
+              <div className=" flex  justify-center gap-4 bg-[#f3f8fb]">
+                <div className="flex-1 px-2">
+                  <h5 className=" mt-2 italic">Athletic Projection</h5>
+                  <div className="flex flex-col gap-1">
+                    <ProgressBar
+                      value={85}
+                      height={30}
+                      color="#126DB8"
+                      label="100 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                    <ProgressBar
+                      value={50}
+                      height={30}
+                      color="#126DB8"
+                      label="90 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                    <ProgressBar
+                      value={67}
+                      height={30}
+                      color="#126DB8"
+                      label="50 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                    <ProgressBar
+                      value={54}
+                      height={30}
+                      color="#126DB8"
+                      label="30 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                    <ProgressBar
+                      value={96}
+                      height={30}
+                      color="#126DB8"
+                      label="10 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                  </div>
+                </div>
+
+                <div className=" mr-5  items-center justify-center  border border-black p-5">
+                  <div className="card">
+                    <h5 className="m-0 italic text-center">10.09</h5>
+                  </div>
+                  <div className="mt-1 card">
+                    <h5 className="m-0 italic text-center">6.2</h5>
+                  </div>
+                  <div className="mt-1 card">
+                    <h5 className="m-0 italic text-center">7.4</h5>
+                  </div>
+                  <div className="mt-1 card">
+                    <h5 className="m-0 italic text-center">4.4</h5>
+                  </div>
+                  <div className="mt-1 card">
+                    <h5 className="m-0 italic text-center">9.2</h5>
+                  </div>
+                </div>
+              </div>
+              <div className=" flex mt-5 justify-center gap-4 bg-[#fff8f4]">
+                <div className="flex-1 px-2">
+                  <h5 className=" mt-2 italic">Athletic Projection</h5>
+                  <div className="flex flex-col gap-1">
+                    <ProgressBar
+                      value={89}
+                      height={30}
+                      color="#FF7525"
+                      label="247"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                    <ProgressBar
+                      value={53}
+                      height={30}
+                      color="#FF7525"
+                      label="ESPN"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                    <ProgressBar
+                      value={68}
+                      height={30}
+                      color="#FF7525"
+                      label="on3"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                    />
+                  </div>
+                </div>
+
+                <div className=" mr-5  items-center justify-center  border border-black p-5">
+                  <div className="card">
+                    <h5 className="m-0 italic text-center">10.9</h5>
+                  </div>
+                  <div className="mt-1 card">
+                    <h5 className="m-0 italic text-center">6.2</h5>
+                  </div>
+                  <div className="mt-1 card">
+                    <h5 className="m-0 italic text-center">7.4</h5>
+                  </div>
+                </div>
+              </div>
+              <div className="flex-1 mt-5 px-2">
+                <h4 className="mb-3 !bg-none italic">Athletic Projection</h4>
+                <div className="flex flex-col gap-1">
+                  <ProgressBar
+                    value={13}
+                    height={30}
+                    color="#C00E1E"
+                    label="HS Coach"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                  />
+                  <ProgressBar
+                    value={20}
+                    height={30}
+                    color="#2BB650"
+                    label="Data Scraping"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                  />
+                  <ProgressBar
+                    value={12}
+                    height={30}
+                    color="#2BB650"
+                    label="Offers"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                  />
+                  <ProgressBar
+                    value={32}
+                    height={30}
+                    color="#FF7525"
+                    label="Honors"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                  />
+                  <ProgressBar
+                    value={18}
+                    height={30}
+                    color="#C00E1E"
+                    label="Scouts"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full md:w-[49%] h-56  px-4">
+          <div className="">
+            <div className=" flex  justify-center card gap-4 bg-[#fff8f4]">
+              <div className="flex-1 px-2">
+                <div className="flex gap-2 items-center justify-between">
+                  <h5 className=" mt-2 italic">Athletic Projection</h5>
+                  <div className="flex gap-2 items-center">
+                    <span className=" italic text-xl">Overall Score</span>
+                    <span className="mt-1 text-xl font-medium card !bg-[#2BB650] text-white italic ">
+                      85
+                    </span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <ProgressBar
+                    value={47}
+                    height={30}
+                    color="#2BB650"
+                    label="Recuirtabilty"
+                    labelSize="12"
+                    labelWeight={500}
+                    labelWidth={110}
+                  />
+                  <ProgressBar
+                    value={55}
+                    height={30}
+                    color="#2BB650"
+                    label="Stickiness"
+                    labelSize="12"
+                    labelWeight={500}
+                    labelWidth={110}
+                  />
+                  <ProgressBar
+                    value={84}
+                    height={30}
+                    color="#2BB650"
+                    label="Athletics Impact"
+                    labelSize="12"
+                    labelWeight={500}
+                    labelWidth={110}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="card  mt-5">
+            <h3 className="text-xl font-semibold italic text-gray-800 mb-1 mt-3">
+              Commitment Predictions
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              These commitment predictions will update but are frozen when the
+              athlete commits
+            </p>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div className="col-span-2 flex flex-col items-start justify-between bg-[#ebf8f2] p-4 rounded-md">
+                <img src="/angry-bird.png" alt="Louisville" className="mb-2" />
+                <h2 className="text-3xl !mb-0 font-bold text-gray-800">
+                  33.3%
+                </h2>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  University of Louisville
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#fff1e9] p-4 rounded-md">
+                <img src="/uni.png" alt="Other" className="mb-2" />
+                <h2 className="text-2xl !m-0 font-bold text-gray-800">28.7%</h2>
+                <p className="!text-lg !m-0 !font-semibold text-gray-700">
+                  Other
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#f3ebfe] p-4 rounded-md">
+                <img src="/uk.png" alt="Kentucky" className="mb-2" />
+                <h3 className="text-2xl !m-0 font-bold text-gray-800">28.7%</h3>
+                <p className="!text-sm !font-semibold italic text-gray-700">
+                  University of Kentucky
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 rounded-md">
+                <img src="/v.png" alt="West Virginia" className="mb-2" />
+                <h3 className="text-xl !m-0 font-bold text-gray-800">4.0%</h3>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  West Virginia University
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 rounded-md">
+                <img src="./tm.png" alt="Florida State" className="mb-2" />
+                <h3 className="text-xl !m-0 font-bold text-gray-800">4.0%</h3>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Florida State University
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 rounded-md">
+                <img src="yt.png" alt="Virginia Tech" className="mb-2" />
+                <h5 className="text-lg !m-0 font-bold text-gray-800">2.9%</h5>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Virginia Tech
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 rounded-md">
+                <img
+                  src="/red-wolf.png"
+                  alt="Arkansas State"
+                  className="mb-2"
+                />
+                <h5 className="text-lg !m-0 font-bold text-gray-800">2.0%</h5>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Arkansas State University
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 rounded-md">
+                <img
+                  src="/red-eagle.png"
+                  alt="Boston College"
+                  className="mb-2"
+                />
+                <h5 className="text-lg !m-0 font-bold text-gray-800">2.0%</h5>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Boston College
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 );
