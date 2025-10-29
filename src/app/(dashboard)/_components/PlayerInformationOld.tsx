@@ -258,159 +258,82 @@ const columns: TableColumnsType<DataType> = [
   },
 ];
 
-interface GameLog {
+interface RawMeasureables {
   key: string;
   date: string;
-  res: string;
-  cmp: number;
-  att: number;
-  cmp2: number;
-  yds: number;
-  avg: number;
-  td: number;
-  int: number;
-  lng: number;
-  sack: number;
+  source: string;
+  measure: string;
+  value: string;
+  score: number;
+  link: string;
 }
 
-const gameLog: GameLog[] = [
-  {
-    key: "1",
-    date: "Sun 10/20",
-    res: "28-20",
-    cmp: 6065,
-    att: 6690,
-    cmp2: 5948,
-    yds: 3536,
-    avg: 8811,
-    td: 1784,
-    int: 9261,
-    lng: 8829,
-    sack: 6025,
-  },
-  {
-    key: "2",
-    date: "Mon 10/7",
-    res: "11-29",
-    cmp: 5560,
-    att: 3933,
-    cmp2: 1577,
-    yds: 8861,
-    avg: 5560,
-    td: 8861,
-    int: 8861,
-    lng: 6025,
-    sack: 5045,
-  },
-  {
-    key: "3",
-    date: "Sun 9/29",
-    res: "29-30",
-    cmp: 5560,
-    att: 3933,
-    cmp2: 1577,
-    yds: 8861,
-    avg: 5560,
-    td: 8861,
-    int: 8861,
-    lng: 6025,
-    sack: 5045,
-  },
-  {
-    key: "4",
-    date: "Sun 9/22",
-    res: "22-20",
-    cmp: 5560,
-    att: 3933,
-    cmp2: 1577,
-    yds: 8861,
-    avg: 5560,
-    td: 8861,
-    int: 8861,
-    lng: 6025,
-    sack: 5045,
-  },
-  {
-    key: "5",
-    date: "Thu 9/5",
-    res: "28-30",
-    cmp: 5560,
-    att: 3933,
-    cmp2: 1577,
-    yds: 8861,
-    avg: 5560,
-    td: 8861,
-    int: 8861,
-    lng: 6025,
-    sack: 5045,
-  },
-];
-
-const gameLogColumns = [
+const rawMeasureablesColumns = [
   {
     title: "Date",
     dataIndex: "date",
     key: "date",
   },
   {
-    title: "Result",
-    dataIndex: "res",
-    key: "res",
-    render: (_: unknown, record: GameLog) => (
-      <div className="flex items-center">
-        {record.res && (
-          <div className="flex justify-center items-center h-5 w-5 bg-[#2BB650] mr-2">
-            <Image src="/w.svg" alt={record.res} width={16} height={13} />
-          </div>
-        )}
-        {record.res}
-      </div>
+    title: "Source",
+    dataIndex: "source",
+    key: "source",
+  },
+  {
+    title: "Measure",
+    dataIndex: "measure",
+    key: "measure",
+  },
+  {
+    title: "Value",
+    dataIndex: "value",
+    key: "value",
+  },
+  {
+    title: "Score",
+    dataIndex: "score",
+    key: "score",
+  },
+
+  {
+    title: "Link",
+    dataIndex: "link",
+    key: "link",
+    render: (_: unknown, record: RawMeasureables) => (
+      <a href={record.link} className="flex items-center">
+        View Link
+      </a>
     ),
   },
+];
+
+const rawMeasureables: RawMeasureables[] = [
   {
-    title: "CMP",
-    dataIndex: "cmp",
-    key: "cmp",
+    key: "1",
+    date: "5/2/2025",
+    source: "GPS",
+    measure: "Max Speed",
+    value: "35.2 km/h",
+    score: 92,
+    link: "http://localhost:3000/new-pages",
   },
   {
-    title: "ATT",
-    dataIndex: "att",
-    key: "att",
+    key: "2",
+    date: "5/2/2025",
+    source: "GPS",
+    measure: "Max Speed",
+    value: "35.2 km/h",
+    score: 92,
+    link: "http://localhost:3000/new-pages",
   },
   {
-    title: "CMP2",
-    dataIndex: "cmp2",
-    key: "cmp2",
-  },
-  {
-    title: "YDS",
-    dataIndex: "yds",
-    key: "yds",
-  },
-  {
-    title: "AVG",
-    dataIndex: "avg",
-    key: "avg",
-  },
-  {
-    title: "TD",
-    dataIndex: "td",
-    key: "td",
-  },
-  {
-    title: "INT",
-    dataIndex: "int",
-    key: "int",
-  },
-  {
-    title: "LNG",
-    dataIndex: "lng",
-    key: "lng",
-  },
-  {
-    title: "SACK",
-    dataIndex: "sack",
-    key: "sack",
+    key: "3",
+    date: "5/2/2025",
+    source: "GPS",
+    measure: "Max Speed",
+    value: "35.2 km/h",
+    score: 92,
+    link: "http://localhost:3000/new-pages",
   },
 ];
 
@@ -507,7 +430,7 @@ const Bio = () => (
   </div>
 );
 
-const Stats = () => (
+const Matrics = () => (
   <div>
     <div className="mb-10">
       <h4>
@@ -544,19 +467,41 @@ const Stats = () => (
     </div>
   </div>
 );
-const GameLog = () => (
+const RawMeasureables = () => (
   <div>
     <div className="mb-10">
-      <h4>Raw Measureables</h4>
-      <Select
-        defaultValue="WR (0)"
-        onChange={handleChange}
-        options={[
-          { value: "jack", label: "Jack" },
-          { value: "lucy", label: "Lucy" },
-        ]}
-      />
-      <Table dataSource={gameLog} columns={gameLogColumns} pagination={false} />{" "}
+    <h4>Raw Measureables</h4>
+      <div className="mb-4 flex gap-2 justify-end">
+        <Select
+          defaultValue="WR (0)"
+          onChange={handleChange}
+          options={[
+            { value: "jack", label: "Jack" },
+            { value: "lucy", label: "Lucy" },
+          ]}
+        />
+        <Select
+          defaultValue="WR (0)"
+          onChange={handleChange}
+          options={[
+            { value: "jack", label: "Jack" },
+            { value: "lucy", label: "Lucy" },
+          ]}
+        />
+        <Select
+          defaultValue="WR (0)"
+          onChange={handleChange}
+          options={[
+            { value: "jack", label: "Jack" },
+            { value: "lucy", label: "Lucy" },
+          ]}
+        />
+      </div>
+      <Table
+        dataSource={rawMeasureables}
+        columns={rawMeasureablesColumns}
+        pagination={false}
+      />{" "}
     </div>
   </div>
 );
@@ -568,8 +513,7 @@ const Survey = () => (
       <div className="text-[#1C1D4D] text-sm">
         <div className="flex items-start space-x-4">
           <div className="card">
-          <Image src="/bull-img.png" alt="abc" width={79} height={73} />
-
+            <Image src="/bull-img.png" alt="abc" width={79} height={73} />
           </div>
           <div>
             <h5 className="mb-0 mt-1 !text-[22px] !font-[500]">
@@ -697,12 +641,12 @@ const items: TabsProps["items"] = [
   {
     key: "4",
     label: "Matrics",
-    children: <Stats />,
+    children: <Matrics />,
   },
   {
     key: "5",
     label: "Raw Measurables",
-    children: <GameLog />,
+    children: <RawMeasureables />,
   },
   {
     key: "6",
