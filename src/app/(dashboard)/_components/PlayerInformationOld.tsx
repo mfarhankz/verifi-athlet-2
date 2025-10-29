@@ -319,27 +319,437 @@ const rawMeasureables: RawMeasureables[] = [
   },
   {
     key: "2",
-    date: "5/2/2025",
-    source: "GPS",
-    measure: "Max Speed",
-    value: "35.2 km/h",
-    score: 92,
+    date: "2/3/2025",
+    source: "Coach",
+    measure: "Vertical Jump",
+    value: "32.5 in",
+    score: 85,
     link: "http://localhost:3000/new-pages",
   },
   {
     key: "3",
-    date: "5/2/2025",
-    source: "GPS",
-    measure: "Max Speed",
-    value: "35.2 km/h",
-    score: 92,
+    date: "5/4/2025",
+    source: "Catapult",
+    measure: "Resting HR",
+    value: "5560",
+    score: 88,
+    link: "http://localhost:3000/new-pages",
+  },
+  {
+    key: "4",
+    date: "3/6/2025",
+    source: "Strength Coach",
+    measure: "10m Sprint Time",
+    value: "5560",
+    score: 82,
+    link: "http://localhost:3000/new-pages",
+  },
+  {
+    key: "5",
+    date: "6/7/2025",
+    source: "VBT Device",
+    measure: "Back Squat 1RM",
+    value: "2.85 m",
+    score: 78,
+    link: "http://localhost:3000/new-pages",
+  },
+  {
+    key: "6",
+    date: "6/7/2025",
+    source: "Coach",
+    measure: "Standing Broad Jump",
+    value: "7.5 hours",
+    score: 34,
+    link: "http://localhost:3000/new-pages",
+  },
+  {
+    key: "7",
+    date: "6/7/2025",
+    source: "Wearable",
+    measure: "Sleep Duration",
+    value: "5560",
+    score: 36,
     link: "http://localhost:3000/new-pages",
   },
 ];
 
 const Activity = () => (
   <div className="activity">
-    <h4>Activity Information</h4>
+    <h4>Committed To</h4>
+    <div className="flex items-center  justify-between p-4 ">
+      <div className="flex items-center  space-x-4">
+        <div className=" bg-gray-200   flex items-center justify-center">
+          <Image
+            className="card object-contain"
+            src="/turbo.png"
+            alt="abc"
+            width={95}
+            height={95}
+          />
+        </div>
+
+        <div>
+          <h5 className="!text-xl font-semibold italic text-[#1C1D4D]">
+            Tennessee Titans College
+          </h5>
+          <div className="flex items-center space-x-3 text-sm">
+            <span className="flex gap-1 items-center card font-medium">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="19"
+                height="19"
+                viewBox="0 0 19 19"
+                fill="none"
+              >
+                <path
+                  fill-rule="evenodd"
+                  clip-rule="evenodd"
+                  d="M3.76302 1.58301C2.56065 1.58301 1.58594 2.55772 1.58594 3.76009V15.6351C1.58594 16.8375 2.56065 17.8122 3.76302 17.8122H15.638C16.8404 17.8122 17.8151 16.8375 17.8151 15.6351V3.76009C17.8151 2.55772 16.8404 1.58301 15.638 1.58301H3.76302ZM13.4753 7.8294C13.7553 7.49351 13.7099 6.99432 13.374 6.71441C13.0381 6.43451 12.5389 6.47989 12.259 6.81577L8.85565 10.8998L7.48948 9.53364C7.18031 9.22449 6.67906 9.22449 6.36989 9.53364C6.06073 9.84278 6.06073 10.3441 6.36989 10.6532L8.34907 12.6324C8.50637 12.7897 8.7225 12.8735 8.94472 12.8635C9.16694 12.8533 9.37467 12.7503 9.51701 12.5794L13.4753 7.8294Z"
+                  fill="#2BB650"
+                />
+              </svg>
+              <span className="italic">Walk ON</span>
+            </span>
+            <span className="text-[#1C1D4D]  cursor-pointer">HS Source</span>
+            <span className="text-blue-600 underline cursor-pointer">
+              View Source
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 mt-1">29/11/2026</p>
+        </div>
+      </div>
+
+      <button className="px-4 py-2 text-sm font-medium text-gray-700 card">
+        Not Committed
+      </button>
+    </div>
+
+    <h4>Offers & Visits</h4>
+    <div className="">
+      <h5 className="text-xl font-semibold text-gray-900 mb-4">Offers (18)</h5>
+
+      <div className="flex flex-wrap gap-3">
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/red-bird.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/a.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/wolf.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/dog.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/uc.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/a-star.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/ku.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/red-a.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/k.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/american.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/nfl.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/eagle.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/ucf.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/lobos.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/b.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/tiger.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/men.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+
+        <div className="group cursor-pointer relative card">
+          <Image
+            src="/warrior.png"
+            alt="abc"
+            width={95}
+            height={95}
+            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+          />
+        </div>
+      </div>
+    </div>
+    <div className=" mt-5">
+      <table className="w-full card ">
+        <thead className="">
+          <tr className="bg-gray-50 border-b border-gray-200 border-t">
+            <th className="text-left text-lg font-semibold text-gray-900 px-4 py-2">
+              School Name
+            </th>
+            <th className="text-left text-lg font-semibold text-gray-900 px-6 py-4">
+              Event Date
+            </th>
+            <th className="text-left text-lg font-semibold text-gray-900 px-8 py-4">
+              Type
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          <tr className="">
+            <td className="px-6 py-4 card flex items-center space-x-4">
+              <img
+                src="/a.png"
+                alt="Georgia Tech Logo"
+                className="w-12 h-12  card"
+              />
+              <div>
+                <h5 className="font-semibold italic text-lg text-gray-900 m-0">
+                  Georgia Tech Yellow Jacket
+                </h5>
+                <p className="text-gray-600 text-sm m-0">
+                  Jason officially visits Georgia Tech yellow Jacket
+                </p>
+              </div>
+            </td>
+
+            <td className="px-6 py-4 card text-gray-800 text-lg">11/12/2024</td>
+
+            <td className="px-6 py-4 card">
+              <div className="flex items-center space-x-2 text-lg text-gray-900">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="17"
+                  height="17"
+                  viewBox="0 0 17 17"
+                  fill="none"
+                >
+                  <rect width="16.5361" height="16.5361" fill="#2BB650" />
+                  <path
+                    d="M6.49521 11.8233C6.22483 11.8233 5.95445 11.7237 5.74099 11.5102L3.60639 9.37563C3.1937 8.96294 3.1937 8.27987 3.60639 7.86718C4.01908 7.45449 4.70215 7.45449 5.11484 7.86718L6.49521 9.24755L11.4332 4.30952C11.8459 3.89683 12.529 3.89683 12.9417 4.30952C13.3544 4.72221 13.3544 5.40528 12.9417 5.81796L7.24944 11.5102C7.05021 11.7237 6.7656 11.8233 6.49521 11.8233Z"
+                    fill="white"
+                  />
+                </svg>
+                <span>Official Visit</span>
+              </div>
+            </td>
+          </tr>
+
+          <tr className="">
+            <td className="px-6 py-4 card flex items-center space-x-4">
+              <img
+                src="/red-bird.png"
+                alt="Clemson Tigers Logo"
+                className="w-12 h-12 card"
+              />
+              <div>
+                <h5 className="font-semibold m-0 italic text-lg text-gray-900">
+                  Clemson Tigers
+                </h5>
+                <p className="text-gray-600 text-sm m-0">
+                  Jason officially visits Georgia Tech yellow Jacket
+                </p>
+              </div>
+            </td>
+
+            <td className="px-6 py-4 card text-gray-800 text-lg">9/12/2024</td>
+
+            <td className="px-6 py-4 card">
+              <div className="flex items-center space-x-2 text-lg text-gray-900">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="17"
+                  height="17"
+                  viewBox="0 0 17 17"
+                  fill="none"
+                >
+                  <rect width="16.5361" height="16.5361" fill="#2BB650" />
+                  <path
+                    d="M6.49521 11.8233C6.22483 11.8233 5.95445 11.7237 5.74099 11.5102L3.60639 9.37563C3.1937 8.96294 3.1937 8.27987 3.60639 7.86718C4.01908 7.45449 4.70215 7.45449 5.11484 7.86718L6.49521 9.24755L11.4332 4.30952C11.8459 3.89683 12.529 3.89683 12.9417 4.30952C13.3544 4.72221 13.3544 5.40528 12.9417 5.81796L7.24944 11.5102C7.05021 11.7237 6.7656 11.8233 6.49521 11.8233Z"
+                    fill="white"
+                  />
+                </svg>
+                <span>Official Visit</span>
+              </div>
+            </td>
+          </tr>
+
+          <tr className="">
+            <td className="px-6 py-4 card flex items-center space-x-4">
+              <img
+                src="/wolf.png"
+                alt="Georgia Tech Logo"
+                className="w-12 h-12 card"
+              />
+              <div>
+                <h5 className="font-semibold italic text-lg m-0 text-gray-900">
+                  Louisville Cardinals
+                </h5>
+                <p className="text-gray-600 text-sm m-0">
+                  Jason officially visits Georgia Tech yellow Jacket
+                </p>
+              </div>
+            </td>
+            <td className="px-6 py-4 card text-gray-800 text-lg">6/12/2024</td>
+            <td className="px-6 py-4 card text-lg text-gray-900">
+              Unofficial Visit
+            </td>
+          </tr>
+
+          <tr className="">
+            <td className="px-6 py-4 card flex items-center space-x-4">
+              <img
+                src="/dog.png"
+                alt="Georgia Tech Logo"
+                className="w-12 h-12 card"
+              />
+              <div>
+                <p className="font-semibold italic text-lg m-0 text-gray-900">
+                  Louisiana-Monroe Offer
+                </p>
+                <p className="text-gray-600 text-sm m-0">
+                  Jason officially visits Georgia Tech yellow Jacket
+                </p>
+              </div>
+            </td>
+            <td className="px-6 card py-4 text-gray-800 text-lg">29/11/2024</td>
+            <td className="px-6 card py-4 text-lg text-gray-900">
+              Unofficial Visit
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 );
 
@@ -351,81 +761,47 @@ const Video = () => (
 
 const Bio = () => (
   <div className="bio">
-    <h4>Contact Information</h4>
-    <div className="grid grid-cols-2 p-5 gap-y-10">
+    <h4>Academic Info</h4>
+    <div className="grid grid-cols-3 mb-11 font-semibold italic">
       <div>
-        <h6>Cell Phone</h6>
-        <h5>(314) 412 2995</h5>
+        Desire Major <div>Journalism</div>
       </div>
       <div>
-        <h6>OK to Connect</h6>
-        <h5 className="flex">
-          <Image
-            className="mr-1"
-            src={"/tick.svg"}
-            alt={"Tick"}
-            width={20}
-            height={20}
-          />
-          Yes
-        </h5>
+        GPA <div>GPA 3.5 (Predicted 3.8)</div>
       </div>
       <div>
-        <h6>Email Address</h6>
-        <h5>
-          <a href="#">mrsh543@gmail.com</a>
-        </h5>
-      </div>
-      <div>
-        <h6>Birthday</h6>
-        <h5>9/17/1995 (29)</h5>
-      </div>
-      <div className="col-span-2">
-        <h6>Preferred Contact Way</h6>
-        <h5>Text, Email</h5>
-      </div>
-      <div>
-        <h6>Helping with Decesion</h6>
-        <h5>Parent</h5>
-      </div>
-      <div>
-        <h6>Contact Info</h6>
-        <h5 className="flex items-center mb-3">
-          <span className="ms">MS</span>Matt Sarish (314) 304 2234
-        </h5>
-        <h5 className="flex items-center">
-          <span className="js">JS</span>Joellen Sarish (739) 392 2945
-        </h5>
+        SAT/ACT <div>5/20</div>
       </div>
     </div>
-    <h4>Academy Details</h4>
-    <div className="grid grid-cols-2 p-5 gap-y-8">
-      <div>
-        <h6>GPA</h6>
-        <h5>3.20</h5>
+    <div className="grid grid-cols-12 gap-4">
+      <div className="col-span-6  ">
+        <h4>Parent Contact Info</h4>
+        <div>
+          <h5>Mom’s Information</h5>
+          <p>
+            Jessica Martin (Doctor - MBBS from University of Florida) <br />{" "}
+            (930) 2930 393
+          </p>
+        </div>
+        <div className=" mt-9">
+          <h5>Dad’s Information</h5>
+          <p>
+            Alex Martin (Real Estate - BBA from University of Taxes) <br />{" "}
+            (930) 6549 203
+          </p>
+        </div>
       </div>
-      <div>
-        <h6>Major</h6>
-        <h5>Sports Management</h5>
+      <div className="col-span-6 ">
+        <h4>Coach Contact Info</h4>
+        <div>
+          <p>
+            Morgan Jason <br />
+            University of Florida <br /> Cell: (930) 2930 393 <br />
+            Home: (203) 9302 2034 <br /> Email:{" "}
+            <span className="text-blue-500">morgan.jason@gmail.com</span>{" "}
+          </p>
+        </div>
       </div>
-      <div>
-        <h6>Importance</h6>
-        <h5>Sports Importance</h5>
-      </div>
-    </div>
-
-    <h4>College Roster Bio</h4>
-    <div className="px-3">
-      <p className="my-3">
-        Sed ut perspiciatis unde omnis iste natus error sit voluptatem
-        accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab
-        illo inventore veritatis et quasi architecto beatae vitae dicta sunt
-        explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut
-        odit aut fugit, sed quia consequuntur magni.
-      </p>
-      <a className="text-base font-semibold" href="#">
-        Show more...
-      </a>
     </div>
   </div>
 );
@@ -470,10 +846,10 @@ const Matrics = () => (
 const RawMeasureables = () => (
   <div>
     <div className="mb-10">
-    <h4>Raw Measureables</h4>
+      <h4>Raw Measureables</h4>
       <div className="mb-4 flex gap-2 justify-end">
         <Select
-          defaultValue="WR (0)"
+          defaultValue="Date Range"
           onChange={handleChange}
           options={[
             { value: "jack", label: "Jack" },
@@ -481,7 +857,7 @@ const RawMeasureables = () => (
           ]}
         />
         <Select
-          defaultValue="WR (0)"
+          defaultValue="Measure"
           onChange={handleChange}
           options={[
             { value: "jack", label: "Jack" },
@@ -489,7 +865,7 @@ const RawMeasureables = () => (
           ]}
         />
         <Select
-          defaultValue="WR (0)"
+          defaultValue="Source"
           onChange={handleChange}
           options={[
             { value: "jack", label: "Jack" },
