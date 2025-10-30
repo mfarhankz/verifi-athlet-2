@@ -45,6 +45,84 @@ export const ProgressBarExamples = () => {
         </div>
       </div>
 
+      {/* With Average Number */}
+      <div style={{ marginBottom: '30px' }}>
+        <h3>With Average Number (Front of Bar)</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={75} average={75} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={60} average={60} color="#4CAF50" />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={85} average={85} height={30} />
+        </div>
+      </div>
+
+      {/* With Label and Average */}
+      <div style={{ marginBottom: '30px' }}>
+        <h3>With Label and Average</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={75} label="Collegiate" average={75} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={60} label="Performance" labelWidth={120} average={60} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={90} label="Rating" labelWidth={80} average={90} color="#FF9800" />
+        </div>
+      </div>
+
+      {/* With Scale */}
+      <div style={{ marginBottom: '30px' }}>
+        <h3>With Target Scale (10, 20, 30, ... 100)</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={75} showScale={true} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={45} showScale={true} color="#4CAF50" />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={85} showScale={true} color="#2196F3" />
+        </div>
+      </div>
+
+      {/* With Average and Scale */}
+      <div style={{ marginBottom: '30px' }}>
+        <h3>With Average and Scale</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={75} average={75} showScale={true} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={60} average={60} showScale={true} color="#4CAF50" />
+        </div>
+      </div>
+
+      {/* With Label, Average and Scale */}
+      <div style={{ marginBottom: '30px' }}>
+        <h3>With Label, Average and Scale (Complete)</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={75} label="Collegiate" average={75} showScale={true} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={60} label="Performance" labelWidth={120} average={60} showScale={true} color="#4CAF50" />
+        </div>
+      </div>
+
+      {/* With Label and Scale */}
+      <div style={{ marginBottom: '30px' }}>
+        <h3>With Label and Scale</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={60} label="Performance" showScale={true} />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={75} label="Skill Level" labelWidth={120} showScale={true} color="#4CAF50" />
+        </div>
+        <div style={{ marginBottom: '10px' }}>
+          <ProgressBar value={90} label="Rating" labelWidth={80} showScale={true} color="#FF9800" />
+        </div>
+      </div>
+
       {/* Custom Colors */}
       <div style={{ marginBottom: '30px' }}>
         <h3>Custom Colors</h3>

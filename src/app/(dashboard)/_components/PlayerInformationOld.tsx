@@ -813,32 +813,34 @@ const Matrics = () => (
     <div className="container mx-auto px-4">
       <div className="flex flex-wrap -mx-4 gap-1">
         <div className="w-full md:w-1/2 card px-4">
-          <div className="rounded-md ">
+          <div className="">
             <div className="flex-1 px-2">
-              <h4 className="mb-3 !bg-none italic">Athletic Projection</h4>
-
+              <h3 className="italic !text-2xl">Athletic Projection</h3>
               <div className=" mr-5 flex items-center justify-center  border-black p-5">
                 <div className="">
                   <h5 className="m-0 italic text-center">Current Projection</h5>
-                  <h3 className="italic text-center ">D3 - Top Half</h3>
-                  <ProgressBar
-                    value={83}
-                    height={55}
-                    color="#2BB650"
-                    label=""
-                    labelSize="14"
-                    labelWeight={400}
-                    labelWidth={120}
-                  />
-                  <p className="mt-4">
+                  <h3 className="italic text-center !text-3xl leading-9 m-2">
+                    D3 - Top Half
+                  </h3>
+                  <div className="w-60 mx-auto">
+                    <ProgressBar
+                      value={83}
+                      height={55}
+                      color="#2BB650"
+                      label=""
+                      labelSize="14"
+                      labelWeight={400}
+                    />
+                  </div>
+                  <p className="mt-3">
                     The above current projection is calculated based on the
                     following statistics
                   </p>
                 </div>
               </div>
               <div className=" flex  justify-center gap-4 bg-[#f3f8fb]">
-                <div className="flex-1 px-2">
-                  <h5 className=" mt-2 italic">Athletic Projection</h5>
+                <div className="flex-1 p-3 ">
+                  <h3 className="px-2 italic !text-2xl">Athletic Testing</h3>
                   <div className="flex flex-col gap-1">
                     <ProgressBar
                       value={85}
@@ -848,6 +850,8 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={10.9}
                     />
                     <ProgressBar
                       value={50}
@@ -857,6 +861,8 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={6.2}
                     />
                     <ProgressBar
                       value={67}
@@ -866,6 +872,8 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={7.4}
                     />
                     <ProgressBar
                       value={54}
@@ -875,6 +883,8 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={4.4}
                     />
                     <ProgressBar
                       value={96}
@@ -884,31 +894,16 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={9.2}
+                      showScale={true}
                     />
                   </div>
                 </div>
-
-                <div className=" mr-5  items-center justify-center  border border-black p-5">
-                  <div className="card">
-                    <h5 className="m-0 italic text-center">10.09</h5>
-                  </div>
-                  <div className="mt-1 card">
-                    <h5 className="m-0 italic text-center">6.2</h5>
-                  </div>
-                  <div className="mt-1 card">
-                    <h5 className="m-0 italic text-center">7.4</h5>
-                  </div>
-                  <div className="mt-1 card">
-                    <h5 className="m-0 italic text-center">4.4</h5>
-                  </div>
-                  <div className="mt-1 card">
-                    <h5 className="m-0 italic text-center">9.2</h5>
-                  </div>
-                </div>
               </div>
-              <div className=" flex mt-5 justify-center gap-4 bg-[#fff8f4]">
+              <div className=" flex mt-3 p-3  justify-center gap-4 bg-[#fff8f4]">
                 <div className="flex-1 px-2">
-                  <h5 className=" mt-2 italic">Athletic Projection</h5>
+                  <h3 className="italic !text-2xl">Recruiting Services</h3>
                   <div className="flex flex-col gap-1">
                     <ProgressBar
                       value={89}
@@ -918,6 +913,8 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#fff8f4"
+                      average={10.9}
                     />
                     <ProgressBar
                       value={53}
@@ -927,6 +924,8 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#fff8f4"
+                      average={6.2}
                     />
                     <ProgressBar
                       value={68}
@@ -936,25 +935,15 @@ const Matrics = () => (
                       labelSize="12"
                       labelWeight={400}
                       labelWidth={110}
+                      backgroundColor="#fff8f4"
+                      average={7.4}
+                      showScale={true}
                     />
-                  </div>
-                </div>
-
-                <div className=" mr-5  items-center justify-center  border border-black p-5">
-                  <div className="card">
-                    <h5 className="m-0 italic text-center">10.9</h5>
-                  </div>
-                  <div className="mt-1 card">
-                    <h5 className="m-0 italic text-center">6.2</h5>
-                  </div>
-                  <div className="mt-1 card">
-                    <h5 className="m-0 italic text-center">7.4</h5>
                   </div>
                 </div>
               </div>
               <div className="flex-1 mt-5 px-2">
-                <h4 className="mb-3 !bg-none italic">Athletic Projection</h4>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 p-3 ">
                   <ProgressBar
                     value={13}
                     height={30}
@@ -963,6 +952,7 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={400}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
                   />
                   <ProgressBar
                     value={20}
@@ -972,6 +962,7 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={400}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
                   />
                   <ProgressBar
                     value={12}
@@ -981,6 +972,7 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={400}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
                   />
                   <ProgressBar
                     value={32}
@@ -990,6 +982,7 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={400}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
                   />
                   <ProgressBar
                     value={18}
@@ -999,6 +992,8 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={400}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
+                    showScale={true}
                   />
                 </div>
               </div>
@@ -1006,15 +1001,15 @@ const Matrics = () => (
           </div>
         </div>
 
-        <div className="w-full md:w-[49%] h-56  px-4">
+        <div className="w-full md:w-[49%] h-56 px-4">
           <div className="">
             <div className=" flex  justify-center card gap-4 bg-[#fff8f4]">
               <div className="flex-1 px-2">
                 <div className="flex gap-2 items-center justify-between">
-                  <h5 className=" mt-2 italic">Athletic Projection</h5>
+                  <h3 className="italic !text-2xl">Athlete Rankers</h3>
                   <div className="flex gap-2 items-center">
                     <span className=" italic text-xl">Overall Score</span>
-                    <span className="mt-1 text-xl font-medium card !bg-[#2BB650] text-white italic ">
+                    <span className="mt-1 text-xl font-bold !bg-[#2BB650] text-white italic w-10 h-10 flex items-center justify-center">
                       85
                     </span>
                   </div>
@@ -1028,6 +1023,7 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={500}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
                   />
                   <ProgressBar
                     value={55}
@@ -1037,6 +1033,7 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={500}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
                   />
                   <ProgressBar
                     value={84}
@@ -1046,6 +1043,8 @@ const Matrics = () => (
                     labelSize="12"
                     labelWeight={500}
                     labelWidth={110}
+                    backgroundColor="#ffffff"
+                    showScale={true}
                   />
                 </div>
               </div>
