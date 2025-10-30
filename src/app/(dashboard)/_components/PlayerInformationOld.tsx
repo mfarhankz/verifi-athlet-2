@@ -810,9 +810,9 @@ const Bio = () => (
 const Matrics = () => (
   <div>
     <h4>Matrics</h4>
-    <div className="container mx-auto px-4">
-      <div className="flex flex-wrap -mx-4 gap-1">
-        <div className="w-full md:w-1/2 card px-4">
+    <div className="container mx-auto">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card px-4">
           <div className="">
             <div className="flex-1 px-2">
               <h3 className="italic !text-2xl">Athletic Projection</h3>
@@ -900,9 +900,9 @@ const Matrics = () => (
                     />
                   </div>
                   <div className="flex justify-center items-center mb-2">
-                    <div className="flex items-center gap-2 w-[250px] mt-3 border border-solid border-[#126DB8] bg-[#fff]">
+                    <div className="flex items-center gap-2 w-fit mt-3 border border-solid border-[#126DB8] bg-[#fff]">
                       <span className="text-xl bg-[#126DB8] text-white px-2 font-[500]">74</span> 
-                      <span className="text-[14px]">Average Athletic Testing Score</span>
+                      <span className="text-[14px] pr-2">Average Athletic Testing Score</span>
                     </div>
                   </div>
                   
@@ -948,9 +948,9 @@ const Matrics = () => (
                     />
                   </div>
                   <div className="flex justify-center items-center mb-2">
-                    <div className="flex items-center gap-2 w-[250px] mt-3 border border-solid border-[#FF7525] bg-[#fff]">
+                    <div className="flex items-center gap-2 w-fit mt-3 border border-solid border-[#FF7525] bg-[#fff]">
                       <span className="text-xl bg-[#FF7525] text-white px-2 font-[500]">74</span> 
-                      <span className="text-[14px]">Average Recruiting Service Score</span>
+                      <span className="text-[14px] pr-2">Average Recruiting Service Score</span>
                     </div>
                   </div>
                 </div>
@@ -1014,7 +1014,7 @@ const Matrics = () => (
           </div>
         </div>
 
-        <div className="w-full md:w-[49%] h-56 px-4">
+        <div className="flex flex-col gap-3">
           <div className="">
             <div className=" flex  justify-center card gap-4 bg-[#fff8f4]">
               <div className="flex-1 px-2">
@@ -1063,8 +1063,8 @@ const Matrics = () => (
               </div>
             </div>
           </div>
-          <div className="card  mt-5">
-            <h3 className="text-xl font-semibold italic text-gray-800 mb-1 mt-3">
+          <div className="card">
+            <h3 className="italic !text-2xl mb-1 mt-1">
               Commitment Predictions
             </h3>
             <p className="text-sm text-gray-600 mb-4">
@@ -1072,8 +1072,9 @@ const Matrics = () => (
               athlete commits
             </p>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div className="col-span-2 flex flex-col items-start justify-between bg-[#ebf8f2] p-4 rounded-md">
+            <div className="grid grid-cols-4 gap-3">
+
+              <div className="col-span-3 flex flex-col items-start justify-between bg-[#ebf8f2] p-4">
                 <img src="/angry-bird.png" alt="Louisville" className="mb-2" />
                 <h2 className="text-3xl !mb-0 font-bold text-gray-800">
                   33.3%
@@ -1083,7 +1084,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#fff1e9] p-4 rounded-md">
+              <div className="col-span-1 flex flex-col items-start justify-between bg-[#fff1e9] p-4 ">
                 <img src="/uni.png" alt="Other" className="mb-2" />
                 <h2 className="text-2xl !m-0 font-bold text-gray-800">28.7%</h2>
                 <p className="!text-lg !m-0 !font-semibold text-gray-700">
@@ -1091,7 +1092,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#f3ebfe] p-4 rounded-md">
+              <div className="col-span-2 flex flex-col items-start justify-between bg-[#f3ebfe] p-4 ">
                 <img src="/uk.png" alt="Kentucky" className="mb-2" />
                 <h3 className="text-2xl !m-0 font-bold text-gray-800">28.7%</h3>
                 <p className="!text-sm !font-semibold italic text-gray-700">
@@ -1099,7 +1100,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 rounded-md">
+              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 ">
                 <img src="/v.png" alt="West Virginia" className="mb-2" />
                 <h3 className="text-xl !m-0 font-bold text-gray-800">4.0%</h3>
                 <p className="!text-lg !font-semibold italic text-gray-700">
@@ -1107,7 +1108,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 rounded-md">
+              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 ">
                 <img src="./tm.png" alt="Florida State" className="mb-2" />
                 <h3 className="text-xl !m-0 font-bold text-gray-800">4.0%</h3>
                 <p className="!text-lg !font-semibold italic text-gray-700">
@@ -1115,7 +1116,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 rounded-md">
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 ">
                 <img src="yt.png" alt="Virginia Tech" className="mb-2" />
                 <h5 className="text-lg !m-0 font-bold text-gray-800">2.9%</h5>
                 <p className="!text-lg !font-semibold italic text-gray-700">
@@ -1123,7 +1124,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 rounded-md">
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 ">
                 <img
                   src="/red-wolf.png"
                   alt="Arkansas State"
@@ -1135,7 +1136,7 @@ const Matrics = () => (
                 </p>
               </div>
 
-              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 rounded-md">
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 ">
                 <img
                   src="/red-eagle.png"
                   alt="Boston College"
