@@ -899,6 +899,13 @@ const Matrics = () => (
                       showScale={true}
                     />
                   </div>
+                  <div className="flex justify-center items-center mb-2">
+                    <div className="flex items-center gap-2 w-[250px] mt-3 border border-solid border-[#126DB8] bg-[#fff]">
+                      <span className="text-xl bg-[#126DB8] text-white px-2 font-[500]">74</span> 
+                      <span className="text-[14px]">Average Athletic Testing Score</span>
+                    </div>
+                  </div>
+                  
                 </div>
               </div>
               <div className=" flex mt-3 p-3  justify-center gap-4 bg-[#fff8f4]">
@@ -939,6 +946,12 @@ const Matrics = () => (
                       average={7.4}
                       showScale={true}
                     />
+                  </div>
+                  <div className="flex justify-center items-center mb-2">
+                    <div className="flex items-center gap-2 w-[250px] mt-3 border border-solid border-[#FF7525] bg-[#fff]">
+                      <span className="text-xl bg-[#FF7525] text-white px-2 font-[500]">74</span> 
+                      <span className="text-[14px]">Average Recruiting Service Score</span>
+                    </div>
                   </div>
                 </div>
               </div>
