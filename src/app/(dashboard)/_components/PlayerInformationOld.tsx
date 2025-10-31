@@ -611,7 +611,39 @@ const Activity = () => (
         </div>
       </div>
     </div>
-    <div className=" mt-5">
+
+    <div className="flex flex-col gap-3 mt-5">
+      <h5 className="text-xl font-semibold text-gray-900 mb-4">Activity</h5>
+      <div>
+        <img src="/calender.png" alt="Georgia Tech Logo" className="w-full" />
+      </div>
+    </div>
+
+    <div className="mt-9">
+      <div className="flex items-center justify-between gap-2">
+      <h3 className="!text-xl font-semibold text-gray-900 mb-4">Jason Jonathon Timeline Events</h3>
+      <div className="mb-4 flex gap-2 justify-end">
+
+        
+        <Select
+          defaultValue="Date"
+          onChange={handleChange}
+          options={[
+            { value: "jack", label: "Jack" },
+            { value: "lucy", label: "Lucy" },
+          ]}
+        />
+        <Select
+          defaultValue="All Team"
+          onChange={handleChange}
+          options={[
+            { value: "jack", label: "Jack" },
+            { value: "lucy", label: "Lucy" },
+          ]}
+        />
+      </div>
+      </div>
+      
       <table className="w-full card ">
         <thead className="">
           <tr className="bg-gray-50 border-b border-gray-200 border-t">
@@ -628,6 +660,14 @@ const Activity = () => (
         </thead>
         <tbody className="divide-y divide-gray-200">
           <tr className="">
+            {/* <Select
+              defaultValue="Source"
+              onChange={handleChange}
+              options={[
+                { value: "jack", label: "Jack" },
+                { value: "lucy", label: "Lucy" },
+              ]}
+            /> */}
             <td className="px-6 py-4 card flex items-center space-x-4">
               <img
                 src="/a.png"
@@ -901,11 +941,14 @@ const Matrics = () => (
                   </div>
                   <div className="flex justify-center items-center mb-2">
                     <div className="flex items-center gap-2 w-fit mt-3 border border-solid border-[#126DB8] bg-[#fff]">
-                      <span className="text-xl bg-[#126DB8] text-white px-2 font-[500]">74</span> 
-                      <span className="text-[14px] pr-2">Average Athletic Testing Score</span>
+                      <span className="text-xl bg-[#126DB8] text-white px-2 font-[500]">
+                        74
+                      </span>
+                      <span className="text-[14px] pr-2">
+                        Average Athletic Testing Score
+                      </span>
                     </div>
                   </div>
-                  
                 </div>
               </div>
               <div className=" flex mt-3 p-3  justify-center gap-4 bg-[#fff8f4]">
@@ -949,8 +992,12 @@ const Matrics = () => (
                   </div>
                   <div className="flex justify-center items-center mb-2">
                     <div className="flex items-center gap-2 w-fit mt-3 border border-solid border-[#FF7525] bg-[#fff]">
-                      <span className="text-xl bg-[#FF7525] text-white px-2 font-[500]">74</span> 
-                      <span className="text-[14px] pr-2">Average Recruiting Service Score</span>
+                      <span className="text-xl bg-[#FF7525] text-white px-2 font-[500]">
+                        74
+                      </span>
+                      <span className="text-[14px] pr-2">
+                        Average Recruiting Service Score
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1073,7 +1120,6 @@ const Matrics = () => (
             </p>
 
             <div className="grid grid-cols-4 gap-3">
-
               <div className="col-span-3 flex flex-col items-start justify-between bg-[#ebf8f2] p-4">
                 <img src="/angry-bird.png" alt="Louisville" className="mb-2" />
                 <h2 className="text-3xl !mb-0 font-bold text-gray-800">

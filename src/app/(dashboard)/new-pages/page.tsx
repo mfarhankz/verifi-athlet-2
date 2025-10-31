@@ -6,12 +6,20 @@ import ImageWithAverage from "../_components/ImageWithAverage";
 import PlayerInformationOld from "../_components/PlayerInformationOld";
 import Image from "next/image";
 import ProgressBar from "@/components/ProgressBar";
+import { Rate } from 'antd';
+
+import { Switch } from "antd";
 
 export default function NewPages() {
   const [isPlayerModalVisible, setIsPlayerModalVisible] = useState(true);
   const handleClosePlayerModal = () => {
     setIsPlayerModalVisible(false);
   };
+
+  const onChange = (checked: boolean) => {
+    console.log(`switch to ${checked}`);
+  };
+
   const items: MenuProps["items"] = [
     {
       label: <a href="#">Follow Athlete Offers</a>,
@@ -325,6 +333,207 @@ export default function NewPages() {
                 </div>
                 <div className="col-span-8 card-withou-pading gray-scale">
                   <PlayerInformationOld />
+                </div>
+
+                <div className="mt-5 flex gap-4">
+                  <div className="card p-0 w-96">
+                    <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                      Raw Measureables
+                    </h3>
+                    <div className="p-3">
+                      <p className="p-0 m-0 leading-5">
+                        Our proprietary web scrape helps predict athletic
+                        potential in athletes with very little other
+                        information. This score often serves as a starting point
+                        until we know more about an athlete
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="card p-0 w-96">
+                    <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                      HS Scouts
+                    </h3>
+                    <div className="p-3">
+                      <table className="w-full new-table">
+                        <thead>
+                          <tr>
+                            <th>Source</th>
+                            <th>Score</th>
+                            <th>Height</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Quick info here</td>
+                            <td>50</td>
+                            <td>5.11”</td>
+                          </tr>
+                          <tr>
+                            <td>Additional info here</td>
+                            <td>49</td>
+                            <td>5.10”</td>
+                          </tr>
+                          <tr>
+                            <td>Go Information</td>
+                            <td>63</td>
+                            <td>5.9”</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="card p-0 w-96">
+                    <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                      Scouts
+                    </h3>
+                    <div className="p-3">
+                      <table className="w-full new-table">
+                        <thead>
+                          <tr>
+                            <th>Source</th>
+                            <th>Score</th>
+                            <th>Height</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Quick info here</td>
+                            <td>50</td>
+                            <td>5.11”</td>
+                          </tr>
+                          <tr>
+                            <td>Additional info here</td>
+                            <td>49</td>
+                            <td>5.10”</td>
+                          </tr>
+                          <tr>
+                            <td>Go Information</td>
+                            <td>63</td>
+                            <td>5.9”</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-4 mt-5">
+                  <div className="card p-0 w-96">
+                    <div className="flex items-center justify-end bg-[#f6f6f8] p-2">
+                      <h3 className="!text-lg font-[500] text-gray-900 !mb-0 mr-4">
+                        View as
+                      </h3>
+                      <span className="text-sm">Height</span>
+                      <Switch
+                        defaultChecked
+                        className="mx-3 !min-h-[23px]"
+                        onChange={onChange}
+                      />
+                      <span className="text-sm">Source</span>
+                    </div>
+                    <div className="p-3">
+                      <img
+                        src="/chart2.png"
+                        alt="Georgia Tech Logo"
+                        className="w-full mb-4"
+                      />
+                      <table className="w-full new-table">
+                        <thead>
+                          <tr>
+                            <th>Source</th>
+                            <th>Score</th>
+                            <th>Height</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td>Quick info here</td>
+                            <td>50</td>
+                            <td>5.11”</td>
+                          </tr>
+                          <tr>
+                            <td>Additional info here</td>
+                            <td>49</td>
+                            <td>5.10”</td>
+                          </tr>
+                          <tr>
+                            <td>Go Information</td>
+                            <td>63</td>
+                            <td>5.9”</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="card p-0 w-96">
+                      <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                        Offers
+                      </h3>
+                      <div className="p-3">
+                        <div className="flex items-center gap-2">
+                          <img
+                            src="/pl1.png"
+                            alt="Georgia Tech Logo"
+                            className="w-12 h-12 mt-1"
+                          />
+                          <div>
+                            <h5 className="!font-[400] text-lg m-0 text-gray-900">
+                              University of New Jersey
+                            </h5>
+                            <span className="!font-[600]">$394,039</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <img
+                            src="/pl1.png"
+                            alt="Georgia Tech Logo"
+                            className="w-12 h-12 mt-1"
+                          />
+                          <div>
+                            <h5 className="!font-[400] text-lg m-0 text-gray-900">
+                              University of New Jersey
+                            </h5>
+                            <span className="!font-[600]">$394,039</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <img
+                            src="/a.png"
+                            alt="Georgia Tech Logo"
+                            className="w-12 h-12 mt-1"
+                          />
+                          <div>
+                            <h5 className="!font-[400] text-lg m-0 text-gray-900">
+                              University of New Jersey
+                            </h5>
+                            <span className="!font-[600]">$394,039</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="card p-0 w-96">
+                      <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                        Recruiting Services
+                      </h3>
+                      <div className="p-3 flex justify-between">
+                        <div>
+                          <h6 className="!text-[16px]">Player Rating</h6>
+                          <h2 className="!text-5xl !font-bold italic !mb-1">4.5</h2>
+                          <Rate allowHalf defaultValue={4.5} className="bg-none" />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <h5 className="flex flex-col items-center !text-[22px] mb-0"><span className="text-[16px] !font-normal">TN</span> 37</h5>
+                          <h5 className="flex flex-col items-center !text-[22px] mb-0"><span className="text-[16px] !font-normal">Edge</span> 111</h5>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
