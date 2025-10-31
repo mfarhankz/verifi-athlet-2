@@ -436,7 +436,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -446,7 +446,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -456,7 +456,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -466,7 +466,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -476,7 +476,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -486,7 +486,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -496,7 +496,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -506,7 +506,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -516,7 +516,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -526,7 +526,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -536,7 +536,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -546,7 +546,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -556,7 +556,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -566,7 +566,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -576,7 +576,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -586,7 +586,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -596,7 +596,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
 
@@ -606,7 +606,7 @@ const Activity = () => (
             alt="abc"
             width={95}
             height={95}
-            className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+            className="w-16 h-16 object-contain -lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
           />
         </div>
       </div>
@@ -614,8 +614,114 @@ const Activity = () => (
 
     <div className="flex flex-col gap-3 mt-5">
       <h5 className="text-xl font-semibold text-gray-900 mb-4">Activity</h5>
-      <div>
-        <img src="/calender.png" alt="Georgia Tech Logo" className="w-full" />
+      <div className="w-full bg-white -lg border border-gray-200">
+        {/* Header */}
+        <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+          <div className="text-[#1C1D4D] font-medium">12/10/2024</div>
+          <div className="text-[#1C1D4D] font-medium">Today</div>
+        </div>
+
+        {/* Timeline Rows */}
+        <div className="flex flex-col gap-2 mb-6">
+          {/* Row 1: Black B logo - Orange bar */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+              <div className="w-8 h-8 bg-black flex items-center justify-center ">
+                <span className="text-yellow-500 font-bold text-sm">B</span>
+              </div>
+              <span className="text-[#1C1D4D] font-semibold text-base">5</span>
+            </div>
+            <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+              <div className="absolute h-full bg-orange-500 " style={{ left: '25%', width: '70px' }}></div>
+            </div>
+          </div>
+
+          {/* Row 2: UCF Gold Shield - Light Blue bar */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+              <div className="w-8 h-8 bg-yellow-500 flex items-center justify-center ">
+                <span className="text-white font-bold text-xs">UCF</span>
+              </div>
+              <span className="text-[#1C1D4D] font-semibold text-base">2</span>
+            </div>
+            <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+              <div className="absolute h-full bg-blue-300 " style={{ left: '75%', width: '70px' }}></div>
+            </div>
+          </div>
+
+          {/* Row 3: New Mexico Red Eagle - Green bar */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+              <div className="w-8 h-8 bg-red-600 flex items-center justify-center  overflow-hidden">
+                <img src="/red-eagle.png" alt="New Mexico" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-[#1C1D4D] font-semibold text-base">1</span>
+            </div>
+            <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+              <div className="absolute h-full bg-green-500 " style={{ left: '50%', width: '70px' }}></div>
+            </div>
+          </div>
+
+          {/* Row 4: Orange Hawk - Green and Dark Blue bars */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+              <div className="w-8 h-8 bg-orange-500 flex items-center justify-center  overflow-hidden">
+                <img src="/tm.png" alt="Team" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-[#1C1D4D] font-semibold text-base">2</span>
+            </div>
+            <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+              <div className="absolute h-full bg-green-500 " style={{ left: '25%', width: '70px' }}></div>
+              <div className="absolute h-full bg-[#1C1D4D] " style={{ left: '75%', width: '70px' }}></div>
+            </div>
+          </div>
+
+          {/* Row 5: West Georgia Blue Wolf - Dark Blue bar */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+              <div className="w-8 h-8 bg-blue-600 flex items-center justify-center  overflow-hidden">
+                <img src="/red-wolf.png" alt="West Georgia" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-[#1C1D4D] font-semibold text-base">3</span>
+            </div>
+            <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+              <div className="absolute h-full bg-[#1C1D4D] " style={{ left: '33%', width: '70px' }}></div>
+            </div>
+          </div>
+
+          {/* Row 6: Red Cardinal - Dark Blue bar */}
+          <div className="flex items-center">
+            <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+              <div className="w-8 h-8 bg-red-600 flex items-center justify-center  overflow-hidden">
+                <img src="/yt.png" alt="Cardinal" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-[#1C1D4D] font-semibold text-base">2</span>
+            </div>
+            <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+              <div className="absolute h-full bg-[#1C1D4D] " style={{ left: '50%', width: '70px' }}></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex gap-6 border-t border-gray-200">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-orange-500 "></div>
+            <span className="text-sm text-gray-700">Offer</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 "></div>
+            <span className="text-sm text-gray-700">Commit</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-[#1C1D4D] "></div>
+            <span className="text-sm text-gray-700">Camp</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-300 "></div>
+            <span className="text-sm text-gray-700">Visit</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -817,38 +923,38 @@ const Bio = () => (
     <div className="grid grid-cols-12 gap-4">
       <div className="col-span-6  ">
         <h4>Parent Contact Info</h4>
-        <div>
+      <div>
           <h5>Mom’s Information</h5>
           <p>
             Jessica Martin (Doctor - MBBS from University of Florida) <br />{" "}
             (930) 2930 393
           </p>
-        </div>
+      </div>
         <div className=" mt-9">
           <h5>Dad’s Information</h5>
           <p>
             Alex Martin (Real Estate - BBA from University of Taxes) <br />{" "}
             (930) 6549 203
           </p>
-        </div>
+      </div>
       </div>
       <div className="col-span-6 ">
         <h4>Coach Contact Info</h4>
-        <div>
+      <div>
           <p>
             Morgan Jason <br />
             University of Florida <br /> Cell: (930) 2930 393 <br />
             Home: (203) 9302 2034 <br /> Email:{" "}
             <span className="text-blue-500">morgan.jason@gmail.com</span>{" "}
           </p>
-        </div>
       </div>
     </div>
-  </div>
+      </div>
+      </div>
 );
 
 const Matrics = () => (
-  <div>
+      <div>
     <h4>Matrics</h4>
     <div className="container mx-auto">
       <div className="grid grid-cols-2 gap-3">
@@ -1058,8 +1164,8 @@ const Matrics = () => (
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+      </div>
+    </div>
 
         <div className="flex flex-col gap-3">
           <div className="">
@@ -1128,7 +1234,7 @@ const Matrics = () => (
                 <p className="!text-lg !font-semibold italic text-gray-700">
                   University of Louisville
                 </p>
-              </div>
+    </div>
 
               <div className="col-span-1 flex flex-col items-start justify-between bg-[#fff1e9] p-4 ">
                 <img src="/uni.png" alt="Other" className="mb-2" />
@@ -1136,7 +1242,7 @@ const Matrics = () => (
                 <p className="!text-lg !m-0 !font-semibold text-gray-700">
                   Other
                 </p>
-              </div>
+  </div>
 
               <div className="col-span-2 flex flex-col items-start justify-between bg-[#f3ebfe] p-4 ">
                 <img src="/uk.png" alt="Kentucky" className="mb-2" />
@@ -1144,7 +1250,7 @@ const Matrics = () => (
                 <p className="!text-sm !font-semibold italic text-gray-700">
                   University of Kentucky
                 </p>
-              </div>
+    </div>
 
               <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 ">
                 <img src="/v.png" alt="West Virginia" className="mb-2" />
@@ -1152,7 +1258,7 @@ const Matrics = () => (
                 <p className="!text-lg !font-semibold italic text-gray-700">
                   West Virginia University
                 </p>
-              </div>
+    </div>
 
               <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 ">
                 <img src="./tm.png" alt="Florida State" className="mb-2" />
@@ -1247,18 +1353,18 @@ const Survey = () => (
         <div className="flex items-start space-x-4">
           <div className="card">
             <Image src="/bull-img.png" alt="abc" width={79} height={73} />
-          </div>
-          <div>
+      </div>
+      <div>
             <h5 className="mb-0 mt-1 !text-[22px] !font-[500]">
               Bulls College New York
             </h5>
             <p className="italic font-[500] mt-2 mb-2">Walk ON</p>
             <p className="m-0">Yes</p>
-          </div>
+      </div>
         </div>
 
         <p className="mt-6 text-xs">Showing 1-1 of 1</p>
-      </div>
+    </div>
     </div>
     <div>
       <h4>High School Coach Data</h4>
@@ -1274,77 +1380,77 @@ const Survey = () => (
           <div>Coach Weight</div>
           <div>Coach Height</div>
           <div>Coach GPA</div>
-        </div>
+      </div>
 
         <div className="grid grid-cols-4  mt-1 font-normal not-italic">
           <div>some info</div>
           <div>140lbs</div>
           <div>6.1”</div>
           <div>4.3</div>
-        </div>
+    </div>
       </div>
     </div>
     <div>
       <h4>Campus Information (Section F)</h4>
-      <div className="flex items-center survey mb-5">
+    <div className="flex items-center survey mb-5">
         <i className="icon-arrow-right text-2xl mr-2"></i>
-        <div>
+      <div>
           <h6>
             Do you prefer your campus location to have all four seasons or be
             warm year round?
           </h6>
           <p className="m-0">No Preference</p>
-        </div>
       </div>
-      <div className="flex items-center survey mb-5">
-        <i className="icon-arrow-right mr-2"></i>
-        <div>
+    </div>
+    <div className="flex items-center survey mb-5">
+      <i className="icon-arrow-right mr-2"></i>
+      <div>
           <h6>
             What is the ideal location for you to go to school? (At least enter
             a state or enter None)
           </h6>
           <p className="m-0">New York, </p>
-        </div>
       </div>
-      <div className="flex items-center survey mb-5">
-        <i className="icon-arrow-right mr-2"></i>
-        <div>
+    </div>
+    <div className="flex items-center survey mb-5">
+      <i className="icon-arrow-right mr-2"></i>
+      <div>
           <h6>
             Within what distance do you want to be from your ideal location?
           </h6>
           <p className="m-0">California </p>
-        </div>
       </div>
-      <div className="flex items-center survey mb-5">
-        <i className="icon-arrow-right mr-2"></i>
-        <div>
+    </div>
+    <div className="flex items-center survey mb-5">
+      <i className="icon-arrow-right mr-2"></i>
+      <div>
           <h6>
             What is your ideal campus size (# indicates full-time undergrads)? 
           </h6>
           <p className="m-0">Yes full-time </p>
-        </div>
       </div>
-      <div className="flex items-center survey mb-5">
-        <i className="icon-arrow-right mr-2"></i>
-        <div>
+    </div>
+    <div className="flex items-center survey mb-5">
+      <i className="icon-arrow-right mr-2"></i>
+      <div>
           <h6>
             Do you want to include military schools? (Army, Navy, Air Force,
             Virginia Military Institute, Coast Guard Academy, Merchant Marine
             Academy)
           </h6>
           <p className="m-0">No</p>
-        </div>
       </div>
-      <div className="flex items-center survey mb-5">
-        <i className="icon-arrow-right mr-2"></i>
-        <div>
+    </div>
+    <div className="flex items-center survey mb-5">
+      <i className="icon-arrow-right mr-2"></i>
+      <div>
           <h6>
             Do you prefer to attend an HBCU (Historically Black College and
             University)?
           </h6>
           <p className="m-0">LA University </p>
-        </div>
       </div>
+    </div>
     </div>
   </div>
 );
