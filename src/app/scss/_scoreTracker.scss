@@ -1,0 +1,29 @@
+// Score Tracker Styles
+
+// Last frozen column border in Grid View
+.last-frozen-column {
+  border-right: 4px solid #e0e0e0 !important;
+}
+
+// Grid View cell backgrounds
+.ant-table-cell {
+  padding: 8px 8px !important;
+  
+  &.has-game-result {
+    background-color: transparent !important;
+  }
+}
+
+// Force button icons and text to be white when button is primary (selected)
+.ant-btn-primary .anticon,
+.ant-btn-primary svg,
+.ant-btn-primary span,
+.ant-btn-primary {
+  color: white !important;
+}
+
+// Force all content inside primary buttons to be white
+.ant-btn-primary * {
+  color: white !important;
+}
+

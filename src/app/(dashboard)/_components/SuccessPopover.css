@@ -1,0 +1,119 @@
+.success-popover-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.success-popover {
+  position: absolute;
+  z-index: 1002;
+  white-space: nowrap;
+}
+
+.success-popover-top {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.success-popover-bottom {
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.success-popover-left {
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.success-popover-right {
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.success-popover-content {
+  background: white;
+  color: #52c41a;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  position: relative;
+  animation: slideDown 0.3s ease-out;
+}
+
+.success-popover-content::before {
+  content: "";
+  position: absolute;
+  border-style: solid;
+}
+
+.success-popover-top .success-popover-content::before {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-color: white transparent transparent transparent;
+  border-width: 6px;
+  margin-top: 0;
+}
+
+.success-popover-bottom .success-popover-content::before {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-color: transparent transparent white transparent;
+  border-width: 6px;
+  margin-bottom: 0;
+}
+
+.success-popover-left .success-popover-content::before {
+  top: 50%;
+  right: 100%;
+  transform: translateY(-50%);
+  border-color: transparent white transparent transparent;
+  border-width: 6px;
+  margin-right: 0;
+}
+
+.success-popover-right .success-popover-content::before {
+  top: 50%;
+  left: 100%;
+  transform: translateY(-50%);
+  border-color: transparent transparent transparent white;
+  border-width: 6px;
+  margin-left: 0;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.success-popover-top {
+  animation: slideDownTop 0.3s ease-out;
+}
+
+.success-popover-bottom {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDownTop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+

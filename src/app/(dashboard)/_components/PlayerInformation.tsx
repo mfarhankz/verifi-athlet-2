@@ -11,6 +11,9 @@ import {
   Space,
   Typography,
   Skeleton,
+  Select,
+  Switch,
+  Rate,
 } from "antd";
 import Image from "next/image";
 import type { TableColumnsType } from "antd";
@@ -18,7 +21,7 @@ import CommentBox from "./CommentBox";
 import VideoComponent from "./VideoComponent";
 import { AthleteData } from "@/types/database";
 import type { GameLog } from "@/types/database";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/contexts/CustomerContext";
 import type { SportStatConfig } from "@/types/database";
@@ -26,6 +29,123 @@ import type { StatCategory } from "@/types/database";
 import { formatStatDecimal, formatPhoneNumber } from "@/utils/utils";
 import { fetchSportColumnConfig } from "@/lib/queries";
 import { calculateFormula, hasValidDependencies } from "@/utils/formulaCalculator";
+import { Tooltip } from "antd";
+import ProgressBar from "@/components/ProgressBar";
+
+// Mock data interfaces and data for HS profiles
+interface RawMeasureables {
+  key: string;
+  date: string;
+  source: string;
+  measure: string;
+  value: string;
+  score: number;
+  link: string;
+}
+
+const rawMeasureablesColumns = [
+  {
+    title: "Date",
+    dataIndex: "date",
+    key: "date",
+  },
+  {
+    title: "Source",
+    dataIndex: "source",
+    key: "source",
+  },
+  {
+    title: "Measure",
+    dataIndex: "measure",
+    key: "measure",
+  },
+  {
+    title: "Value",
+    dataIndex: "value",
+    key: "value",
+  },
+  {
+    title: "Score",
+    dataIndex: "score",
+    key: "score",
+  },
+  {
+    title: "Link",
+    dataIndex: "link",
+    key: "link",
+    render: (_: unknown, record: RawMeasureables) => (
+      <a href={record.link} className="flex items-center">
+        View Link
+      </a>
+    ),
+  },
+];
+
+const rawMeasureables: RawMeasureables[] = [
+  {
+    key: "1",
+    date: "5/2/2025",
+    source: "GPS",
+    measure: "Max Speed",
+    value: "35.2 km/h",
+    score: 92,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+  {
+    key: "2",
+    date: "2/3/2025",
+    source: "Coach",
+    measure: "Vertical Jump",
+    value: "32.5 in",
+    score: 85,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+  {
+    key: "3",
+    date: "5/4/2025",
+    source: "Catapult",
+    measure: "Resting HR",
+    value: "5560",
+    score: 88,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+  {
+    key: "4",
+    date: "3/6/2025",
+    source: "Strength Coach",
+    measure: "10m Sprint Time",
+    value: "5560",
+    score: 82,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+  {
+    key: "5",
+    date: "6/7/2025",
+    source: "VBT Device",
+    measure: "Back Squat 1RM",
+    value: "2.85 m",
+    score: 78,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+  {
+    key: "6",
+    date: "6/7/2025",
+    source: "Coach",
+    measure: "Standing Broad Jump",
+    value: "7.5 hours",
+    score: 34,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+  {
+    key: "7",
+    date: "6/7/2025",
+    source: "Wearable",
+    measure: "Sleep Duration",
+    value: "5560",
+    score: 36,
+    link: "http://localhost:3000/qais-hs-profile",
+  },
+];
 
 interface AthleteComment {
   id: string;
@@ -2380,7 +2500,2023 @@ const Notes = ({ athlete }: { athlete: AthleteData | null }) => {
   );
 };
 
-const items = (athlete: AthleteData | null, config: DataSourceConfig, dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null): TabsProps["items"] => {
+// Date Range Filter Component
+const DateRangeFilter = ({ 
+  dateRange, 
+  setDateRange, 
+  confirm, 
+  clearFilters 
+}: { 
+  dateRange: [string, string]; 
+  setDateRange: (range: [string, string]) => void; 
+  confirm: () => void; 
+  clearFilters: () => void; 
+}) => {
+  const [localStartDate, setLocalStartDate] = useState(dateRange[0]);
+  const [localEndDate, setLocalEndDate] = useState(dateRange[1]);
+  
+  return (
+    <div style={{ padding: 8 }}>
+      <div style={{ marginBottom: 8 }}>
+        <Input
+          type="date"
+          placeholder="Start Date"
+          value={localStartDate}
+          onChange={(e) => setLocalStartDate(e.target.value)}
+          style={{ width: 200, marginBottom: 4, display: 'block' }}
+        />
+        <Input
+          type="date"
+          placeholder="End Date"
+          value={localEndDate}
+          onChange={(e) => setLocalEndDate(e.target.value)}
+          style={{ width: 200, display: 'block' }}
+        />
+      </div>
+      <Space>
+        <Button
+          type="primary"
+          onClick={() => {
+            setDateRange([localStartDate, localEndDate]);
+            confirm();
+          }}
+          size="small"
+          style={{ width: 90 }}
+        >
+          Filter
+        </Button>
+        <Button
+          onClick={() => {
+            setLocalStartDate('');
+            setLocalEndDate('');
+            setDateRange(['', '']);
+            clearFilters();
+          }}
+          size="small"
+          style={{ width: 90 }}
+        >
+          Reset
+        </Button>
+      </Space>
+    </div>
+  );
+};
+
+// Dynamic Activity for HS profiles using offers table
+const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: any[] }) => {
+  // State for date range filter (only affects the table, not the offers logo section)
+  const [dateRange, setDateRange] = useState<[string, string]>(['', '']);
+  
+  // All events - unfiltered (used for offers logo section)
+  const allEventsRaw = events || [];
+  
+  // Build offers from ALL events (not filtered by date) for the logo section
+  const offers = allEventsRaw.filter((e: any) => (e?.type || '').toString().toLowerCase() === 'offer');
+  
+  // Apply date filter manually ONLY for the table
+  const filteredEventsForTable = useMemo(() => {
+    const [startDate, endDate] = dateRange;
+    
+    // If both dates are empty, show all
+    if (!startDate && !endDate) {
+      return allEventsRaw;
+    }
+    
+    return allEventsRaw.filter((record: any) => {
+      const recordDateStr = record.offer_date || record.created_at;
+      if (!recordDateStr) return false;
+      
+      // Parse the record date
+      const recordDate = new Date(recordDateStr);
+      recordDate.setHours(0, 0, 0, 0);
+      
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        return recordDate >= start && recordDate <= end;
+      } else if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        return recordDate >= start;
+      } else if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        return recordDate <= end;
+      }
+      
+      return true;
+    });
+  }, [allEventsRaw, dateRange]);
+
+  // Deduplicate by school_id while preserving first occurrence data
+  const offerSchools = Array.from(
+    offers.reduce((map: Map<string, { schoolId: string; name: string; logo: string | null; rank: number | null; date: string | null }>, e: any) => {
+      const sid = e?.school_id;
+      if (!sid || map.has(sid)) return map;
+      map.set(sid, {
+        schoolId: sid,
+        name: e?.school_name || 'Unknown School',
+        logo: e?.school_logo_url || null,
+        rank: e?.school_rank || null,
+        date: e?.offer_date || e?.created_at || null,
+      });
+      return map;
+    }, new Map()).values()
+  ).sort((a: any, b: any) => {
+    // Sort by rank (low to high), null ranks go to the end
+    if (a.rank === null && b.rank === null) return 0;
+    if (a.rank === null) return 1;
+    if (b.rank === null) return -1;
+    return a.rank - b.rank;
+  });
+
+  // Format date for display
+  const formatEventDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+    } catch {
+      return '—';
+    }
+  };
+
+  // Format type for display
+  const formatType = (type: string | null | undefined) => {
+    if (!type) return 'Unknown';
+    const typeStr = type.toString().toLowerCase();
+    
+    // Map types to display names
+    const typeMap: Record<string, string> = {
+      'offer': 'Offer',
+      'commit': 'Commit',
+      'decommit': 'Decommit',
+      'de-commit': 'Decommit',
+      'de_commit': 'Decommit',
+      'visit': 'Visit',
+      'official_visit': 'Official Visit',
+      'unofficial_visit': 'Unofficial Visit',
+    };
+    
+    return typeMap[typeStr] || type.charAt(0).toUpperCase() + type.slice(1);
+  };
+
+  // Get action verb for the type
+  const getActionText = (type: string | null | undefined, athleteName: string | null | undefined, schoolName: string | null | undefined) => {
+    if (!type) return '';
+    const typeStr = type.toString().toLowerCase();
+    const name = athleteName || 'Athlete';
+    const school = schoolName || 'Unknown School';
+    
+    const actionMap: Record<string, string> = {
+      'offer': `${name} received an offer from ${school}`,
+      'commit': `${name} committed to ${school}`,
+      'decommit': `${name} decommitted from ${school}`,
+      'de-commit': `${name} decommitted from ${school}`,
+      'de_commit': `${name} decommitted from ${school}`,
+      'visit': `${name} visited ${school}`,
+      'official_visit': `${name} officially visited ${school}`,
+      'unofficial_visit': `${name} unofficially visited ${school}`,
+    };
+    
+    return actionMap[typeStr] || `${name} ${typeStr} ${school}`;
+  };
+
+  // Get icon for the activity type
+  const getTypeIcon = (type: string | null | undefined) => {
+    if (!type) return null;
+    const typeStr = type.toString().toLowerCase();
+    
+    const iconMap: Record<string, { icon: string; color: string; style?: any }> = {
+      'offer': { icon: 'icon-check-2', color: '#52c41a' },
+      'commit': { icon: 'icon-check', color: '#52c41a', style: { fontWeight: 'bold' } },
+      'decommit': { icon: 'icon-ban', color: '#ff4d4f' },
+      'de-commit': { icon: 'icon-ban', color: '#ff4d4f' },
+      'de_commit': { icon: 'icon-ban', color: '#ff4d4f' },
+      'official_visit': { icon: 'icon-check-2', color: '#52c41a' },
+      'unofficial_visit': { icon: 'icon-location', color: '#8c8c8c' },
+      'visit': { icon: 'icon-location', color: '#8c8c8c' },
+      'camp': { icon: 'icon-tent', color: '#8c8c8c' },
+    };
+    
+    return iconMap[typeStr] || null;
+  };
+
+  // Get athlete's full name
+  const athleteName = athlete?.name_first && athlete?.name_last 
+    ? `${athlete.name_first} ${athlete.name_last}` 
+    : 'Athlete';
+
+  return (
+    <div className="activity">
+      <h4>Offers{offerSchools.length ? ` (${offerSchools.length})` : ''}</h4>
+      <div className="">
+        <div className="flex flex-wrap gap-3">
+          {offerSchools.map((s: any) => {
+            const tooltipTitle = s.date 
+              ? <>{s.name}<br />{formatEventDate(s.date)}</>
+              : s.name;
+            
+            return (
+              <Tooltip key={s.schoolId as string} title={tooltipTitle} placement="top">
+                <div className="group cursor-pointer relative card">
+                  <Image
+                    src={s.logo || '/blank-hs.svg'}
+                    alt={s.name as string}
+                    width={95}
+                    height={95}
+                    className="w-16 h-16 object-contain rounded-lg border border-gray-200 p-1 transition-transform group-hover:scale-110"
+                  />
+                </div>
+              </Tooltip>
+            );
+          })}
+        </div>
+        </div>
+      
+      {/* Added legacy activity visualization above All Activity */}
+      {false && (
+      <div className="flex flex-col gap-3 mt-5">
+        <h3 className="!text-xl font-semibold text-gray-900 mb-4">Activity</h3>
+        <div className="w-full bg-white -lg border border-gray-200">
+          {/* Header */}
+          <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+            <div className="text-[#1C1D4D] font-medium" style={{ paddingLeft: '70px' }}>12/10/2024</div>
+            <div className="text-[#1C1D4D] font-medium">Today</div>
+          </div>
+
+          {/* Timeline Rows */}
+          <div className="flex flex-col gap-2 mb-6">
+            {/* Row 1: Black B logo - Orange bar */}
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+                <div className="w-8 h-8 bg-black flex items-center justify-center ">
+                  <span className="text-yellow-500 font-bold text-sm">B</span>
+                </div>
+                <span className="text-[#1C1D4D] font-semibold text-xl">5</span>
+              </div>
+              <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+                <div className="absolute h-full bg-orange-500 " style={{ left: '25%', width: '70px' }}></div>
+              </div>
+            </div>
+
+            {/* Row 2: UCF Gold Shield - Light Blue bar */}
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+                <div className="w-8 h-8 bg-yellow-500 flex items-center justify-center ">
+                  <span className="text-white font-bold text-xs">UCF</span>
+                </div>
+                <span className="text-[#1C1D4D] font-semibold text-xl">2</span>
+              </div>
+              <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+                <div className="absolute h-full bg-blue-300 " style={{ left: '75%', width: '70px' }}></div>
+              </div>
+            </div>
+
+            {/* Row 3: New Mexico Red Eagle - Green bar */}
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+                <div className="w-8 h-8 bg-red-600 flex items-center justify-center  overflow-hidden">
+                  <img src="/red-eagle.png" alt="New Mexico" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-[#1C1D4D] font-semibold text-xl">1</span>
+              </div>
+              <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+                <div className="absolute h-full bg-green-500 " style={{ left: '50%', width: '70px' }}></div>
+              </div>
+            </div>
+
+            {/* Row 4: Orange Hawk - Green and Dark Blue bars */}
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+                <div className="w-8 h-8 bg-orange-500 flex items-center justify-center  overflow-hidden">
+                  <img src="/tm.png" alt="Team" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-[#1C1D4D] font-semibold text-xl">2</span>
+              </div>
+              <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+                <div className="absolute h-full bg-green-500 " style={{ left: '25%', width: '70px' }}></div>
+                <div className="absolute h-full bg-[#1C1D4D] " style={{ left: '75%', width: '70px' }}></div>
+              </div>
+            </div>
+
+            {/* Row 5: West Georgia Blue Wolf - Dark Blue bar */}
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+                <div className="w-8 h-8 bg-blue-600 flex items-center justify-center  overflow-hidden">
+                  <img src="/red-wolf.png" alt="West Georgia" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-[#1C1D4D] font-semibold text-xl">3</span>
+              </div>
+              <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+                <div className="absolute h-full bg-[#1C1D4D] " style={{ left: '33%', width: '70px' }}></div>
+              </div>
+            </div>
+
+            {/* Row 6: Red Cardinal - Dark Blue bar */}
+            <div className="flex items-center">
+              <div className="flex items-center gap-2 flex-shrink-0 card !p-1 !pr-2 h-[40px]">
+                <div className="w-8 h-8 bg-red-600 flex items-center justify-center  overflow-hidden">
+                  <img src="/yt.png" alt="Cardinal" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-[#1C1D4D] font-semibold text-xl">2</span>
+              </div>
+              <div className="flex-1 relative h-[40px] bg-slate-100 border border-gray-200 ">
+                <div className="absolute h-full bg-[#1C1D4D] " style={{ left: '50%', width: '70px' }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex gap-6 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-500 "></div>
+              <span className="text-sm text-gray-700">Offer</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 "></div>
+              <span className="text-sm text-gray-700">Commit</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-[#1C1D4D] "></div>
+              <span className="text-sm text-gray-700">Camp</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-300 "></div>
+              <span className="text-sm text-gray-700">Visit</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+
+      <div className=" mt-5">
+        <h4>All Activity</h4>
+        {allEventsRaw.length === 0 ? (
+          <p className="text-gray-500 italic">No activity recorded</p>
+        ) : (
+          <Table
+            dataSource={filteredEventsForTable.map((event: any, index: number) => ({
+              ...event,
+              key: event.id || index,
+            }))}
+            columns={[
+              {
+                title: "College",
+                dataIndex: "school_name",
+                key: "school_name",
+                filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => {
+                  // Get unique school names from ALL data (not filtered by date)
+                  const uniqueSchools = [...new Set(allEventsRaw
+                    .map(event => event.school_name)
+                    .filter(name => name && name !== 'Unknown School')
+                  )].sort();
+                  
+                  return (
+                    <div style={{ padding: 8 }}>
+                      <Select
+                        mode="multiple"
+                        placeholder="Select colleges"
+                        value={selectedKeys}
+                        onChange={(value) => setSelectedKeys(value || [])}
+                        style={{ width: 200, marginBottom: 8, display: 'block' }}
+                        allowClear
+                      >
+                        {uniqueSchools.map(school => (
+                          <Select.Option key={school} value={school}>
+                            {school}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                      <Space>
+                        <Button
+                          type="primary"
+                          onClick={() => confirm()}
+                          size="small"
+                          style={{ width: 90 }}
+                        >
+                          Filter
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            clearFilters();
+                            confirm();
+                          }}
+                          size="small"
+                          style={{ width: 90 }}
+                        >
+                          Reset
+                        </Button>
+                      </Space>
+        </div>
+                  );
+                },
+                onFilter: (value: any, record: any) => {
+                  if (!value || value.length === 0) return true;
+                  const selectedValues = Array.isArray(value) ? value : [value];
+                  return selectedValues.includes(record.school_name);
+                },
+                render: (_: any, record: any) => (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {record.school_logo_url && (
+                      <img
+                        src={record.school_logo_url}
+                        alt={record.school_name || 'School Logo'}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          objectFit: 'contain',
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 500 }}>
+                        {record.school_name || 'Unknown School'}
+        </div>
+                      <div style={{ fontSize: 12, color: "#666" }}>
+                        {getActionText(record.type, athleteName, record.school_name)}
+        </div>
+        </div>
+      </div>
+                ),
+              },
+              {
+                title: "Event Date",
+                dataIndex: "offer_date",
+                key: "offer_date",
+                filterDropdown: ({ confirm, clearFilters }: any) => (
+                  <DateRangeFilter 
+                    dateRange={dateRange}
+                    setDateRange={setDateRange}
+                    confirm={confirm}
+                    clearFilters={clearFilters}
+                  />
+                ),
+                render: (_: any, record: any) => formatEventDate(record.offer_date || record.created_at),
+              },
+              {
+                title: "Activity",
+                dataIndex: "type",
+                key: "type",
+                filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => {
+                  // Get unique activity types from ALL data (not filtered by date)
+                  const uniqueTypes = [...new Set(allEventsRaw
+                    .map(event => formatType(event.type))
+                    .filter(type => type && type !== 'Unknown')
+                  )].sort();
+                  
+                  return (
+                    <div style={{ padding: 8 }}>
+                      <Select
+                        mode="multiple"
+                        placeholder="Select activities"
+                        value={selectedKeys}
+                        onChange={(value) => setSelectedKeys(value || [])}
+                        style={{ width: 200, marginBottom: 8, display: 'block' }}
+                        allowClear
+                      >
+                        {uniqueTypes.map(type => (
+                          <Select.Option key={type} value={type}>
+                            {type}
+                          </Select.Option>
+                        ))}
+                      </Select>
+                      <Space>
+                        <Button
+                          type="primary"
+                          onClick={() => confirm()}
+                          size="small"
+                          style={{ width: 90 }}
+                        >
+                          Filter
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            clearFilters();
+                            confirm();
+                          }}
+                          size="small"
+                          style={{ width: 90 }}
+                        >
+                          Reset
+                        </Button>
+                      </Space>
+              </div>
+                  );
+                },
+                onFilter: (value: any, record: any) => {
+                  if (!value || value.length === 0) return true;
+                  const selectedValues = Array.isArray(value) ? value : [value];
+                  const recordType = formatType(record.type);
+                  return selectedValues.includes(recordType);
+                },
+                render: (type: any) => {
+                  const typeIcon = getTypeIcon(type);
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>{formatType(type)}</span>
+                      {typeIcon && (
+                        <i
+                          className={typeIcon.icon}
+                          style={{
+                            color: typeIcon.color,
+                            fontSize: '16px',
+                            ...(typeIcon.style || {})
+                          }}
+                        ></i>
+                      )}
+              </div>
+                  );
+                },
+              },
+            ]}
+            pagination={false}
+            scroll={{ x: "max-content" }}
+          />
+        )}
+    </div>
+  </div>
+);
+};
+
+const HSBio = ({ 
+  athlete, 
+  bioData,
+  coachData,
+  schoolName
+}: { 
+  athlete: AthleteData | null;
+  bioData?: {
+    desiredMajor: string | null;
+    predictedGPA: string | null;
+    sat: string | null;
+    act: string | null;
+    parentName: string | null;
+    parentEmail: string | null;
+    parentPhone: string | null;
+    momOccupation: string | null;
+    momEducationLevel: string | null;
+    momAlmaMater: string | null;
+    dadOccupation: string | null;
+    dadEducationLevel: string | null;
+    dadAlmaMater: string | null;
+  };
+  coachData?: {
+    name: string | null;
+    cell: string | null;
+    office: string | null;
+    email: string | null;
+  } | null;
+  schoolName?: string | null;
+}) => {
+  // Get data from props
+  const desiredMajor = bioData?.desiredMajor || null;
+  const predictedGPA = bioData?.predictedGPA || null;
+  const sat = bioData?.sat || null;
+  const act = bioData?.act || null;
+  const parentName = bioData?.parentName || null;
+  const parentEmail = bioData?.parentEmail || null;
+  const parentPhone = bioData?.parentPhone || null;
+  const momOccupation = bioData?.momOccupation || null;
+  const momEducationLevel = bioData?.momEducationLevel || null;
+  const momAlmaMater = bioData?.momAlmaMater || null;
+  const dadOccupation = bioData?.dadOccupation || null;
+  const dadEducationLevel = bioData?.dadEducationLevel || null;
+  const dadAlmaMater = bioData?.dadAlmaMater || null;
+  
+  // Get GPA from athlete object (source != hs_coach, survey, or verified)
+  const gpaRaw = athlete?.gpa || null;
+  // Round GPA to nearest .01
+  const gpa = gpaRaw ? Math.round(parseFloat(gpaRaw.toString()) * 100) / 100 : null;
+
+  // Format SAT/ACT display
+  const satActDisplay = [sat, act].filter(Boolean).join('/') || '—';
+
+  // Format parent info displays
+  const formatParentInfo = (occupation: string | null, education: string | null, almaMater: string | null) => {
+    const parts = [];
+    if (occupation) parts.push(`Job: ${occupation}`);
+    if (education && almaMater) {
+      parts.push(`${education} from ${almaMater}`);
+    } else if (education) {
+      parts.push(`Educ Level: ${education}`);
+    } else if (almaMater) {
+      parts.push(almaMater);
+    }
+    return parts.join(' - ');
+  };
+
+  const momInfo = formatParentInfo(momOccupation, momEducationLevel, momAlmaMater);
+  const dadInfo = formatParentInfo(dadOccupation, dadEducationLevel, dadAlmaMater);
+
+  // Check if we have any parent data to display
+  const hasParentData = parentName || parentEmail || parentPhone || momInfo || dadInfo;
+
+  // Format phone number to (xxx) xxx-xxxx
+  const formatPhoneNumber = (phone: string | null) => {
+    if (!phone) return null;
+    // Remove all non-digit characters
+    const cleaned = phone.replace(/\D/g, '');
+    // Format as (xxx) xxx-xxxx
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    // If it's not 10 digits, return as is
+    return phone;
+  };
+
+  return (
+    <div className="bio">
+      <h4>Academic Info</h4>
+      <div className="grid grid-cols-3 mb-11 font-semibold italic">
+        <div>
+          Desired Major <div className="font-normal">{desiredMajor || '—'}</div>
+        </div>
+        <div>
+          GPA{' '}
+          <div className="font-normal">
+            {gpa ? `GPA ${gpa}` : '—'}
+            {predictedGPA && ` - ${predictedGPA}`}
+          </div>
+        </div>
+        <div>
+          SAT/ACT <div className="font-normal">{satActDisplay}</div>
+        </div>
+      </div>
+      {hasParentData && (
+        <div className="grid grid-cols-12 gap-4">
+          <div className="col-span-12">
+            <h4>Parent Contact Info</h4>
+            {parentName && (
+              <div className="mb-2">
+                <strong>Name:</strong> {parentName}
+              </div>
+            )}
+            {parentEmail && (
+              <div className="mb-2">
+                <strong>Email:</strong>{" "}
+                <a href={`mailto:${parentEmail}`} className="text-blue-500 hover:underline">
+                  {parentEmail}
+                </a>
+              </div>
+            )}
+            {parentPhone && (
+              <div className="mb-4">
+                <strong>Phone:</strong>{" "}
+                <a href={`tel:${parentPhone}`} className="text-blue-500 hover:underline">
+                  {formatPhoneNumber(parentPhone)}
+                </a>
+              </div>
+            )}
+            {(momInfo || dadInfo) && (
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                {momInfo && (
+                  <div>
+                    <h5>Mom&apos;s Information</h5>
+                    <p>{momInfo}</p>
+                  </div>
+                )}
+                {dadInfo && (
+                  <div>
+                    <h5>Dad&apos;s Information</h5>
+                    <p>{dadInfo}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {coachData && (coachData.name || coachData.cell || coachData.office || coachData.email) && (
+        <div className="grid grid-cols-12 gap-4 mt-8">
+          <div className="col-span-6">
+            <h4>Coach Contact Info</h4>
+            <div>
+              <p>
+                {coachData.name && (
+                  <>
+                    {coachData.name} <br />
+                  </>
+                )}
+                {schoolName && (
+                  <>
+                    {schoolName} <br />
+                  </>
+                )}
+                {coachData.cell && (
+                  <>
+                    Cell:{" "}
+                    <a href={`tel:${coachData.cell}`} className="text-blue-500 hover:underline">
+                      {formatPhoneNumber(coachData.cell)}
+                    </a>{" "}
+                    <br />
+                  </>
+                )}
+                {coachData.office && (
+                  <>
+                    Office:{" "}
+                    <a href={`tel:${coachData.office}`} className="text-blue-500 hover:underline">
+                      {formatPhoneNumber(coachData.office)}
+                    </a>{" "}
+                    <br />
+                  </>
+                )}
+                {coachData.email && (
+                  <>
+                    Email:{" "}
+                    <a href={`mailto:${coachData.email}`} className="text-blue-500 hover:underline">
+                      {coachData.email}
+                    </a>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Metrics = ({ projectionText }: { projectionText?: string | null }) => (
+  <div>
+    <div className="container mx-auto">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="card px-4">
+          <div className="">
+            <div className="flex-1 px-2">
+              <h3 className="italic !text-2xl">Athletic Projection</h3>
+              <div className=" mr-5 flex items-center justify-center  border-black p-5">
+                <div className="">
+                  <h5 className="m-0 italic text-center">Current Projection</h5>
+              <h4 className="italic text-[22px] text-center">{projectionText || '—'}</h4>
+              <Tooltip title="Coming Soon" placement="top">
+                <div className="opacity-30 w-60 mx-auto">
+                    <ProgressBar
+                      value={83}
+                      height={55}
+                      color="#2BB650"
+                      label=""
+                      labelSize="14"
+                      labelWeight={400}
+                    />
+                </div>
+              </Tooltip>
+              </div>
+            </div>
+              <Tooltip title="Coming Soon" placement="top">
+                <div className="opacity-30 flex  justify-center gap-4 bg-[#f3f8fb]">
+                  <div className="flex-1 p-3 ">
+                  <h3 className="px-2 italic !text-2xl">Athletic Testing</h3>
+                  <div className="flex flex-col gap-1">
+                    <ProgressBar
+                      value={85}
+                      height={30}
+                      color="#126DB8"
+                      label="100 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={10.9}
+                    />
+                    <ProgressBar
+                      value={50}
+                      height={30}
+                      color="#126DB8"
+                      label="200 M"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={22.2}
+                    />
+                    <ProgressBar
+                      value={67}
+                      height={30}
+                      color="#126DB8"
+                      label="40"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={4.7}
+                    />
+                    <ProgressBar
+                      value={54}
+                      height={30}
+                      color="#126DB8"
+                      label="BJ"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={9.5}
+                    />
+                    <ProgressBar
+                      value={96}
+                      height={30}
+                      color="#126DB8"
+                      label="VJ"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#f3f8fb"
+                      average={34}
+                      showScale={true}
+                    />
+                  </div>
+                  <div className="flex justify-center items-center mb-2">
+                    <div className="flex items-center gap-2 w-fit mt-3 border border-solid border-[#126DB8] bg-[#fff]">
+                      <span className="text-xl bg-[#126DB8] text-white px-2 font-[500]">74</span> 
+                      <span className="text-[14px] pr-2">Average Athletic Testing Score</span>
+                    </div>
+                  </div>
+                  
+                  </div>
+                </div>
+              </Tooltip>
+              <Tooltip title="Coming Soon" placement="top">
+                <div className="opacity-30 flex mt-3 p-3  justify-center gap-4 bg-[#fff8f4]">
+                  <div className="flex-1 px-2">
+                  <h3 className="italic !text-2xl">Recruiting Services</h3>
+                  <div className="flex flex-col gap-1">
+                    <ProgressBar
+                      value={89}
+                      height={30}
+                      color="#FF7525"
+                      label="247"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#fff8f4"
+                      average={78}
+                    />
+                    <ProgressBar
+                      value={53}
+                      height={30}
+                      color="#FF7525"
+                      label="ESPN"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#fff8f4"
+                      average={80}
+                    />
+                    <ProgressBar
+                      value={68}
+                      height={30}
+                      color="#FF7525"
+                      label="On3"
+                      labelSize="12"
+                      labelWeight={400}
+                      labelWidth={110}
+                      backgroundColor="#fff8f4"
+                      average={85}
+                      showScale={true}
+                    />
+                  </div>
+                  <div className="flex justify-center items-center mb-2">
+                    <div className="flex items-center gap-2 w-fit mt-3 border border-solid border-[#FF7525] bg-[#fff]">
+                      <span className="text-xl bg-[#FF7525] text-white px-2 font-[500]">74</span> 
+                      <span className="text-[14px] pr-2">Average Recruiting Service Score</span>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+              </Tooltip>
+              <Tooltip title="Coming Soon" placement="top">
+                <div className="opacity-30 flex-1 mt-5 px-2">
+                  <div className="flex flex-col gap-1 p-3 ">
+                  <ProgressBar
+                    value={13}
+                    height={30}
+                    color="#C00E1E"
+                    label="HS Coach"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                  />
+                  <ProgressBar
+                    value={20}
+                    height={30}
+                    color="#2BB650"
+                    label="Data Scraping"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                  />
+                  <ProgressBar
+                    value={12}
+                    height={30}
+                    color="#2BB650"
+                    label="Offers"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                  />
+                  <ProgressBar
+                    value={32}
+                    height={30}
+                    color="#FF7525"
+                    label="Honors"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                  />
+                  <ProgressBar
+                    value={18}
+                    height={30}
+                    color="#C00E1E"
+                    label="Scouts"
+                    labelSize="12"
+                    labelWeight={400}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                    showScale={true}
+                  />
+                </div>
+              </div>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <Tooltip title="Coming Soon" placement="top">
+            <div className="opacity-30">
+              <div className="card bg-[#fff8f4]">
+                <div className="flex  justify-center gap-4">
+                  <div className="flex-1 px-2">
+                    <div className="flex gap-2 items-center justify-between">
+                      <h3 className="italic !text-2xl">Athlete Ranker</h3>
+                      <div className="flex gap-2 items-center">
+                        <span className=" italic text-xl">Overall Score</span>
+                        <span className="mt-1 text-xl font-bold !bg-[#2BB650] text-white italic w-10 h-10 flex items-center justify-center">
+                          85
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1 p-3">
+                  <ProgressBar
+                    value={47}
+                    height={30}
+                    color="#2BB650"
+                    label="Recuirtabilty"
+                    labelSize={"12"}
+                    labelWeight={500}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                  />
+                  <ProgressBar
+                    value={55}
+                    height={30}
+                    color="#2BB650"
+                    label="Stickiness"
+                    labelSize={"12"}
+                    labelWeight={500}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                  />
+                  <ProgressBar
+                    value={84}
+                    height={30}
+                    color="#2BB650"
+                    label="Athletics Impact"
+                    labelSize={"12"}
+                    labelWeight={500}
+                    labelWidth={110}
+                    backgroundColor="#ffffff"
+                    showScale={true}
+                  />
+                </div>
+              </div>
+            </div>
+          </Tooltip>
+
+            <Tooltip title="Coming Soon" placement="top">
+            <div className="card opacity-50">
+            <h3 className="italic !text-2xl mb-1 mt-1">
+              Commitment Predictions
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              These commitment predictions will update but are frozen when the
+              athlete commits
+            </p>
+
+            <div className="grid grid-cols-4 gap-3">
+
+              <div className="col-span-3 flex flex-col items-start justify-between bg-[#ebf8f2] p-4">
+                <img src="/angry-bird.png" alt="Louisville" className="mb-2" />
+                <h2 className="text-3xl !mb-0 font-bold text-gray-800">
+                  33.3%
+                </h2>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  University of Louisville
+                </p>
+              </div>
+
+              <div className="col-span-1 flex flex-col items-start justify-between bg-[#fff1e9] p-4 ">
+                <img src="/uni.png" alt="Other" className="mb-2" />
+                <h2 className="text-2xl !m-0 font-bold text-gray-800">28.7%</h2>
+                <p className="!text-lg !m-0 !font-semibold text-gray-700">
+                  Other
+                </p>
+              </div>
+
+              <div className="col-span-2 flex flex-col items-start justify-between bg-[#f3ebfe] p-4 ">
+                <img src="/uk.png" alt="Kentucky" className="mb-2" />
+                <h3 className="text-2xl !m-0 font-bold text-gray-800">28.7%</h3>
+                <p className="!text-sm !font-semibold italic text-gray-700">
+                  University of Kentucky
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 ">
+                <img src="/v.png" alt="West Virginia" className="mb-2" />
+                <h3 className="text-xl !m-0 font-bold text-gray-800">4.0%</h3>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  West Virginia University
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#fff6cc] p-4 ">
+                <img src="./tm.png" alt="Florida State" className="mb-2" />
+                <h3 className="text-xl !m-0 font-bold text-gray-800">4.0%</h3>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Florida State University
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 ">
+                <img src="yt.png" alt="Virginia Tech" className="mb-2" />
+                <h5 className="text-lg !m-0 font-bold text-gray-800">2.9%</h5>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Virginia Tech
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 ">
+                <img
+                  src="/red-wolf.png"
+                  alt="Arkansas State"
+                  className="mb-2"
+                />
+                <h5 className="text-lg !m-0 font-bold text-gray-800">2.0%</h5>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Arkansas State University
+                </p>
+              </div>
+
+              <div className="flex flex-col items-start justify-between bg-[#e7f0f8] p-4 ">
+                <img
+                  src="/red-eagle.png"
+                  alt="Boston College"
+                  className="mb-2"
+                />
+                <h5 className="text-lg !m-0 font-bold text-gray-800">2.0%</h5>
+                <p className="!text-lg !font-semibold italic text-gray-700">
+                  Boston College
+                </p>
+              </div>
+            </div>
+            </div>
+            </Tooltip>
+
+            {/* Moved from qais-hs-profile/page.tsx (337-537) */}
+            {false && (
+            <div>
+            <div className="mt-5 flex gap-4">
+              <div className="card p-0 w-96">
+                <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                  Raw Measureables
+                </h3>
+                <div className="p-3">
+                  <p className="p-0 m-0 leading-5">
+                    Our proprietary web scrape helps predict athletic
+                    potential in athletes with very little other
+                    information. This score often serves as a starting point
+                    until we know more about an athlete
+                  </p>
+                </div>
+              </div>
+
+              <div className="card p-0 w-96">
+                <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                  HS Scouts
+                </h3>
+                <div className="p-3">
+                  <table className="w-full new-table">
+                    <thead>
+                      <tr>
+                        <th>Source</th>
+                        <th>Score</th>
+                        <th>Height</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Quick info here</td>
+                        <td>50</td>
+                        <td>5.11”</td>
+                      </tr>
+                      <tr>
+                        <td>Additional info here</td>
+                        <td>49</td>
+                        <td>5.10”</td>
+                      </tr>
+                      <tr>
+                        <td>Go Information</td>
+                        <td>63</td>
+                        <td>5.9”</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="card p-0 w-96">
+                <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                  Scouts
+                </h3>
+                <div className="p-3">
+                  <table className="w-full new-table">
+                    <thead>
+                      <tr>
+                        <th>Source</th>
+                        <th>Score</th>
+                        <th>Height</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Quick info here</td>
+                        <td>50</td>
+                        <td>5.11”</td>
+                      </tr>
+                      <tr>
+                        <td>Additional info here</td>
+                        <td>49</td>
+                        <td>5.10”</td>
+                      </tr>
+                      <tr>
+                        <td>Go Information</td>
+                        <td>63</td>
+                        <td>5.9”</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-4 mt-5">
+              <div className="card p-0 w-96">
+                <div className="flex items-center justify-end bg-[#f6f6f8] p-2">
+                  <h3 className="!text-lg font-[500] text-gray-900 !mb-0 mr-4">
+                    View as
+                  </h3>
+                  <span className="text-sm">Height</span>
+                  <Switch
+                    defaultChecked
+                    className="mx-3 !min-h-[23px]"
+                    onChange={() => {}}
+                  />
+                  <span className="text-sm">Source</span>
+                </div>
+                <div className="p-3">
+                  <img
+                    src="/chart2.png"
+                    alt="Georgia Tech Logo"
+                    className="w-full mb-4"
+                  />
+                  <table className="w-full new-table">
+                    <thead>
+                      <tr>
+                        <th>Source</th>
+                        <th>Score</th>
+                        <th>Height</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Quick info here</td>
+                        <td>50</td>
+                        <td>5.11”</td>
+                      </tr>
+                      <tr>
+                        <td>Additional info here</td>
+                        <td>49</td>
+                        <td>5.10”</td>
+                      </tr>
+                      <tr>
+                        <td>Go Information</td>
+                        <td>63</td>
+                        <td>5.9”</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div>
+                <div className="card p-0 w-96">
+                  <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                    Offers
+                  </h3>
+                  <div className="p-3">
+                    <div className="flex items-center gap-2">
+                      <img
+                        src="/pl1.png"
+                        alt="Georgia Tech Logo"
+                        className="w-12 h-12 mt-1"
+                      />
+                      <div>
+                        <h5 className="!font-[400] text-lg m-0 text-gray-900">
+                          University of New Jersey
+                        </h5>
+                        <span className="!font-[600]">$394,039</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <img
+                        src="/pl1.png"
+                        alt="Georgia Tech Logo"
+                        className="w-12 h-12 mt-1"
+                      />
+                      <div>
+                        <h5 className="!font-[400] text-lg m-0 text-gray-900">
+                          University of New Jersey
+                        </h5>
+                        <span className="!font-[600]">$394,039</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <img
+                        src="/a.png"
+                        alt="Georgia Tech Logo"
+                        className="w-12 h-12 mt-1"
+                      />
+                      <div>
+                        <h5 className="!font-[400] text-lg m-0 text-gray-900">
+                          University of New Jersey
+                        </h5>
+                        <span className="!font-[600]">$394,039</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="card p-0 w-96">
+                  <h3 className="!text-lg font-[500] text-gray-900 mb-4 bg-[#f6f6f8] p-2 !m-0">
+                    Recruiting Services
+                  </h3>
+                  <div className="p-3 flex justify-between">
+                    <div>
+                      <h6 className="!text-[16px]">Player Rating</h6>
+                      <h2 className="!text-5xl !font-bold italic !mb-1">4.5</h2>
+                      <Rate allowHalf defaultValue={4.5} className="bg-none" />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <h5 className="flex flex-col items-center !text-[22px] mb-0"><span className="text-[16px] !font-normal">TN</span> 37</h5>
+                      <h5 className="flex flex-col items-center !text-[22px] mb-0"><span className="text-[16px] !font-normal">Edge</span> 111</h5>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+            )}
+        </div>
+        </div>
+      </div>
+    </div>
+);
+
+const RawMeasureables = ({ athlete }: { athlete: AthleteData | null }) => {
+  const [measurablesData, setMeasurablesData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<[string, string]>(['', '']);
+
+  useEffect(() => {
+    const fetchMeasurables = async () => {
+      if (!athlete?.id) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const allMeasurables: any[] = [];
+
+        // Fetch all data_type names for mapping
+        const allDataTypeIds: number[] = [];
+
+        // 1. Fetch from athlete_track
+        const { data: athleteTrackData, error: trackError } = await supabase
+          .from('athlete_track')
+          .select('value, data_type_id, date, source, grade')
+          .eq('athlete_id', athlete.id)
+          .or('inactive.is.null,inactive.eq.false')
+          .order('date', { ascending: false });
+
+        if (trackError) {
+          console.error('Error fetching athlete_track:', trackError);
+        }
+
+        // Collect data_type_ids from athlete_track
+        if (athleteTrackData) {
+          athleteTrackData.forEach((track: any) => {
+            if (track.data_type_id && !allDataTypeIds.includes(track.data_type_id)) {
+              allDataTypeIds.push(track.data_type_id);
+            }
+          });
+        }
+
+        // Fetch needed athlete_fact entries in a single query (video links and AI tape analysis)
+        const athleteFactIds = [964, 1061, 1052, 1053, 1054, 1055];
+        const { data: combinedFacts, error: combinedFactsError } = await supabase
+          .from('athlete_fact')
+          .select('data_type_id, value, created_at')
+          .eq('athlete_id', athlete.id)
+          .in('data_type_id', athleteFactIds)
+          .or('inactive.is.null,inactive.eq.false')
+          .order('created_at', { ascending: false });
+
+        if (combinedFactsError) {
+          console.error('Error fetching athlete_fact entries:', combinedFactsError);
+        }
+
+        // Prioritize 1061 over 964 for video link
+        const videoLink = combinedFacts?.find((f: any) => f.data_type_id === 1061)?.value ||
+                          combinedFacts?.find((f: any) => f.data_type_id === 964)?.value ||
+                          null;
+
+        // 2. Fetch from camp_result via camp_attendance
+        const { data: campAttendanceData, error: attendanceError } = await supabase
+          .from('camp_attendance')
+          .select('id, event_id')
+          .eq('athlete_id', athlete.id);
+
+        if (attendanceError) {
+          console.error('Error fetching camp_attendance:', attendanceError);
+        }
+
+        if (campAttendanceData && campAttendanceData.length > 0) {
+          const attendanceIds = campAttendanceData.map((a: any) => a.id);
+          const eventIds = [...new Set(campAttendanceData.map((a: any) => a.event_id))];
+
+          // Fetch camp results
+          const { data: campResults, error: resultsError } = await supabase
+            .from('camp_result')
+            .select('camp_attendance_id, data_type_id, value, created_at')
+            .in('camp_attendance_id', attendanceIds);
+
+          if (resultsError) {
+            console.error('Error fetching camp_result:', resultsError);
+          }
+
+          // Collect data_type_ids from camp_result
+          if (campResults) {
+            campResults.forEach((result: any) => {
+              if (result.data_type_id && !allDataTypeIds.includes(result.data_type_id)) {
+                allDataTypeIds.push(result.data_type_id);
+              }
+            });
+          }
+
+          // Fetch camp events
+          const { data: campEvents, error: eventsError } = await supabase
+            .from('camp_event')
+            .select('id, source, start_date')
+            .in('id', eventIds);
+
+          if (eventsError) {
+            console.error('Error fetching camp_event:', eventsError);
+          }
+
+          // Create a map of event_id to event data
+          const eventMap = new Map();
+          campEvents?.forEach((event: any) => {
+            eventMap.set(event.id, event);
+          });
+
+          // Create a map of attendance_id to event_id
+          const attendanceToEventMap = new Map();
+          campAttendanceData.forEach((attendance: any) => {
+            attendanceToEventMap.set(attendance.id, attendance.event_id);
+          });
+        }
+
+        // 3. Use AI Tape Analysis facts from combinedFacts
+        const athleteFactData = (combinedFacts || []).filter((f: any) => [1052, 1053, 1054, 1055].includes(f.data_type_id));
+
+        // Helper function to format measure names
+        const formatMeasureName = (name: string) => {
+          return name
+            .replace(/_/g, ' ') // Replace underscores with spaces
+            .split(' ')
+            .map(word => {
+              if (word.length === 2) {
+                // Two-letter words: capitalize both letters
+                return word.toUpperCase();
+              } else {
+                // Other words: capitalize first letter, lowercase rest
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+              }
+            })
+            .join(' ');
+        };
+
+        // Fetch data_type names for all collected data_type_ids
+        const dataTypeNameMap: { [key: number]: string } = {
+          1052: 'Top Speed',
+          1053: 'Average Speed',
+          1054: 'Acceleration',
+          1055: 'Deceleration'
+        };
+
+        if (allDataTypeIds.length > 0) {
+          const { data: dataTypes, error: dataTypeError } = await supabase
+            .from('data_type')
+            .select('id, name')
+            .in('id', allDataTypeIds);
+
+          if (dataTypeError) {
+            console.error('Error fetching data_types:', dataTypeError);
+          }
+
+          if (dataTypes) {
+            dataTypes.forEach((dt: any) => {
+              dataTypeNameMap[dt.id] = formatMeasureName(dt.name);
+            });
+          }
+        }
+
+        // Process athlete_track data
+        if (athleteTrackData) {
+          athleteTrackData.forEach((track: any) => {
+            // Determine source based on link
+            let source = track.source || '—';
+            if (videoLink) {
+              if (videoLink.toLowerCase().includes('milesplit')) {
+                source = 'Milesplit';
+              } else if (videoLink.toLowerCase().includes('athletic.net')) {
+                source = 'Athletic.net';
+              } else {
+                source = 'Track';
+              }
+            } else if (source === '—') {
+              source = 'Track';
+            }
+
+            allMeasurables.push({
+              date: track.date,
+              source: source,
+              measure: dataTypeNameMap[track.data_type_id] || `DT_${track.data_type_id}`,
+              data_type_id: track.data_type_id,
+              value: track.value,
+              score: '—',
+              link: videoLink,
+              grade: track.grade
+            });
+          });
+        }
+
+        // Process camp results
+        if (campAttendanceData && campAttendanceData.length > 0) {
+          const attendanceIds = campAttendanceData.map((a: any) => a.id);
+          
+          const { data: campResults } = await supabase
+            .from('camp_result')
+            .select('camp_attendance_id, data_type_id, value, created_at')
+            .in('camp_attendance_id', attendanceIds);
+
+          const eventIds = [...new Set(campAttendanceData.map((a: any) => a.event_id))];
+          const { data: campEvents } = await supabase
+            .from('camp_event')
+            .select('id, source, start_date')
+            .in('id', eventIds);
+
+          const eventMap = new Map();
+          campEvents?.forEach((event: any) => {
+            eventMap.set(event.id, event);
+          });
+
+          const attendanceToEventMap = new Map();
+          campAttendanceData.forEach((attendance: any) => {
+            attendanceToEventMap.set(attendance.id, attendance.event_id);
+          });
+
+          if (campResults) {
+            campResults.forEach((result: any) => {
+              const eventId = attendanceToEventMap.get(result.camp_attendance_id);
+              const event = eventMap.get(eventId);
+
+              allMeasurables.push({
+                date: event?.start_date || result.created_at,
+                source: event?.source || 'Camp',
+                measure: dataTypeNameMap[result.data_type_id] || `DT_${result.data_type_id}`,
+                data_type_id: result.data_type_id,
+                value: result.value,
+                score: '—',
+                link: '—',
+                grade: null
+              });
+            });
+          }
+        }
+
+        // Process athlete_fact data
+        if (athleteFactData) {
+          athleteFactData.forEach((fact: any) => {
+            allMeasurables.push({
+              date: fact.created_at,
+              source: 'AI Tape Analysis',
+              measure: dataTypeNameMap[fact.data_type_id] || `DT_${fact.data_type_id}`,
+              data_type_id: fact.data_type_id,
+              value: fact.value,
+              score: '—',
+              link: '—',
+              grade: null
+            });
+          });
+        }
+
+        // Sort by date descending
+        allMeasurables.sort((a, b) => {
+          const dateA = new Date(a.date || 0).getTime();
+          const dateB = new Date(b.date || 0).getTime();
+          return dateB - dateA;
+        });
+
+        setMeasurablesData(allMeasurables);
+      } catch (err) {
+        console.error('Unexpected error fetching measurables:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMeasurables();
+  }, [athlete?.id]);
+
+  // Format date for display (x/x/xx format)
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '—';
+    try {
+      const date = new Date(dateStr);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const year = date.getFullYear().toString().slice(-2);
+      return `${month}/${day}/${year}`;
+    } catch {
+      return '—';
+    }
+  };
+
+  // Date range filter component
+  const DateRangeFilter = ({ 
+    dateRange, 
+    setDateRange, 
+    confirm, 
+    clearFilters 
+  }: { 
+    dateRange: [string, string]; 
+    setDateRange: (range: [string, string]) => void; 
+    confirm: () => void; 
+    clearFilters: () => void; 
+  }) => {
+    const [localStartDate, setLocalStartDate] = useState(dateRange[0]);
+    const [localEndDate, setLocalEndDate] = useState(dateRange[1]);
+    
+    return (
+      <div style={{ padding: 8 }}>
+        <div style={{ marginBottom: 8 }}>
+          <Input
+            type="date"
+            placeholder="Start Date"
+            value={localStartDate}
+            onChange={(e) => setLocalStartDate(e.target.value)}
+            style={{ width: 200, marginBottom: 4, display: 'block' }}
+          />
+          <Input
+            type="date"
+            placeholder="End Date"
+            value={localEndDate}
+            onChange={(e) => setLocalEndDate(e.target.value)}
+            style={{ width: 200, display: 'block' }}
+          />
+        </div>
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => {
+              setDateRange([localStartDate, localEndDate]);
+              confirm();
+            }}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Filter
+          </Button>
+          <Button
+            onClick={() => {
+              setLocalStartDate('');
+              setLocalEndDate('');
+              setDateRange(['', '']);
+              clearFilters();
+            }}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Reset
+          </Button>
+        </Space>
+      </div>
+    );
+  };
+
+  // Apply date range filter only (other filters handled by Ant Design)
+  const dateFilteredData = useMemo(() => {
+    if (!dateRange[0] && !dateRange[1]) {
+      return measurablesData;
+    }
+
+    return measurablesData.filter((record) => {
+      if (!record.date) return true;
+      
+      const recordDate = new Date(record.date);
+      const startDate = dateRange[0] ? new Date(dateRange[0]) : null;
+      const endDate = dateRange[1] ? new Date(dateRange[1]) : null;
+
+      if (startDate && recordDate < startDate) return false;
+      if (endDate && recordDate > endDate) return false;
+      
+      return true;
+    });
+  }, [measurablesData, dateRange]);
+
+  // Get unique values for filters
+  const uniqueSources = [...new Set(measurablesData.map(item => item.source))].filter(Boolean);
+  const uniqueMeasures = [...new Set(measurablesData.map(item => item.measure))].filter(Boolean);
+  const uniqueScores = [...new Set(measurablesData.map(item => item.score))].filter(Boolean);
+
+  console.log('Unique sources:', uniqueSources);
+  console.log('Unique measures:', uniqueMeasures);
+  console.log('Sample data:', measurablesData.slice(0, 3));
+
+  // Table columns
+  const measurablesColumns = [
+    {
+      title: 'Date',
+      dataIndex: 'date',
+      key: 'date',
+      render: (date: string) => formatDate(date),
+      sorter: (a: any, b: any) => {
+        const dateA = new Date(a.date || 0).getTime();
+        const dateB = new Date(b.date || 0).getTime();
+        return dateA - dateB;
+      },
+      filterDropdown: ({ confirm, clearFilters }: any) => (
+        <DateRangeFilter
+          dateRange={dateRange}
+          setDateRange={setDateRange}
+          confirm={confirm}
+          clearFilters={clearFilters}
+        />
+      ),
+    },
+    {
+      title: 'Source',
+      dataIndex: 'source',
+      key: 'source',
+      sorter: (a: any, b: any) => (a.source || '').localeCompare(b.source || ''),
+
+      onFilter: (value: any, record: any) => {
+        return record.source === value;
+      },
+      filterSearch: true,
+    },
+    {
+      title: 'Measure',
+      dataIndex: 'measure',
+      key: 'measure',
+      sorter: (a: any, b: any) => (a.measure || '').localeCompare(b.measure || ''),
+      filters: uniqueMeasures.map(measure => ({ text: measure, value: measure })),
+      onFilter: (value: any, record: any) => {
+
+        return record.measure === value;
+      },
+      filterSearch: true,
+    },
+    {
+      title: 'Value',
+      dataIndex: 'value',
+      key: 'value',
+      sorter: (a: any, b: any) => {
+        const valA = parseFloat(a.value) || 0;
+        const valB = parseFloat(b.value) || 0;
+        return valA - valB;
+      },
+    },
+    {
+      title: 'Score',
+      dataIndex: 'score',
+      key: 'score',
+      sorter: (a: any, b: any) => (a.score || '').localeCompare(b.score || ''),
+      filters: uniqueScores.map(score => ({ text: score, value: score })),
+      onFilter: (value: any, record: any) => record.score === value,
+    },
+    {
+      title: 'Link',
+      dataIndex: 'link',
+      key: 'link',
+      render: (link: string | null) => {
+        if (!link || link === '—') return '—';
+        if (link.startsWith('http')) {
+          return (
+            <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+              View
+            </a>
+          );
+        }
+        return link;
+      },
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <div>
+        <h4>Raw Measureables</h4>
+        <Skeleton active />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-10">
+        <h4>Raw Measureables</h4>
+        <Table
+          dataSource={dateFilteredData.map((item, index) => ({ ...item, key: index }))}
+          columns={measurablesColumns}
+          pagination={false}
+        />
+      </div>
+    </div>
+  );
+};
+
+const HSSurvey = ({ athleteFacts }: { athleteFacts?: { data_type_id: number; value: string; source?: string }[] }) => (
+  <div>
+    <div>
+      <h4>Schools Athlete is Interested In</h4>
+      <div className="text-[#1C1D4D] text-sm">
+
+          <div className="relative">
+
+            <div className="flex items-start space-x-4 opacity-50">
+            <Tooltip title="Coming Soon" placement="top">
+              <div className="card">
+                <Image src="/tm.png" alt="abc" width={79} height={73} />
+              </div>
+              <div>
+                <h5 className="mb-0 mt-1 !text-[22px] !font-[500]">
+                  Florida State University
+                </h5>
+                <p className="italic font-[500] mt-2 mb-2">Walk On: Yes</p>
+              </div>
+              </Tooltip>
+            </div>
+
+          </div>
+
+      </div>
+    </div>
+    <div>
+      {(() => {
+        const byType = (id: number, src?: string) =>
+          athleteFacts?.find((f: any) => f?.data_type_id === id && (!src || f?.source === src))?.value || null;
+
+        const athleticInfo = byType(114) as string | null;
+
+        // Coach-provided values (filter source === 'hs_coach')
+        const coachWeight = byType(6, 'hs_coach');
+        const coachHeightFeet = byType(4, 'hs_coach');
+        const coachHeightInch = byType(5, 'hs_coach');
+        const coachHeight = coachHeightFeet || coachHeightInch
+          ? `${coachHeightFeet ?? '0'}'${coachHeightInch ?? '0'}"`
+          : null;
+        const coachGpa = (byType(693, 'hs_coach') || byType(35, 'hs_coach')) as string | null;
+
+        const items: { label: string; value: string }[] = [];
+        if (athleticInfo) items.push({ label: 'Athletic Info', value: athleticInfo });
+        if (coachWeight) items.push({ label: 'Coach Weight', value: `${coachWeight} lbs.` });
+        if (coachHeight) items.push({ label: 'Coach Height', value: coachHeight });
+        if (coachGpa) items.push({ label: 'Coach GPA', value: `${coachGpa}` });
+
+        if (items.length === 0) return null;
+
+        return (
+          <div>
+            <h4>High School Coach Data</h4>
+            <div className="mb-4">
+              <p className=" mb-6">
+                The data below has been provided by the high school coach and has not
+                been confirmed by Verified Athletics
+              </p>
+              <div className="grid grid-cols-4 gap-4">
+                {items.map((item, idx) => (
+                  <div key={idx} className="font-semibold italic">
+                    <div>{item.label}</div>
+                    <div className="mt-1 font-normal not-italic">{item.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+    <div>
+      {(() => {
+        const get = (id: number) => (athleteFacts || []).find((f: any) => f?.data_type_id === id && (f?.source || '').toString().toLowerCase() === 'college_selector')?.value || null;
+
+        // Campus Information (Step 1)
+        const campusItems: { q: string; a: string }[] = [];
+        const seasonsPref = get(1117);
+        if (seasonsPref) campusItems.push({ q: 'Do you prefer your campus location to have all four seasons or be warm year round?', a: seasonsPref });
+        const city = get(1118);
+        const state = get(1119);
+        const idealLocation = [city, state].filter(Boolean).join(', ');
+        if (idealLocation) campusItems.push({ q: 'What is the ideal location for you to go to school? (At least enter a state or enter None)', a: idealLocation });
+        const distance = get(51);
+        if (distance) campusItems.push({ q: 'Within what distance do you want to be from your ideal location?', a: distance });
+        const campusSize = get(52);
+        if (campusSize) campusItems.push({ q: 'What is your ideal campus size (# indicates full-time undergrads)?', a: campusSize });
+        const military = get(72);
+        if (military) campusItems.push({ q: 'Do you want to include military schools? (Army, Navy, Air Force, Virginia Military Institute, Coast Guard Academy, Merchant Marine Academy)', a: military });
+        const hbcu = get(64);
+        if (hbcu) campusItems.push({ q: 'Do you prefer to attend an HBCU (Historically Black College and University)?', a: hbcu });
+        const genderRatio = get(63);
+        if (genderRatio) campusItems.push({ q: 'What is your preferred male to female ratio?', a: genderRatio });
+        const locationType = get(53);
+        if (locationType) campusItems.push({ q: 'What is your ideal campus location type?', a: locationType });
+        const nearMountains = get(1123);
+        if (nearMountains) campusItems.push({ q: 'Do you prefer your campus location to be near the mountains?', a: nearMountains });
+        const nearOcean = get(1124);
+        if (nearOcean) campusItems.push({ q: 'Do you prefer your campus location to be near the ocean?', a: nearOcean });
+        const northeast = get(1125);
+        if (northeast) campusItems.push({ q: 'Do you prefer your campus location to be in the Northeast?', a: northeast });
+        const southeast = get(1126);
+        if (southeast) campusItems.push({ q: 'Do you prefer your campus location to be in the Southeast?', a: southeast });
+        const midwest = get(1127);
+        if (midwest) campusItems.push({ q: 'Do you prefer your campus location to be in the Midwest?', a: midwest });
+        const mountainRegion = get(1128);
+        if (mountainRegion) campusItems.push({ q: 'Do you prefer your campus location to be in the Mountain region?', a: mountainRegion });
+        const southwest = get(1129);
+        if (southwest) campusItems.push({ q: 'Do you prefer your campus location to be in the Southwest?', a: southwest });
+        const westCoast = get(1130);
+        if (westCoast) campusItems.push({ q: 'Do you prefer your campus location to be on the West Coast?', a: westCoast });
+
+        // Academic Profile (Step 2)
+        const academicItems: { q: string; a: string }[] = [];
+        const gradYear = get(1015);
+        if (gradYear) academicItems.push({ q: 'What year will you graduate high school?', a: gradYear });
+        const unweightedGpa = get(35);
+        if (unweightedGpa) academicItems.push({ q: 'What is your unweighted GPA (4.0 scale)?', a: unweightedGpa });
+        const stretch = get(1132);
+        if (stretch) academicItems.push({ q: 'How much do you want to stretch yourself academically?', a: stretch });
+        const sat = get(1024);
+        if (sat) academicItems.push({ q: 'What is your best SAT score?', a: sat });
+        const act = get(1025);
+        if (act) academicItems.push({ q: 'What is your best ACT score?', a: act });
+        const desiredMajor = get(10);
+        if (desiredMajor) academicItems.push({ q: 'What is your desired college major?', a: desiredMajor });
+        const specificMajor = get(1133);
+        if (specificMajor) academicItems.push({ q: 'Specific major you want to study', a: specificMajor });
+        const majorImportance = get(36);
+        if (majorImportance) academicItems.push({ q: 'How important is it that the school offers your desired major?', a: majorImportance });
+
+        // Football Information (Step 3)
+        const footballItems: { q: string; a: string }[] = [];
+        const coachStrict = get(77);
+        if (coachStrict) footballItems.push({ q: 'What type of coaching staff would you prefer?', a: coachStrict });
+        const d3vsJuco = get(1134);
+        if (d3vsJuco) footballItems.push({ q: 'If you do not get any scholarship offers would you prefer to go to a D3 school and start right away or go to a prep school/juco and try again for a scholarship?', a: d3vsJuco });
+        const nilImportance = get(366);
+        if (nilImportance) footballItems.push({ q: 'How important is an NIL deal in your college decision?', a: nilImportance });
+        const nilValue = get(365);
+        if (nilValue) footballItems.push({ q: 'How much money are you expecting your NIL deal to be worth per year?', a: nilValue });
+
+        // Preference Information (Step 5)
+        const preferenceItems: { q: string; a: string }[] = [];
+        const qMap: { id: number; q: string }[] = [
+          { id: 682, q: "The football program's recent winning and competitiveness vs. the football program's winning tradition" },
+          { id: 54, q: "What the school costs vs. the school's academic reputation" },
+          { id: 55, q: "The football program's winning tradition vs. the school's location" },
+          { id: 56, q: 'The odds that you will play right away and be an impactful player vs. the chance to compete for a national championship' },
+          { id: 62, q: 'Campus fun Party/Social culture vs. football winning tradition' },
+          { id: 680, q: "Team's chance to compete for a national championship vs. playing at the highest possible level" },
+          { id: 57, q: "What the school costs vs. the school's campus type (city, suburb, rural, etc.)" },
+          { id: 679, q: "Quality of the team's facilities vs. competing for a national championship" },
+          { id: 58, q: 'The odds that you will play right away and be an impactful player vs. the size of the school' },
+          { id: 61, q: 'Campus fun Party/Social culture vs. academic reputation' },
+          { id: 59, q: "The football program's winning tradition vs. the school's academic reputation" },
+          { id: 60, q: "Team's chance to compete for a national championship vs. the school's location" },
+          { id: 681, q: "Team's history producing NFL talent vs. the quality of the team's facilities" },
+        ];
+        qMap.forEach(({ id, q }) => {
+          const a = get(id);
+          if (a) preferenceItems.push({ q, a });
+        });
+
+        // Financial Considerations (Step 4)
+        const financialItems: { q: string; a: string }[] = [];
+        const financialAidNeeded = (athleteFacts || []).find((f: any) => f?.data_type_id === 'financialAidNeeded')?.value || null; // placeholder if needed later
+        const budgetRange = (athleteFacts || []).find((f: any) => f?.data_type_id === 'budgetRange')?.value || null; // placeholder if needed later
+        const scholarshipInterest = (athleteFacts || []).find((f: any) => f?.data_type_id === 'scholarshipInterest')?.value || null; // placeholder if needed later
+        const workStudyInterest = (athleteFacts || []).find((f: any) => f?.data_type_id === 'workStudyInterest')?.value || null; // placeholder if needed later
+        const financialConsiderations = (athleteFacts || []).find((f: any) => f?.data_type_id === 'financialConsiderations')?.value || null; // placeholder if needed later
+        // Currently Step 4 isn't persisted to athlete_fact numeric IDs in CollegeSelector — leaving placeholders in case added later
+        // If later mapped to data_type_ids, switch to get(<id>) calls and push into financialItems
+
+        const renderSection = (title: string, items: { q: string; a: string }[]) => {
+          if (!items.length) return null;
+          return (
+            <>
+              <h4>{title}</h4>
+              {items.map((it, idx) => (
+                <div key={`${title}-${idx}`} className="flex items-center survey mb-5">
+                  <i className="icon-arrow-right mr-2"></i>
+                  <div>
+                    <h6>{it.q}</h6>
+                    <p className="m-0">{it.a}</p>
+                  </div>
+                </div>
+              ))}
+            </>
+          );
+        };
+
+        return (
+          <>
+            {renderSection('Campus Information', campusItems)}
+            {renderSection('Academic Profile', academicItems)}
+            {renderSection('Football Information', footballItems)}
+            {renderSection('Financial Considerations', financialItems)}
+            {renderSection('Preference Information', preferenceItems)}
+          </>
+        );
+      })()}
+    </div>
+  </div>
+);
+
+const items = (
+  athlete: AthleteData | null,
+  config: DataSourceConfig,
+  dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null,
+  useMockData?: boolean,
+  activityEvents?: any[],
+  bioData?: {
+    desiredMajor: string | null;
+    predictedGPA: string | null;
+    sat: string | null;
+    act: string | null;
+    parentName: string | null;
+    parentEmail: string | null;
+    parentPhone: string | null;
+    momOccupation: string | null;
+    momEducationLevel: string | null;
+    momAlmaMater: string | null;
+    dadOccupation: string | null;
+    dadEducationLevel: string | null;
+    dadAlmaMater: string | null;
+  },
+  coachData?: {
+    name: string | null;
+    cell: string | null;
+    office: string | null;
+    email: string | null;
+  } | null,
+  schoolName?: string | null,
+  athleteFacts?: { data_type_id: number; value: string; source?: string }[]
+): TabsProps["items"] => {
   // Add more detailed logging for survey data
   const surveyData = athlete?.generic_survey?.[0];
   const hasSurveyData = !!surveyData;
@@ -2422,66 +4558,113 @@ const items = (athlete: AthleteData | null, config: DataSourceConfig, dataSource
 
   const tabs = [];
 
-  if (config.tabs.bio) {
-    tabs.push({
-      key: "1",
-      label: "Bio",
-      children: <Bio athlete={athlete} config={config} />,
-    });
-  }
+  // Handle mock data mode
+  if (useMockData) {
+    // Check if athlete has videos
+    const hasVideos = athlete?.athlete_videos && athlete.athlete_videos.length > 0;
+    
+    tabs.push(
+      {
+        key: "1",
+        label: "Activity",
+        children: <Activity athlete={athlete} events={activityEvents} />,
+      },
+      {
+        key: "2",
+        label: "Videos",
+        children: <VideoComponent athlete={athlete} />,
+        disabled: !hasVideos,
+        className: !hasVideos ? "disabled-tab" : "",
+      },
+      {
+        key: "3",
+        label: "Bio",
+        children: <HSBio athlete={athlete} bioData={bioData} coachData={coachData} schoolName={schoolName} />,
+      },
+      {
+        key: "4",
+        label: "Metrics",
+        children: <Metrics projectionText={(athleteFacts || []).find((f: any) => f?.data_type_id === 1026)?.value || '—'} />,
+      },
+      {
+        key: "5",
+        label: "Raw Measurables",
+        children: <RawMeasureables athlete={athlete} />,
+      },
+      {
+        key: "6",
+        label: "Survey",
+        children: <HSSurvey athleteFacts={athleteFacts} />,
+      },
+      {
+        key: "7",
+        label: "Notes",
+        children: <Notes athlete={athlete} />,
+      }
+    );
+  } else {
+    // Real data mode
+    if (config.tabs.bio) {
+      tabs.push({
+        key: "1",
+        label: "Bio",
+        children: <Bio athlete={athlete} config={config} />,
+      });
+    }
 
-  if (config.tabs.videos) {
-    tabs.push({
-      key: "2",
-      label: "Videos",
-      children: <VideoComponent athlete={athlete} />,
-    });
-  }
+    if (config.tabs.videos) {
+      tabs.push({
+        key: "2",
+        label: "Videos",
+        children: <VideoComponent athlete={athlete} />,
+      });
+    }
 
-  if (config.tabs.stats) {
-    tabs.push({
-      key: "3",
-      label: "Stats",
-      children: <Stats athlete={athlete} />,
-    });
-  }
+    if (config.tabs.stats) {
+      tabs.push({
+        key: "3",
+        label: "Stats",
+        children: <Stats athlete={athlete} />,
+      });
+    }
 
-  // For JUCO data source, add Notes tab right after Stats
-  if (dataSource === 'juco' && config.tabs.notes) {
-    tabs.push({
-      key: "6",
-      label: "Notes",
-      children: <Notes athlete={athlete} />,
-    });
-  }
+    // For JUCO data source, add Notes tab right after Stats
+    if (dataSource === 'juco' && config.tabs.notes) {
+      tabs.push({
+        key: "6",
+        label: "Notes",
+        children: <Notes athlete={athlete} />,
+      });
+    }
 
-  if (config.tabs.gameLog) {
-    tabs.push({
-      key: "4",
-      label: "Game Log",
-      children: <GameLog athlete={athlete} />,
-      disabled: !athlete?.game_logs?.length,
-      className: !athlete?.game_logs?.length ? "disabled-tab" : "",
-    });
-  }
+    if (config.tabs.gameLog) {
+      tabs.push({
+        key: "4",
+        label: "Game Log",
+        children: <GameLog athlete={athlete} />,
+        disabled: !athlete?.game_logs?.length,
+        className: !athlete?.game_logs?.length ? "disabled-tab" : "",
+      });
+    }
 
-  if (config.tabs.survey) {
-    tabs.push({
-      key: "5",
-      label: "Survey",
-      children: <Survey athlete={athlete} />,
-      disabled: surveyDisabled,
-      className: surveyDisabled ? "disabled-tab" : "",
-    });
-  }
+    if (config.tabs.survey) {
+      tabs.push({
+        key: "5",
+        label: "Survey",
+        children: <Survey athlete={athlete} />,
+        disabled: surveyDisabled,
+        className: surveyDisabled ? "disabled-tab" : "",
+      });
+    }
 
-  // For non-JUCO data sources, add Notes tab at the end
-  if (dataSource !== 'juco' && config.tabs.notes) {
-    tabs.push({
-      key: "6",
-      label: "Notes",
-      children: <Notes athlete={athlete} />,
-    });
+    // For non-JUCO data sources, add Notes tab at the end
+    if (dataSource !== 'juco' && config.tabs.notes) {
+      tabs.push({
+        key: "6",
+        label: "Notes",
+        children: <Notes athlete={athlete} />,
+      });
+    }
   }
 
   return tabs;
@@ -2490,9 +4673,40 @@ const items = (athlete: AthleteData | null, config: DataSourceConfig, dataSource
 export default function PlayerInformation({
   athlete,
   dataSource = null,
+  useMockData = false,
+  activityEvents,
+  bioData,
+  coachData,
+  schoolName,
+  athleteFacts,
 }: {
   athlete: AthleteData | null;
   dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null;
+  useMockData?: boolean;
+  activityEvents?: any[];
+  bioData?: {
+    desiredMajor: string | null;
+    predictedGPA: string | null;
+    sat: string | null;
+    act: string | null;
+    parentName: string | null;
+    parentEmail: string | null;
+    parentPhone: string | null;
+    momOccupation: string | null;
+    momEducationLevel: string | null;
+    momAlmaMater: string | null;
+    dadOccupation: string | null;
+    dadEducationLevel: string | null;
+    dadAlmaMater: string | null;
+  };
+  coachData?: {
+    name: string | null;
+    cell: string | null;
+    office: string | null;
+    email: string | null;
+  } | null;
+  schoolName?: string | null;
+  athleteFacts?: { data_type_id: number; value: string; source?: string }[];
 }) {
   // Get the appropriate configuration for the data source
   const config = dataSource && DATA_SOURCE_CONFIGS[dataSource] ? DATA_SOURCE_CONFIGS[dataSource] : DEFAULT_CONFIG;
@@ -2516,7 +4730,7 @@ export default function PlayerInformation({
       `}</style>
       <Tabs
         defaultActiveKey="1"
-        items={items(athlete, config, dataSource)}
+        items={items(athlete, config, dataSource, useMockData, activityEvents, bioData, coachData, schoolName, athleteFacts)}
         onChange={onChange}
         className={`player-information ${dataSource === 'juco' ? 'juco-tabs' : ''}`}
       />

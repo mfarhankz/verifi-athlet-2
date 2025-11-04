@@ -240,7 +240,7 @@ export default function RoadPlannerPage() {
         setSelectedSchoolsData(updatedMap);
       }
     }
-  }, [highSchools, selectedAddresses, allHighSchools, loading, selectedSchoolsData]);
+  }, [highSchools, selectedAddresses, allHighSchools, loading]); // Removed selectedSchoolsData from dependencies to prevent infinite loop
 
   // Separate useEffect to handle search and filter changes
   useEffect(() => {
@@ -760,6 +760,203 @@ export default function RoadPlannerPage() {
               </span>
             ) : null}
           </button>
+        </div>
+      </div>
+
+      <div className="map-schools-container">
+        <div className="card-list flex justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <div className="school-icon">
+                <img src="/svgicons/school-icon.svg" alt="X Feed" height={89} />
+              </div>
+              <div className="flex flex-col text-left mt-1">
+                <h4 className="mb-1">Virginia Beach HS
+                  <span className='bg-[#c8ff24]'>Public</span>
+                </h4>
+                <p className="mb-0">
+                  1272 Mill Dam Road, Virginia Beach, VA, 23445 <br />
+                  Virginia Beach, Virginia - (202) 684 7943
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mx-3 mb-3">
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Liam James</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Moxen Galin</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Richard Mark</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Alex James</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 p-2">
+            
+            <div className="flex flex-col text-left w-[550px]">
+              <div className="flex gap-2 mb-2 justify-end">
+                <div className='text-lg font-medium bg-[#126DB8] text-white px-2'>Division 5A</div>
+                <div className='text-lg font-medium border border-solid border-[#ccc] px-2'>1W - 9L</div>
+                <div className='text-lg bg-[#000] text-white px-2'>@virginiabeach</div>
+                <div className='border border-solid border-[#ccc] px-2 flex items-center justify-center'>
+                <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
+                </div>
+              </div>
+              <div className="flex justify-between gap-2">
+               <div>
+                <span className='bg-[#FFD000] text-lg italic font-bold leading-5'>
+                Coach
+                </span>
+                <h6 className='mb-0 !text-lg leading-3'>George Alex</h6>
+                <p className='mb-0 leading-5'>george.alex@virginiabeach.com <br /> 
+                School (757) 648 5300
+                </p>
+               </div>
+               <div className='text-right'>
+               <span className='bg-[#FFD000] text-lg italic font-bold leading-5'>
+               AD
+                </span>
+                <h6 className='mb-0 !text-lg leading-3'>Stephen Butler</h6>
+                <p className='mb-0 leading-5'>Shbutler@vbschools.com <br /> 
+                School (757) 648 5300
+                </p>
+               </div>
+              </div>
+              <div className='flex gap-2'>
+                <ul className='co-title'>
+                  <li>
+                    <h6>06</h6>
+                    <p>College</p>
+                  </li>
+                  <li>
+                    <h6>04</h6>
+                    <p>D1</p>
+                  </li>
+                  <li>
+                    <h6>05</h6>
+                    <p>Team</p>
+                  </li>
+                  <li>
+                    <h6>09</h6>
+                    <p>Income</p>
+                  </li>
+                  <li>
+                    <h6>06</h6>
+                    <p>Acad</p>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card-list flex justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <img src="/svgicons/plyer1.png" alt="X Feed" height={207} width={207} />
+              <div>
+                <div className="flex flex-col text-left mt-1">
+                  <h4 className="mb-1">Chale James
+                    <span className='bg-[#FF7525] text-white leading-3'>4.8</span>
+                  </h4>
+                  <p className="mb-0 !text-lg font-medium italic">
+                  (918) 993 838 / @chalejamesRock
+                  </p>
+                </div>
+                
+                <div className="flex flex-col text-left mt-1">
+                  <h5 className="mb-1 !text-lg !font-semibold">Virginia Beach HS
+                    <span className='bg-[#c8ff24] !text-sm !font-semibold ml-1 px-1'>Public</span>
+                  </h5>
+                  <p className="mb-0">
+                    1272 Mill Dam Road, Virginia Beach, VA, 23445 <br />
+                    Virginia Beach, Virginia - (202) 684 7943
+                  </p>
+                </div>
+              </div>
+            </div>
+          
+          </div>
+          <div className="flex gap-2 p-2">
+            
+            <div className="flex flex-col text-left w-[550px]">
+              <div className="flex gap-2 mb-2 justify-end">
+                <div className='text-lg font-medium bg-[#126DB8] text-white px-2'>Division 5A</div>
+                <div className='text-lg font-medium border border-solid border-[#ccc] px-2'>1W - 9L</div>
+                <div className='text-lg bg-[#000] text-white px-2'>@virginiabeach</div>
+                <div className='border border-solid border-[#ccc] px-2 flex items-center justify-center'>
+                <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
+                </div>
+              </div>
+              <div className="flex justify-between gap-2">
+               <div>
+                <span className='bg-[#FFD000] text-lg italic font-bold leading-5'>
+                Coach
+                </span>
+                <h6 className='mb-0 !text-lg leading-3'>George Alex</h6>
+                <p className='mb-0 leading-5'>george.alex@virginiabeach.com <br /> 
+                School (757) 648 5300
+                </p>
+               </div>
+               <div className='text-right'>
+               <span className='bg-[#FFD000] text-lg italic font-bold leading-5'>
+               AD
+                </span>
+                <h6 className='mb-0 !text-lg leading-3'>Stephen Butler</h6>
+                <p className='mb-0 leading-5'>Shbutler@vbschools.com <br /> 
+                School (757) 648 5300
+                </p>
+               </div>
+              </div>
+              <div className='flex gap-2'>
+                <ul className='co-title'>
+                  <li>
+                    <h6>06</h6>
+                    <p>College</p>
+                  </li>
+                  <li>
+                    <h6>04</h6>
+                    <p>D1</p>
+                  </li>
+                  <li>
+                    <h6>05</h6>
+                    <p>Team</p>
+                  </li>
+                  <li>
+                    <h6>09</h6>
+                    <p>Income</p>
+                  </li>
+                  <li>
+                    <h6>06</h6>
+                    <p>Acad</p>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       

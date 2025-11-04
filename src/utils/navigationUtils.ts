@@ -66,6 +66,8 @@ export const menuRoutes = [
   { key: '7-6', route: '/cap-manager?view=depth-chart', packageIds: utra_platinum_packages, title: 'Depth Chart' },
   { key: '13', route: '/admin', packageIds: [3], title: 'Admin' },
   { key: '15', route: '/verified-game', packageIds: [3, 4, 5, 78], title: 'Verified Game' },
+  { key: '18', route: '/activity-feed', packageIds: football_packages, title: 'Activity Feed' },
+  { key: '19', route: '/score-tracker', packageIds: football_packages, title: 'Score Tracker' },
 ];
 
 // Define unclickable menu items with restricted access to other_sport_packages

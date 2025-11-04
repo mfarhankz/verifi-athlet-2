@@ -18,11 +18,14 @@ import {
   message,
   Spin,
   Dropdown,
+  Collapse,
   Menu,
   App,
   Tabs,
   Card,
-  Image
+  Image,
+  Checkbox,
+  Divider
 } from "antd";
 import type { RadioChangeEvent, TableColumnsType } from "antd";
 import { useState, useEffect } from "react";
@@ -49,6 +52,7 @@ import { hasFeatureAccess } from "@/utils/navigationUtils";
 import { PlusOutlined, StarFilled, StarOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useColorConfig } from "@/contexts/ColorConfigContext";
 import ConfigPreview from './ConfigPreview';
+import SettingsDropdown from "@/app/(dashboard)/_components/SettingsDropdown";
 
 // Helper function to convert RGB to HEX
 const rgbToHex = (rgb: string): string => {
@@ -218,12 +222,46 @@ export default function MyTeam() {
   
   const [sideRules, setSideRules] = useState<TagColorRuleWithKey[]>(defaultSideRules);
   
+  // Card preview state
+  const [showPicture, setShowPicture] = useState(true);
+  const [dataPoint1, setDataPoint1] = useState('academy');
+  const [dataPoint2, setDataPoint2] = useState('school');
+  const [dataPoint3, setDataPoint3] = useState('');
+  const [dataPoint4, setDataPoint4] = useState('');
+  const [dataPoint5, setDataPoint5] = useState('');
+  const [dataPoint6, setDataPoint6] = useState('');
+  const [dataPoint7, setDataPoint7] = useState('recruiting_coach');
+
+  // Helper function to get display text for data points
+  const getDataPointText = (dataPoint: string) => {
+    switch (dataPoint) {
+      case 'academy': return 'Lee HS (Huntsville)';
+      case 'school': return 'University of North Alabama';
+      case 'state': return 'Alabama';
+      case 'year': return 'Senior';
+      case 'position': return 'WR';
+      case 'rating': return '4-Star';
+      case 'height_weight': return '6\'4", 212 lbs';
+      case 'contact': return 'James Alex';
+      case 'gpa': return '3.2 GPA';
+      case 'test_score': return '1200 SAT';
+      case 'offers': return '12 Offers';
+      case 'committed': return 'Committed';
+      case 'recruiting_coach': return 'John Smith';
+      default: return '';
+    }
+  };
+  
   // State for saved configurations
   const [configurations, setConfigurations] = useState<CustomerOption[]>([defaultConfig]);
   const [selectedConfigId, setSelectedConfigId] = useState<number | null>(-1); // Start with default selected
   const [configName, setConfigName] = useState<string>("System Default");
   const [loading, setLoading] = useState<boolean>(false);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+  
+  // Card layout state
+  const [savedLayouts, setSavedLayouts] = useState([{ id: '1', name: 'Default Layout' }]);
+  const [isLayoutDropdownVisible, setIsLayoutDropdownVisible] = useState(false);
   const [modalMode, setModalMode] = useState<'save' | 'saveAs'>('save');
   const [scholarshipType, setScholarshipType] = useState<'equivalencies' | 'dollars'>('equivalencies');
   const [scholarshipSaveLoading, setScholarshipSaveLoading] = useState(false);
@@ -755,7 +793,7 @@ export default function MyTeam() {
     } else if (category === "position") {
       return (
         <Input 
-          style={{ width: 120 }} 
+          style={{ width: 60 }} 
           value={record[field] as string} 
           onChange={(e) => updateRule(record.key, field, e.target.value, record.colorType)}
           placeholder="Position"
@@ -773,19 +811,29 @@ export default function MyTeam() {
           ]}
         />
       );
-    } else if (["position", "tier"].includes(category)) {
+    } else if (category === "tier") {
+      // Tier should be InputNumber to show increment/decrement buttons
+      return (
+        <InputNumber 
+          style={{ width: 60 }} 
+          value={typeof record[field] === 'string' ? parseInt(record[field] as string) : record[field] as number} 
+          onChange={(value) => updateRule(record.key, field, value?.toString() || '', record.colorType)}
+          placeholder="Value"
+        />
+      );
+    } else if (category === "position") {
       return (
         <Input 
-          style={{ width: 120 }} 
+          style={{ width: 60 }} 
           value={record[field] as string} 
           onChange={(e) => updateRule(record.key, field, e.target.value, record.colorType)}
-          placeholder="Value"
+          placeholder="Position"
         />
       );
     } else {
       return (
         <InputNumber 
-          style={{ width: 120 }} 
+          style={{ width: 60 }} 
           value={record[field] as number} 
           onChange={(value) => updateRule(record.key, field, value, record.colorType)}
           placeholder="Value"
@@ -906,9 +954,7 @@ export default function MyTeam() {
           danger 
           icon={<i className="icon-trash text-xl"></i>}
           onClick={() => removeRule(record.key, colorType)}
-        >
-          Remove
-        </Button>
+        />
       ),
     },
   ];
@@ -1407,16 +1453,289 @@ export default function MyTeam() {
                 </Flex>
               ) : (
                 <Flex vertical gap={16}>
-                  {/* Card Background Color Section */}
-                  <Card title="Card Background Color" className="mb-4 mt-4">
-                    <Flex vertical gap={16}>
-                      <Flex align="center">
+                  {/* Card Design Section */}
+                  <Flex vertical className="card">
+                    <Flex justify="space-between" align="center" className="mb-4">
+                      <Typography.Title level={4}>Card Design</Typography.Title>
+                      <div style={{ position: 'relative' }}>
+                        <SettingsDropdown
+                          trigger={
+                            <Button 
+                              type="primary"
+                              style={{ backgroundColor: '#1c1d4d', borderColor: '#1c1d4d' }}
+                              onClick={() => setIsLayoutDropdownVisible(!isLayoutDropdownVisible)}
+                            >
+                              Save Changes
+                            </Button>
+                          }
+                          isVisible={isLayoutDropdownVisible}
+                          onClose={() => setIsLayoutDropdownVisible(false)}
+                          onSelect={(layoutId) => {
+                            console.log('Selected card layout:', layoutId);
+                            const layout = savedLayouts.find(l => l.id === layoutId);
+                            if (layout) {
+                              message.info(`Loading card layout: ${layout.name}`);
+                              // TODO: Load the selected layout configuration
+                            }
+                            setIsLayoutDropdownVisible(false);
+                          }}
+                          onNewItem={(layoutName) => {
+                            console.log('Saving new card layout:', layoutName);
+                            const newLayout = {
+                              id: Date.now().toString(),
+                              name: layoutName
+                            };
+                            setSavedLayouts([...savedLayouts, newLayout]);
+                            message.success(`Saved layout: ${layoutName}`);
+                            setIsLayoutDropdownVisible(false);
+                          }}
+                          items={savedLayouts}
+                          searchPlaceholder="Search saved layouts..."
+                          newItemPlaceholder="Save current layout as..."
+                          placement="bottomRight"
+                        />
+                      </div>
+                    </Flex>
+                    
+                    <Typography.Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: 16 }}>
+                      Configure the appearance and data fields displayed on recruiting board cards.
+                    </Typography.Text>
+                    
+                    {/* Preview Section */}
+                    <Typography.Title level={5} style={{ marginBottom: 12 }}>Preview</Typography.Title>
+                    <div style={{ 
+                      marginBottom: 24,
+                      display: 'flex',
+                      justifyContent: 'flex-start'
+                    }}>
+                      {/* Player Card - exact match to recruiting board card */}
+                      <div style={{
+                        backgroundColor: '#f5f5f5',
+                        padding: '10px',
+                        borderRadius: '8px',
+                        position: 'relative',
+                        width: '380px',
+                        minWidth: '380px'
+                      }}>
+                        {/* Actions - top right */}
+                        <div style={{ 
+                          position: 'absolute',
+                          top: '10px',
+                          right: '10px',
+                          display: 'flex',
+                          gap: '8px',
+                          alignItems: 'center',
+                          zIndex: 10
+                        }}>
+                          {/* Close button */}
+                          <span style={{ 
+                            cursor: 'default',
+                            color: '#ff4d4f',
+                            fontSize: '16px',
+                            fontWeight: 'normal',
+                            lineHeight: '1',
+                            userSelect: 'none'
+                          }}>×</span>
+                        </div>
+                        {/* Drag handle - below close button */}
+                        <div style={{ 
+                          position: 'absolute',
+                          top: '38px',
+                          right: '10px',
+                          zIndex: 10
+                        }}>
+                          <span style={{ 
+                            cursor: 'default',
+                            color: '#8c8c8c',
+                            fontSize: '16px',
+                            lineHeight: '1',
+                            userSelect: 'none'
+                          }}>⋮⋮</span>
+                        </div>
+
+                        <Flex style={{ gap: '10px', alignItems: 'flex-start' }}>
+                          {/* Left: Picture and stats */}
+                          <div style={{ 
+                            width: '85px', 
+                            flexShrink: 0
+                          }}>
+                            {showPicture && (
+                              <div style={{ 
+                                width: '90px', 
+                                height: '90px',
+                                backgroundColor: '#bfbfbf',
+                                borderRadius: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: '6px'
+                              }}>
+                                <span style={{ fontSize: '40px' }}>👤</span>
+                              </div>
+                            )}
+                            {/* Data Point 5 and 6 shown under the picture */}
+                            {(dataPoint5 && getDataPointText(dataPoint5)) || (dataPoint6 && getDataPointText(dataPoint6)) ? (
+                              <div>
+                                {dataPoint5 && getDataPointText(dataPoint5) && (
+                                  <Typography.Text style={{ 
+                                    fontSize: '12px', 
+                                    color: '#1c1d4d', 
+                                    fontWeight: 500,
+                                    display: 'block'
+                                  }}>
+                                    {getDataPointText(dataPoint5)}
+                                  </Typography.Text>
+                                )}
+                                {dataPoint6 && getDataPointText(dataPoint6) && (
+                                  <Typography.Text style={{ 
+                                    fontSize: '12px', 
+                                    color: '#1c1d4d', 
+                                    fontWeight: 500,
+                                    display: 'block'
+                                  }}>
+                                    {getDataPointText(dataPoint6)}
+                                  </Typography.Text>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                          
+                          {/* Right: Name and info */}
+                          <div style={{ flex: 1, paddingTop: '2px', position: 'relative' }}>
+                            <Typography.Title 
+                              level={5}
+                              style={{ 
+                                margin: '0 0 6px 0', 
+                                fontSize: '16px', 
+                                fontWeight: 600,
+                                color: '#1c1d4d',
+                                lineHeight: '1.2'
+                              }}
+                            >
+                              Taye Fields
+                            </Typography.Title>
+                            
+                            {/* Data Point 1 - only show if not blank */}
+                            {dataPoint1 && getDataPointText(dataPoint1) && (
+                              <Typography.Paragraph style={{ 
+                                margin: '2px 0', 
+                                fontSize: '13px', 
+                                color: '#1c1d4d',
+                                lineHeight: '1.3'
+                              }}>
+                                {getDataPointText(dataPoint1)}
+                              </Typography.Paragraph>
+                            )}
+                            
+                            {/* Data Point 2 - only show if not blank */}
+                            {dataPoint2 && getDataPointText(dataPoint2) && (
+                              <Typography.Paragraph style={{ 
+                                margin: '2px 0', 
+                                fontSize: '13px', 
+                                color: '#1c1d4d',
+                                lineHeight: '1.3'
+                              }}>
+                                {getDataPointText(dataPoint2)}
+                              </Typography.Paragraph>
+                            )}
+                            
+                            {/* Data Point 3 - only show if not blank */}
+                            {dataPoint3 && getDataPointText(dataPoint3) && (
+                              <Typography.Paragraph style={{ 
+                                margin: '2px 0', 
+                                fontSize: '13px', 
+                                color: '#1c1d4d',
+                                lineHeight: '1.3'
+                              }}>
+                                {getDataPointText(dataPoint3)}
+                              </Typography.Paragraph>
+                            )}
+                            
+                            {/* Data Point 4 - only show if not blank */}
+                            {dataPoint4 && getDataPointText(dataPoint4) && (
+                              <Typography.Paragraph style={{ 
+                                margin: '2px 0', 
+                                fontSize: '13px', 
+                                color: '#1c1d4d',
+                                lineHeight: '1.3'
+                              }}>
+                                {getDataPointText(dataPoint4)}
+                              </Typography.Paragraph>
+                            )}
+                            
+                            {/* Data Point 7 - right aligned at end of data points */}
+                            {dataPoint7 && getDataPointText(dataPoint7) && (
+                              <div style={{ 
+                                textAlign: 'right',
+                                marginTop: '12px'
+                              }}>
+                                {(dataPoint7 === 'contact' || dataPoint7 === 'recruiting_coach') ? (
+                                  <Flex align="center" gap={6} justify="flex-end">
+                                    <div style={{
+                                      width: '36px',
+                                      height: '36px',
+                                      borderRadius: '50%',
+                                      backgroundColor: '#a8f59c',
+                                      color: '#1c1d4d',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '12px',
+                                      fontWeight: 'bold'
+                                    }}>JS</div>
+                                    <Typography.Text style={{ 
+                                      fontSize: '13px', 
+                                      color: '#1c1d4d',
+                                      fontWeight: 500
+                                    }}>
+                                      {getDataPointText(dataPoint7)}
+                                    </Typography.Text>
+                                  </Flex>
+                                ) : (
+                                  <Typography.Text style={{ 
+                                    fontSize: '13px', 
+                                    color: '#1c1d4d',
+                                    fontWeight: 500
+                                  }}>
+                                    {getDataPointText(dataPoint7)}
+                                  </Typography.Text>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </Flex>
+                      </div>
+                    </div>
+
+                    {/* Configuration Options */}
+                    <Collapse
+                      defaultActiveKey={[]}
+                      ghost
+                      expandIcon={({ isActive }) =>
+                        isActive ? (
+                          <i className="icon-minus" style={{ fontSize: '18px' }}></i>
+                        ) : (
+                          <i className="icon-add" style={{ fontSize: '18px' }}></i>
+                        )
+                      }
+                      expandIconPosition="end"
+                      style={{ backgroundColor: '#fff' }}
+                    >
+                      {/* Card Background Color Section - INTEGRATED */}
+                      <Collapse.Panel
+                        key="background"
+                        header="Card Background Color"
+                        style={{ marginBottom: '8px' }}
+                      >
+                        <div style={{ padding: '12px' }}>
+                          <Flex align="center" style={{ marginBottom: 16 }}>
                         <Typography.Text strong className="mr-3">Category:</Typography.Text>
                         <Select
                           value={backgroundCategory}
                           style={{ width: 200 }}
                           options={categoryOptions}
                           onChange={(value) => setBackgroundCategory(value)}
+                              suffixIcon={<i className="icon-arrow-down" style={{ fontSize: '12px' }}></i>}
                         />
                       </Flex>
                       
@@ -1442,19 +1761,24 @@ export default function MyTeam() {
                           Add Condition
                         </Button>
                       </Flex>
-                    </Flex>
-                  </Card>
+                        </div>
+                      </Collapse.Panel>
 
-                  {/* Card Side Color Section */}
-                  <Card title="Card Side Color" className="mb-4">
-                    <Flex vertical gap={16}>
-                      <Flex align="center">
+                      {/* Card Side Color Section - INTEGRATED */}
+                      <Collapse.Panel
+                        key="side"
+                        header="Card Side Color"
+                        style={{ marginBottom: '8px' }}
+                      >
+                        <div style={{ padding: '12px' }}>
+                          <Flex align="center" style={{ marginBottom: 16 }}>
                         <Typography.Text strong className="mr-3">Category:</Typography.Text>
                         <Select
                           value={sideCategory}
                           style={{ width: 200 }}
                           options={categoryOptions}
                           onChange={(value) => setSideCategory(value)}
+                              suffixIcon={<i className="icon-arrow-down" style={{ fontSize: '12px' }}></i>}
                         />
                       </Flex>
                       
@@ -1480,8 +1804,213 @@ export default function MyTeam() {
                           Add Condition
                         </Button>
                       </Flex>
+                        </div>
+                      </Collapse.Panel>
+
+                      {/* Picture Toggle and Data Points */}
+                      <Collapse.Panel
+                        key="data"
+                        header="Data Points & Display Options"
+                        style={{ marginBottom: '8px' }}
+                      >
+                        <div style={{ padding: '12px' }}>
+                          <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
+                            <Typography.Text strong>Show Picture</Typography.Text>
+                            <Checkbox
+                              checked={showPicture}
+                              onChange={(e) => {
+                                setShowPicture(e.target.checked);
+                              }}
+                            />
                     </Flex>
-                  </Card>
+
+                          <Divider />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 1</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            First data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint1}
+                            onChange={(value) => setDataPoint1(value)}
+                            style={{ width: '100%', marginBottom: 16 }}
+                            options={[
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'School', value: 'school' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 2</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            Second data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint2}
+                            onChange={(value) => setDataPoint2(value)}
+                            style={{ width: '100%', marginBottom: 16 }}
+                            options={[
+                              { label: 'School', value: 'school' },
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 3</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            Third data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint3}
+                            onChange={(value) => setDataPoint3(value)}
+                            style={{ width: '100%', marginBottom: 16 }}
+                            options={[
+                              { label: 'School', value: 'school' },
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 4</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            Fourth data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint4}
+                            onChange={(value) => setDataPoint4(value)}
+                            style={{ width: '100%', marginBottom: 16 }}
+                            options={[
+                              { label: 'School', value: 'school' },
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 5</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            Fifth data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint5}
+                            onChange={(value) => setDataPoint5(value)}
+                            style={{ width: '100%', marginBottom: 16 }}
+                            options={[
+                              { label: 'School', value: 'school' },
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 6</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            Sixth data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint6}
+                            onChange={(value) => setDataPoint6(value)}
+                            style={{ width: '100%', marginBottom: 16 }}
+                            options={[
+                              { label: 'School', value: 'school' },
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+
+                          <Typography.Text strong style={{ fontSize: '14px', marginBottom: 4, display: 'block' }}>Data Point 7</Typography.Text>
+                          <Typography.Text style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: 8, display: 'block' }}>
+                            Seventh data point under the name
+                          </Typography.Text>
+                          <Select
+                            value={dataPoint7}
+                            onChange={(value) => setDataPoint7(value)}
+                            style={{ width: '100%' }}
+                            options={[
+                              { label: 'School', value: 'school' },
+                              { label: 'Academy / Title', value: 'academy' },
+                              { label: 'State', value: 'state' },
+                              { label: 'Year', value: 'year' },
+                              { label: 'Position', value: 'position' },
+                              { label: 'Rating', value: 'rating' },
+                              { label: 'Height & Weight', value: 'height_weight' },
+                              { label: 'Contact', value: 'contact' },
+                              { label: 'GPA', value: 'gpa' },
+                              { label: 'Test Score', value: 'test_score' },
+                              { label: 'Offers', value: 'offers' },
+                              { label: 'Committed', value: 'committed' },
+                              { label: 'Recruiting Coach', value: 'recruiting_coach' },
+                              { label: 'None', value: '' }
+                            ]}
+                          />
+                        </div>
+                      </Collapse.Panel>
+                    </Collapse>
+                  </Flex>
                 </Flex>
               )}
             </Flex>

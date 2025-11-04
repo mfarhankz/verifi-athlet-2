@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { AthleteData, RecruitingBoardData, SportStatConfig, RecruitingBoardPosition } from '../types/database';
+import { AthleteData, RecruitingBoardData, SportStatConfig, RecruitingBoardPosition, AthleteVideo, RecruitingBoardBoard, RecruitingBoardColumn } from '../types/database';
 import { FilterState } from '../types/filters';
 import { fetchUserDetails } from '../utils/utils';
 import { US_STATE_ABBREVIATIONS } from '@/utils/constants';
@@ -469,8 +469,8 @@ export async function fetchHighSchoolAthletes(
     if (options?.sortField && options?.sortOrder) {
       query = query.order(options.sortField, { ascending: options.sortOrder === 'asc' });
     } else {
-      // Default sorting by athletic_projection descending
-      query = query.order('athletic_projection', { ascending: false });
+      // Default sorting by grad_year ascending, then athletic_projection using custom hierarchy
+      query = query.order('grad_year', { ascending: true });
     }
 
     const { data, error, count } = await query;
@@ -497,6 +497,51 @@ export async function fetchHighSchoolAthletes(
       highlight: athlete.hs_highlight,
       image_url: athlete.image_url
     }));
+
+    // Apply custom sorting for default order (grad_year ascending, then athletic_projection hierarchy)
+    if (!options?.sortField || !options?.sortOrder) {
+      const projectionOrder = [
+        'FBS P4 - Top half',
+        'FBS P4',
+        'FBS G5 - Top half',
+        'FBS G5',
+        'FCS - Full Scholarship',
+        'FCS',
+        'D2 - Top half',
+        'D2',
+        'D3 - Top half',
+        'D3',
+        'D3 Walk-on'
+      ];
+
+      transformedData.sort((a: any, b: any) => {
+        // Primary sort by grad year
+        const yearA = parseInt(a.gradYear) || 0;
+        const yearB = parseInt(b.gradYear) || 0;
+        
+        if (yearA !== yearB) {
+          return yearA - yearB;
+        }
+
+        // Secondary sort by athletic projection hierarchy
+        // Handle both numeric 0 and string values
+        const projectionA = a.athleticProjection === 0 || a.athleticProjection === '0' || !a.athleticProjection ? '' : a.athleticProjection;
+        const projectionB = b.athleticProjection === 0 || b.athleticProjection === '0' || !b.athleticProjection ? '' : b.athleticProjection;
+        
+        const indexA = projectionOrder.indexOf(projectionA);
+        const indexB = projectionOrder.indexOf(projectionB);
+        
+        // If both are in the order array, sort by their position
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        // If only one is in the order array, prioritize it
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+        // If neither is in the order array, sort alphabetically
+        return projectionA.localeCompare(projectionB);
+      });
+    }
 
     return {
       data: transformedData,
@@ -586,7 +631,6 @@ export async function fetchAthleteRatings(
     return {};
   }
 }
-
 /**
  * Fetch school facts data for a specific school
  * Returns all school_fact records for the given school_id
@@ -1084,8 +1128,6 @@ function getColumnsToSelect(filters?: FilterState, displayColumns?: string[], da
   
   return Array.from(columns);
 }
-
-
 export async function fetchAthleteData(
   sport: string,
   options?: {
@@ -1105,12 +1147,6 @@ export async function fetchAthleteData(
   }
 ): Promise<{ data: AthleteData[]; hasMore: boolean; totalCount?: number }> {
   try {
-    console.log('fetchAthleteData called with:', {
-      sport,
-      dataSource: options?.dataSource,
-      filters: options?.filters,
-      gpaFilter: options?.filters?.gpa
-    });
     
     const page = options?.page || 1;
     const limit = options?.limit || 25;
@@ -1163,6 +1199,7 @@ export async function fetchAthleteData(
       .from(viewName)
       .select(selectString, { count: 'exact' })
       .limit(limit);
+    
 
     // Apply filters if provided
     if (options?.filters) {
@@ -1654,55 +1691,62 @@ export async function fetchAthleteData(
         // For now, this filter is disabled and doesn't affect the query
       }
       
-      // Handle dynamic stat filters
-      Object.keys(options.filters || {}).forEach(filterKey => {
-        if (filterKey.startsWith('stat_')) {
-          const dataTypeId = filterKey.replace('stat_', '');
-          const filterValue = options.filters![filterKey];
+    // Handle dynamic stat filters - optimized version with column caching
+    const statFilters = Object.keys(options.filters || {}).filter(key => key.startsWith('stat_'));
+    if (statFilters.length > 0) {
+      // Cache column lookups to avoid repeated array searches
+      const columnCache = new Map<string, SportStatConfig>();
+      options.dynamicColumns?.forEach(col => {
+        columnCache.set(col.data_type_id.toString(), col);
+      });
+      
+      statFilters.forEach(filterKey => {
+        const dataTypeId = filterKey.replace('stat_', '');
+        const filterValue = options.filters![filterKey];
+        
+        if (filterValue && typeof filterValue === 'object' && 'comparison' in filterValue) {
+          // Use cached column lookup
+          const column = columnCache.get(dataTypeId);
           
-          if (filterValue && typeof filterValue === 'object' && 'comparison' in filterValue) {
-            // Find the corresponding column name from dynamicColumns
-            const column = options.dynamicColumns?.find((col: SportStatConfig) => col.data_type_id.toString() === dataTypeId);
-            if (column?.sanitized_column_name) {
-              const { comparison } = filterValue;
-              const columnName = column.sanitized_column_name;
+          if (column?.sanitized_column_name) {
+            const { comparison } = filterValue;
+            const columnName = column.sanitized_column_name;
 
-              // Detect GP/GS by heading or known ids to optionally treat null as 0
-              const nameLower = (column.data_type_name || column.display_name || columnName || '').toLowerCase();
-              const isGpGsByHeading = ['gp','gs','games played','games started','games_played','games_started'].includes(nameLower);
-              const isGpGsColumn = isGpGsByHeading || [98, 83].includes(column.data_type_id);
-              
-              if (comparison === 'between' && 'minValue' in filterValue && 'maxValue' in filterValue) {
-                // Handle between comparison with min and max values
-                query = query.gte(columnName, filterValue.minValue)
-                          .lte(columnName, filterValue.maxValue);
-              } else if ('value' in filterValue) {
-                // Handle other comparisons (greater, less, equal)
-                const { value } = filterValue;
-                if (comparison === 'greater') {
-                  query = query.gte(columnName, value);
-                } else if (comparison === 'less') {
-                  // For GP/GS Max filter, include nulls (treat null as 0)
-                  if (isGpGsColumn) {
-                    query = query.or(`${columnName}.lte.${value},${columnName}.is.null`);
-                  } else {
-                    query = query.lte(columnName, value);
-                  }
-                } else if (comparison === 'equal') {
-                  // Special-case: For GP/GS filters where value is 0, treat null as 0
-                  if (isGpGsColumn && (value === 0 || value === '0')) {
-                    // Note: Using OR here may conflict with other OR filters on the same query.
-                    // It ensures athletes with null GP/GS are included when filtering for 0.
-                    query = query.or(`${columnName}.eq.0,${columnName}.is.null`);
-                  } else {
-                    query = query.eq(columnName, value);
-                  }
+            // Detect GP/GS by heading or known ids to optionally treat null as 0
+            const nameLower = (column.data_type_name || column.display_name || columnName || '').toLowerCase();
+            const isGpGsByHeading = ['gp','gs','games played','games started','games_played','games_started'].includes(nameLower);
+            const isGpGsColumn = isGpGsByHeading || [98, 83].includes(column.data_type_id);
+            
+            if (comparison === 'between' && 'minValue' in filterValue && 'maxValue' in filterValue) {
+              // Handle between comparison with min and max values
+              query = query.gte(columnName, filterValue.minValue)
+                        .lte(columnName, filterValue.maxValue);
+            } else if ('value' in filterValue) {
+              // Handle other comparisons (greater, less, equal, min, max)
+              const { value } = filterValue;
+              if (comparison === 'greater' || comparison === 'min') {
+                query = query.gte(columnName, value);
+              } else if (comparison === 'less' || comparison === 'max') {
+                // For GP/GS Max filter, include nulls (treat null as 0)
+                if (isGpGsColumn) {
+                  query = query.or(`${columnName}.lte.${value},${columnName}.is.null`);
+                } else {
+                  query = query.lte(columnName, value);
+                }
+              } else if (comparison === 'equal') {
+                // Special-case: For GP/GS filters where value is 0, treat null as 0
+                if (isGpGsColumn && (value === 0 || value === '0')) {
+                  query = query.or(`${columnName}.eq.0,${columnName}.is.null`);
+                } else {
+                  query = query.eq(columnName, value);
                 }
               }
             }
           }
         }
       });
+    }
+    
 
       if (Array.isArray(options.filters.survey_completed)) {
         const values = options.filters.survey_completed;
@@ -1722,7 +1766,6 @@ export async function fetchAthleteData(
         }
       }
     }
-
     // Apply grad student filter if provided
     if (options.filters?.gradStudent !== undefined) {
       if (Array.isArray(options.filters.gradStudent)) {
@@ -2161,7 +2204,6 @@ export async function fetchAthleteData(
     
     while (retryCount < maxRetries) {
       try {
-        
         // Reduce timeout to 15 seconds to fail faster
         const queryPromise = query;
         const timeoutPromise = new Promise((_, reject) => {
@@ -2169,6 +2211,7 @@ export async function fetchAthleteData(
         });
         
         const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+        
         athleteData = result.data;
         athleteError = result.error;
         count = result.count;
@@ -2284,7 +2327,7 @@ export async function fetchAthleteData(
         athlete_name: `${firstName} ${lastName}`,
         name_name: row.school_name || '',
         school_id: row.school_id || '',
-        school_logo_url: schoolLogos[row.school_id] || '',
+        school_logo_url: schoolLogos[row.school_id],
         commit_school_id: row.commit_school_id || '',
         commit_school_logo_url: schoolLogos[row.commit_school_id] || '',
         date: row.initiated_date || '',
@@ -2328,6 +2371,7 @@ export async function fetchAthleteData(
     
     hasMore = count ? offset + limit < count : false;
 
+
     return {
       data: transformedData,
       hasMore,
@@ -2346,7 +2390,6 @@ export async function fetchAthleteData(
     throw error;
   }
 }
-
 // Fallback function for when the main query fails
 async function fetchAthleteDataFallback(
   sport: string,
@@ -2948,7 +2991,6 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       championship_vs_level: findFactValue(680), // Championship vs highest level
       recent_vs_winning: findFactValue(682) // Recent winning vs winning tradition
     };
-
     // Get conference, division, and logo from school_fact table
     let conference: string | undefined = undefined;
     let division: string | undefined = undefined;
@@ -3088,7 +3130,11 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
         246, // address_street
         247, // city (used for address_city)
         248, // state
-        639 // stats_link
+        571, // email
+        639, // stats_link
+        925, // address_street2
+        1058, // ncaa_id
+        1015 // grad_year
       ])
       .order('created_at', { ascending: false });
 
@@ -3203,6 +3249,7 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
 
     // Process athlete facts
     const year = findFact(factData, 1);
+    const gradYear = findFact(factData, 1015);
     const highname = findFact(factData, 7);
     const state = findFact(factData, 24);
     const address_city = findFact(factData, 247);
@@ -3213,6 +3260,8 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
     const twitter = findFact(factData, 13);
     // Remove @ symbol if it's already present in the Twitter handle
     const cleanTwitter = twitter ? twitter.replace(/^@/, '') : twitter;
+    const email = findFact(factData, 571);
+    const ncaaId = findFact(factData, 1058);
     const primaryPosition = findFact(factData, 2);
     const secondaryPosition = findFact(factData, 3);
     const highnamehighlight = findFact(factData, 38);
@@ -3278,6 +3327,22 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       }
     }
     
+    // Get athlete videos if there's an athlete_id
+    let videosData = null;
+    if (athleteId) {
+      const { data: videos, error: videosError } = await supabase
+        .from('athlete_video')
+        .select('*')
+        .eq('athlete_id', athleteId)
+        .order('created_at', { ascending: false });
+      
+      if (videosError) {
+        console.error('Error fetching athlete videos:', videosError);
+      } else {
+        videosData = videos;
+      }
+    }
+    
     // Combine all data into the structure expected by the frontend
     const transformedData: AthleteData = {
       id: athleteData.id,
@@ -3286,6 +3351,7 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       sport_id: athleteData.sport_id,
       initiated_date: transferPortalData?.initiated_date,
       year: year || undefined,
+      grad_year: gradYear || undefined,
       game_eval: gameEval || undefined,
       club: club || undefined,
       summer_league: summerLeague || undefined,
@@ -3294,6 +3360,7 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       image_url: imageUrl as string | undefined,
       high_name: highname as string | undefined,
       address_street: findFact(factData, 246) as string | undefined,
+      address_street2: findFact(factData, 925) as string | undefined,
       address_city: findFact(factData, 247) as string | undefined,
       address_state: findFact(factData, 24) as string | undefined,
       address_zip: findFact(factData, 248) as string | undefined,
@@ -3301,6 +3368,8 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       height_inch: heightInch ? parseInt(heightInch) : null,
       weight: weight ? parseInt(weight) : null,
       twitter: cleanTwitter as string | undefined,
+      email: email as string | undefined,
+      ncaa_id: ncaaId as string | undefined,
       roster_link: rosterLink as string | undefined,
       stats_link: statsLink as string | undefined,
       bio: bio as string | undefined,
@@ -3311,6 +3380,8 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       tfrrs_link: tfrrsLink as string | undefined,
       wtn_link: wtnLink as string | undefined,
       utr_link: utrLink as string | undefined,
+      highlight: highlight as string | undefined,
+      highnamehighlight: highnamehighlight as string | undefined,
       gpa: gpa || undefined,
       birthday: birthday || undefined,
       pref_contact: preferredContactWay || undefined,
@@ -3326,6 +3397,7 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
       school_division: schoolDivision,
       // Store the school_id used for school_fact queries (for coach info)
       current_school_id: schoolIdToUse,
+      athlete_videos: videosData && videosData.length > 0 ? videosData as AthleteVideo[] : undefined,
       school: {
         name: (dataSource === 'all_athletes' || dataSource === 'juco') 
           ? (currentSchoolData?.school?.name || transferPortalData?.school_name)
@@ -3388,38 +3460,213 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
   }
 }
 
-export async function fetchRecruitingBoardPositions(customerId: string): Promise<RecruitingBoardPosition[]> {
-  const startTime = performance.now();
-  
+// Helper function to get or create the "Main" board for a customer
+export async function getOrCreateMainBoard(customerId: string): Promise<string> {
+  try {
+    // First, try to get the existing "Main" board
+    const { data: existingBoard, error: fetchError } = await supabase
+      .from('recruiting_board_board')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('name', 'Main')
+      .is('recruiting_board_column_id', null) // Main boards have NULL column_id
+      .is('ended_at', null)
+      .single();
+
+    if (!fetchError && existingBoard) {
+      return existingBoard.id;
+    }
+
+    // If no Main board exists, create one
+    const { data: newBoard, error: createError } = await supabase
+      .from('recruiting_board_board')
+      .insert({
+        customer_id: customerId,
+        name: 'Main',
+        recruiting_board_column_id: null,
+        display_order: 1
+      })
+      .select('id')
+      .single();
+
+    if (createError) {
+      console.error('Error creating Main board:', createError);
+      throw new Error('Failed to create Main board');
+    }
+
+    return newBoard.id;
+  } catch (error) {
+    console.error('Error in getOrCreateMainBoard:', error);
+    throw error;
+  }
+}
+
+// Fetch all boards for a customer
+export async function fetchRecruitingBoards(customerId: string): Promise<RecruitingBoardBoard[]> {
   try {
     const { data, error } = await supabase
-      .from('recruiting_board_position')
+      .from('recruiting_board_board')
       .select('*')
       .eq('customer_id', customerId)
+      .is('recruiting_board_column_id', null) // Only main boards, not sub-boards
       .is('ended_at', null)
       .order('display_order', { ascending: true });
 
     if (error) {
-      console.error('Error fetching recruiting board positions:', error);
-      throw new Error('Failed to fetch recruiting board positions');
+      console.error('Error fetching recruiting boards:', error);
+      throw new Error('Failed to fetch recruiting boards');
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in fetchRecruitingBoards:', error);
+    throw error;
+  }
+}
+
+// Create a new recruiting board
+export async function createRecruitingBoard(customerId: string, boardName: string): Promise<RecruitingBoardBoard> {
+  try {
+    // Get the next display order
+    const { data: maxOrderData, error: maxOrderError } = await supabase
+      .from('recruiting_board_board')
+      .select('display_order')
+      .eq('customer_id', customerId)
+      .is('recruiting_board_column_id', null)
+      .is('ended_at', null)
+      .order('display_order', { ascending: false })
+      .limit(1);
+
+    if (maxOrderError) {
+      console.error('Error getting max display order:', maxOrderError);
+      throw new Error('Failed to get max display order');
+    }
+
+    const nextOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
+
+    const { data, error } = await supabase
+      .from('recruiting_board_board')
+      .insert({
+        customer_id: customerId,
+        name: boardName,
+        recruiting_board_column_id: null,
+        display_order: nextOrder
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating recruiting board:', error);
+      throw new Error('Failed to create recruiting board');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in createRecruitingBoard:', error);
+    throw error;
+  }
+}
+
+// Update recruiting board name
+export async function updateRecruitingBoardName(boardId: string, newName: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('recruiting_board_board')
+      .update({ name: newName })
+      .eq('id', boardId);
+
+    if (error) {
+      console.error('Error updating board name:', error);
+      throw new Error('Failed to update board name');
+    }
+  } catch (error) {
+    console.error('Error in updateRecruitingBoardName:', error);
+    throw error;
+  }
+}
+
+// Delete a recruiting board (soft delete)
+export async function deleteRecruitingBoard(boardId: string): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('recruiting_board_board')
+      .update({ ended_at: new Date().toISOString() })
+      .eq('id', boardId)
+      .is('ended_at', null);
+
+    if (error) {
+      console.error('Error deleting recruiting board:', error);
+      throw new Error('Failed to delete recruiting board');
+    }
+  } catch (error) {
+    console.error('Error in deleteRecruitingBoard:', error);
+    throw error;
+  }
+}
+
+// Update recruiting board display order
+export async function updateRecruitingBoardOrder(boards: { id: string; display_order: number }[]): Promise<void> {
+  try {
+    for (const board of boards) {
+      const { error } = await supabase
+        .from('recruiting_board_board')
+        .update({ display_order: board.display_order })
+        .eq('id', board.id);
+
+      if (error) {
+        console.error('Error updating board order:', error);
+        throw new Error('Failed to update board order');
+      }
+    }
+  } catch (error) {
+    console.error('Error in updateRecruitingBoardOrder:', error);
+    throw error;
+  }
+}
+export async function fetchRecruitingBoardPositions(customerId: string, boardId?: string): Promise<RecruitingBoardColumn[]> {
+  const startTime = performance.now();
+  
+  try {
+    console.log('[fetchRecruitingBoardPositions] Starting fetch with:', { customerId, boardId });
+    
+    // Get the board ID - use provided or get/create Main board
+    const activeBoardId = boardId || await getOrCreateMainBoard(customerId);
+    console.log('[fetchRecruitingBoardPositions] Using activeBoardId:', activeBoardId);
+
+    const { data, error } = await supabase
+      .from('recruiting_board_column')
+      .select('*')
+      .eq('customer_id', customerId)
+      .eq('recruiting_board_board_id', activeBoardId)
+      .is('ended_at', null)
+      .order('display_order', { ascending: true });
+
+    if (error) {
+      console.error('[fetchRecruitingBoardPositions] Error fetching recruiting board columns:', error);
+      throw new Error('Failed to fetch recruiting board columns');
     }
 
     const totalTime = performance.now() - startTime;
     
     return data || [];
   } catch (error) {
+    console.error('[fetchRecruitingBoardPositions] Exception:', error);
     const errorTime = performance.now() - startTime;
     throw error;
   }
 }
 
-export async function createRecruitingBoardPosition(customerId: string, positionName: string): Promise<RecruitingBoardPosition> {
+export async function createRecruitingBoardPosition(customerId: string, positionName: string, boardId?: string | null): Promise<RecruitingBoardColumn> {
   try {
+    // Get the board ID - use provided one or get/create Main board
+    const activeBoardId = boardId || await getOrCreateMainBoard(customerId);
+
     // Get the next display order
     const { data: maxOrderData, error: maxOrderError } = await supabase
-      .from('recruiting_board_position')
+      .from('recruiting_board_column')
       .select('display_order')
       .eq('customer_id', customerId)
+      .eq('recruiting_board_board_id', activeBoardId)
       .is('ended_at', null)
       .order('display_order', { ascending: false })
       .limit(1);
@@ -3433,18 +3680,19 @@ export async function createRecruitingBoardPosition(customerId: string, position
     const nextOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
 
     const { data, error } = await supabase
-      .from('recruiting_board_position')
+      .from('recruiting_board_column')
       .insert({
         customer_id: customerId,
-        position_name: positionName,
+        recruiting_board_board_id: activeBoardId,
+        name: positionName,
         display_order: nextOrder
       })
       .select()
       .single();
 
     if (error) {
-      console.error('Error creating recruiting board position:', error);
-      throw new Error('Failed to create recruiting board position');
+      console.error('Error creating recruiting board column:', error);
+      throw new Error('Failed to create recruiting board column');
     }
 
     return data;
@@ -3456,17 +3704,69 @@ export async function createRecruitingBoardPosition(customerId: string, position
 
 export async function updateRecruitingBoardPositionOrder(customerId: string, positions: { id: string; display_order: number }[]): Promise<void> {
   try {
-    // Update each position's display order
+    // Determine a safe temporary base that exceeds any existing display_order on this board
+    // 1) Find the boardId for these positions (assume all belong to the same board)
+    const { data: sampleCols, error: sampleErr } = await supabase
+      .from('recruiting_board_column')
+      .select('recruiting_board_board_id')
+      .in('id', positions.map(p => p.id))
+      .limit(1);
+
+    if (sampleErr) {
+      console.error('[updateRecruitingBoardPositionOrder] Failed to fetch sample columns:', sampleErr);
+      throw new Error('Failed to update column order');
+    }
+
+    const boardId = sampleCols?.[0]?.recruiting_board_board_id;
+
+    // 2) Fetch the current max display_order for this board to avoid any collisions
+    let tempBase = 1_000_000; // Fallback
+    if (boardId) {
+      const { data: maxRows, error: maxErr } = await supabase
+        .from('recruiting_board_column')
+        .select('display_order')
+        .eq('customer_id', customerId)
+        .eq('recruiting_board_board_id', boardId)
+        .is('ended_at', null)
+        .order('display_order', { ascending: false })
+        .limit(1);
+
+      if (maxErr) {
+        console.error('[updateRecruitingBoardPositionOrder] Failed to get max display_order:', maxErr);
+        throw new Error('Failed to update column order');
+      }
+
+      const currentMax = maxRows?.[0]?.display_order ?? 0;
+      tempBase = Math.max(currentMax + 1000, 1_000_000);
+    }
+
+    // Phase 1: Set all display_orders to unique temporary values beyond current max
+    for (let i = 0; i < positions.length; i++) {
+      const position = positions[i];
+      const tempOrder = tempBase + i + 1; // guaranteed unique and above current max
+      const { error } = await supabase
+        .from('recruiting_board_column')
+        .update({ display_order: tempOrder })
+        .eq('id', position.id)
+        .eq('customer_id', customerId);
+
+      if (error) {
+        console.error('Error updating column order (phase 1):', error);
+        throw new Error('Failed to update column order');
+      }
+    }
+
+    // Phase 2: Set display_orders to final values
     for (const position of positions) {
       const { error } = await supabase
-        .from('recruiting_board_position')
+        .from('recruiting_board_column')
         .update({ display_order: position.display_order })
         .eq('id', position.id)
         .eq('customer_id', customerId);
 
       if (error) {
-        console.error('Error updating position order:', error);
-        throw new Error('Failed to update position order');
+        console.error('Error updating column order (phase 2):', error);
+        throw new Error('Failed to update column order');
       }
     }
   } catch (error) {
@@ -3475,18 +3775,22 @@ export async function updateRecruitingBoardPositionOrder(customerId: string, pos
   }
 }
 
-export async function endRecruitingBoardPosition(customerId: string, positionName: string): Promise<void> {
+export async function endRecruitingBoardPosition(customerId: string, positionName: string, boardId?: string | null): Promise<void> {
   try {
+    // Get the board ID - use provided one or get/create Main board
+    const activeBoardId = boardId || await getOrCreateMainBoard(customerId);
+
     const { error } = await supabase
-      .from('recruiting_board_position')
+      .from('recruiting_board_column')
       .update({ ended_at: new Date().toISOString() })
-      .eq('position_name', positionName)
+      .eq('name', positionName)
       .eq('customer_id', customerId)
+      .eq('recruiting_board_board_id', activeBoardId)
       .is('ended_at', null);
 
     if (error) {
-      console.error('Error ending recruiting board position:', error);
-      throw new Error('Failed to end recruiting board position');
+      console.error('Error ending recruiting board column:', error);
+      throw new Error('Failed to end recruiting board column');
     }
   } catch (error) {
     console.error('Error in endRecruitingBoardPosition:', error);
@@ -3496,34 +3800,38 @@ export async function endRecruitingBoardPosition(customerId: string, positionNam
 
 export async function resetRecruitingBoardPositionOrders(customerId: string): Promise<void> {
   try {
-    // Get all active positions for this customer, ordered by current display_order
+    // Get the Main board ID
+    const boardId = await getOrCreateMainBoard(customerId);
+
+    // Get all active columns for this customer, ordered by current display_order
     const { data: positions, error: fetchError } = await supabase
-      .from('recruiting_board_position')
+      .from('recruiting_board_column')
       .select('id, display_order')
       .eq('customer_id', customerId)
+      .eq('recruiting_board_board_id', boardId)
       .is('ended_at', null)
       .order('display_order', { ascending: true });
 
     if (fetchError) {
-      console.error('Error fetching positions for reset:', fetchError);
-      throw new Error('Failed to fetch positions for reset');
+      console.error('Error fetching columns for reset:', fetchError);
+      throw new Error('Failed to fetch columns for reset');
     }
 
     if (!positions || positions.length === 0) {
       return; // No positions to reset
     }
 
-    // Update each position with a new sequential order starting at 1
+    // Update each column with a new sequential order starting at 1
     for (let i = 0; i < positions.length; i++) {
       const { error: updateError } = await supabase
-        .from('recruiting_board_position')
+        .from('recruiting_board_column')
         .update({ display_order: i + 1 })
         .eq('id', positions[i].id)
         .eq('customer_id', customerId);
 
       if (updateError) {
-        console.error('Error updating position order:', updateError);
-        throw new Error('Failed to update position order');
+        console.error('Error updating column order:', updateError);
+        throw new Error('Failed to update column order');
       }
     }
   } catch (error) {
@@ -3534,28 +3842,105 @@ export async function resetRecruitingBoardPositionOrders(customerId: string): Pr
 
 export async function updateRecruitingBoardRanks(
   customerId: string, 
-  updates: { athleteId: string; rank: number; position?: string }[]
+  updates: { recruitingBoardId: string; rank: number; position?: string }[],
+  boardId?: string | null
 ): Promise<void> {
   try {
-    // Update each athlete's rank and position
+    // Get the board ID - use provided one or get/create Main board
+    const activeBoardId = boardId || await getOrCreateMainBoard(customerId);
+
+    // Group updates by column to handle rank conflicts
+    const updatesByColumn = new Map<string, typeof updates>();
+    
     for (const update of updates) {
-      const updateData: any = { rank: update.rank };
+      // Get column ID for grouping
+      let columnId: string | null = null;
       
-      // Only update position if it's provided (when moving between columns)
       if (update.position !== undefined) {
-        updateData.position = update.position;
+        const { data: columnData, error: columnError } = await supabase
+          .from('recruiting_board_column')
+          .select('id')
+          .eq('customer_id', customerId)
+          .eq('recruiting_board_board_id', activeBoardId)
+          .eq('name', update.position)
+          .is('ended_at', null)
+          .single();
+
+        if (columnError) {
+          console.error('Error finding column:', columnError);
+          throw new Error('Failed to find column');
+        }
+        
+        columnId = columnData.id;
+      } else {
+        // If no position provided, get the current column from the athlete record
+        const { data: athleteData, error: athleteError } = await supabase
+          .from('recruiting_board_athlete')
+          .select('recruiting_board_column_id')
+          .eq('id', update.recruitingBoardId)
+          .is('ended_at', null)
+          .single();
+          
+        if (athleteError) {
+          console.error('Error finding athlete:', athleteError);
+          throw new Error('Failed to find athlete');
+        }
+        
+        columnId = athleteData?.recruiting_board_column_id || null;
+      }
+      
+      const key = columnId || 'null';
+      if (!updatesByColumn.has(key)) {
+        updatesByColumn.set(key, []);
+      }
+      updatesByColumn.get(key)!.push({
+        ...update,
+        _columnId: columnId
+      } as any);
+    }
+
+    // Process each column separately using two-phase update to avoid rank conflicts
+    for (const [columnKey, columnUpdates] of updatesByColumn) {
+      // Phase 1: Set all ranks to temporary high values to avoid conflicts
+      const tempOffset = 999999;
+      for (const update of columnUpdates) {
+        const tempRank = tempOffset + update.rank;
+        const updateData: any = { rank: tempRank };
+        
+        if ((update as any)._columnId) {
+          updateData.recruiting_board_column_id = (update as any)._columnId;
+        }
+
+        const { error } = await supabase
+          .from('recruiting_board_athlete')
+          .update(updateData)
+          .eq('id', update.recruitingBoardId)
+          .is('ended_at', null);
+
+        if (error) {
+          console.error('Error updating recruiting board rank (phase 1):', error);
+          throw new Error('Failed to update recruiting board rank');
+        }
       }
 
-      const { error } = await supabase
-        .from('recruiting_board')
-        .update(updateData)
-        .eq('athlete_id', update.athleteId)
-        .eq('customer_id', customerId)
-        .is('ended_at', null);
+      // Phase 2: Set ranks to final values
+      for (const update of columnUpdates) {
+        const updateData: any = { rank: update.rank };
+        
+        if ((update as any)._columnId) {
+          updateData.recruiting_board_column_id = (update as any)._columnId;
+        }
 
-      if (error) {
-        console.error('Error updating recruiting board rank:', error);
-        throw new Error('Failed to update recruiting board rank');
+        const { error } = await supabase
+          .from('recruiting_board_athlete')
+          .update(updateData)
+          .eq('id', update.recruitingBoardId)
+          .is('ended_at', null);
+
+        if (error) {
+          console.error('Error updating recruiting board rank (phase 2):', error);
+          throw new Error('Failed to update recruiting board rank');
+        }
       }
     }
   } catch (error) {
@@ -3567,7 +3952,7 @@ export async function updateRecruitingBoardRanks(
 export async function endRecruitingBoardAthlete(recruitingBoardId: string): Promise<void> {
   try {
     const { error } = await supabase
-      .from('recruiting_board')
+      .from('recruiting_board_athlete')
       .update({ ended_at: new Date().toISOString() })
       .eq('id', recruitingBoardId)
       .is('ended_at', null);
@@ -3581,8 +3966,7 @@ export async function endRecruitingBoardAthlete(recruitingBoardId: string): Prom
     throw error;
   }
 }
-
-export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetails?: any): Promise<RecruitingBoardData[]> {
+export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetails?: any, boardId?: string): Promise<RecruitingBoardData[]> {
   const startTime = performance.now();
   
   try {
@@ -3613,27 +3997,47 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
 
     // Timer for basic recruiting board data fetch
     const recruitingBoardStart = performance.now();
+    
+    console.log('[fetchRecruitingBoardData] Starting fetch with boardId:', boardId, 'customerId:', userDetails.customer_id);
+    
+    // Get the board ID - use provided boardId or get/create Main board
+    const activeBoardId = boardId || await getOrCreateMainBoard(userDetails.customer_id);
+    console.log('[fetchRecruitingBoardData] Using activeBoardId:', activeBoardId);
+    
+    // Get the recruiting board columns (positions) to resolve column names
+    const { data: columnsData, error: columnsError } = await supabase
+      .from('recruiting_board_column')
+      .select('id, name')
+      .eq('customer_id', userDetails.customer_id)
+      .eq('recruiting_board_board_id', activeBoardId)
+      .is('ended_at', null);
+
+    if (columnsError) {
+      console.error('[fetchRecruitingBoardData] Error fetching columns:', columnsError);
+      throw new Error('Failed to fetch recruiting board columns');
+    }
+
+    console.log('[fetchRecruitingBoardData] Found columns:', columnsData?.length || 0, columnsData);
+
+    // Create a map of column ID to column name for later lookup
+    const columnIdToName = new Map(columnsData?.map((col: { id: string; name: string }) => [col.id, col.name]) || []);
+    
     // First, get the basic recruiting board data
     const { data: recruitingBoardBasic, error: recruitingBoardBasicError } = await supabase
-      .from('recruiting_board')
+      .from('recruiting_board_athlete')
       .select(`
         id,
         athlete_id,
         user_id,
         created_at,
         athlete_tier,
-        position,
+        recruiting_board_column_id,
         rank,
-        source,
-        user_detail!user_id (
-          id,
-          name_first,
-          name_last
-        )
+        source
       `)
-      .eq('customer_id', userDetails.customer_id)
+      .eq('recruiting_board_board_id', activeBoardId)
       .is('ended_at', null) // Only show athletes that haven't been ended/removed
-      .order('rank', { ascending: true, nullsFirst: false });
+      .order('rank', { ascending: true, nullsFirst: false});
     const recruitingBoardEnd = performance.now();
 
     if (recruitingBoardBasicError) {
@@ -3641,8 +4045,33 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
       throw new Error('Failed to fetch recruiting board data');
     }
 
+    console.log('[fetchRecruitingBoardData] Found athletes:', recruitingBoardBasic?.length || 0, recruitingBoardBasic);
+
+    // Fetch user details separately for each unique user_id
+    const userIds = [...new Set(recruitingBoardBasic?.map((item: any) => item.user_id).filter(Boolean))];
+    const userDetailsMap = new Map();
+    
+    if (userIds.length > 0) {
+      const { data: userDetailsData, error: userDetailsError } = await supabase
+        .from('user_detail')
+        .select('id, name_first, name_last')
+        .in('id', userIds);
+      
+      if (!userDetailsError && userDetailsData) {
+        userDetailsData.forEach((user: any) => {
+          userDetailsMap.set(user.id, user);
+        });
+      }
+    }
+
+    // Attach user details to recruiting board data
+    const recruitingBoardBasicWithUsers = recruitingBoardBasic?.map((item: any) => ({
+      ...item,
+      user_detail: userDetailsMap.get(item.user_id) || null
+    }));
+
     // Fetch ratings for all athletes on the recruiting board
-    const boardAthleteIds = recruitingBoardBasic?.map((item: { athlete_id: string }) => item.athlete_id) || [];
+    const boardAthleteIds = recruitingBoardBasicWithUsers?.map((item: { athlete_id: string }) => item.athlete_id) || [];
     const ratingsMap = new Map();
     
     if (boardAthleteIds.length > 0) {
@@ -3658,15 +4087,15 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
     }
     }
 
-    if (!recruitingBoardBasic || recruitingBoardBasic.length === 0) {
+    if (!recruitingBoardBasicWithUsers || recruitingBoardBasicWithUsers.length === 0) {
       // Debug log removed('[fetchRecruitingBoardData] No recruiting board data found');
       return [];
     }
 
-    // Debug log removed('[fetchRecruitingBoardData] Found', recruitingBoardBasic.length, 'athletes on recruiting board');
+    // Debug log removed('[fetchRecruitingBoardData] Found', recruitingBoardBasicWithUsers.length, 'athletes on recruiting board');
 
     // Get athlete IDs and fetch their sport_ids
-    const athleteIds = recruitingBoardBasic.map((item: any) => item.athlete_id);
+    const athleteIds = recruitingBoardBasicWithUsers.map((item: any) => item.athlete_id);
     // Debug log removed('[fetchRecruitingBoardData] Athlete IDs:', athleteIds);
     
     // Timer for athlete sport data fetch
@@ -3747,10 +4176,10 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
     }
 
     // 🚀 [OPTIMIZATION] Pre-filter recruiting board data by sport to avoid querying non-existent athletes
-    let preFilteredRecruitingBoard = recruitingBoardBasic;
+    let preFilteredRecruitingBoard = recruitingBoardBasicWithUsers;
     if (sportId && athleteData && athleteData.length > 0) {
       const validAthleteIds = new Set(athleteData.map((a: any) => a.id));
-      preFilteredRecruitingBoard = recruitingBoardBasic.filter((item: any) => 
+      preFilteredRecruitingBoard = recruitingBoardBasicWithUsers.filter((item: any) => 
         validAthleteIds.has(item.athlete_id)
       );
     }
@@ -3764,6 +4193,7 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
       // Determine package tier and view suffix for this sport
       const userPackageNumbers = (userDetails.packages || []).map((pkg: any) => parseInt(String(pkg), 10));
       const viewSuffix = getViewSuffixForSport(sportAbbrev, userPackageNumbers);
+      const hsViewSuffix = getHsViewSuffixForSport(sportAbbrev, userPackageNumbers);
       const bestPackage = getBestPackageForSport(sportAbbrev, userPackageNumbers);
       
       // Debug log removed(`[fetchRecruitingBoardData] Best package for ${sportAbbrev}:`, bestPackage?.description || 'none');
@@ -3776,8 +4206,8 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
 
         // Debug log removed(`[fetchRecruitingBoardData] Querying all data sources for ${athleteIdsToQuery.length} athletes`);
 
-        // Define data sources in priority order: TP -> Athletes -> JUCO
-        const dataSources = [
+        // Define data sources in priority order: TP -> Athletes -> JUCO (conditional) -> HS Athletes (conditional)
+        const dataSources: { name: string; viewName: string; dataSource: 'transfer_portal' | 'all_athletes' | 'juco' | 'hs_athletes' }[] = [
           {
             name: 'transfer_portal',
             viewName: `vw_tp_athletes_wide_${sportAbbrev}${viewSuffix}`,
@@ -3787,13 +4217,27 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
             name: 'athletes',
             viewName: `vw_athletes_wide_${sportAbbrev}`,
             dataSource: 'all_athletes' as const
-          },
-          {
+          }
+        ];
+
+        // Only add JUCO data source for sports that have JUCO data
+        const jucoSports = ['wbb', 'wsoc', 'msoc', 'bsb', 'wvol'];
+        if (jucoSports.includes(sportAbbrev)) {
+          dataSources.push({
             name: 'juco',
             viewName: `vw_juco_athletes_wide_${sportAbbrev}`,
             dataSource: 'juco' as const
-          }
-        ];
+          });
+        }
+
+        // Only add high school data source if the sport has HS athlete data
+        if (hsViewSuffix) {
+          dataSources.push({
+            name: 'high_school',
+            viewName: `vw_hs_athletes_wide_${sportAbbrev}_${hsViewSuffix}`,
+            dataSource: 'hs_athletes' as const
+          });
+        }
 
         // Query each data source in priority order
         for (const source of dataSources) {
@@ -3824,7 +4268,11 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
                 height_feet,
                 height_inch,
                 weight,
-                division
+                division,
+                primary_position,
+                m_status,
+                survey_completed,
+                conference
               `)
               .in('athlete_id', remainingAthleteIds);
 
@@ -3931,14 +4379,20 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
       // Format height using data from the athlete object
       const heightFeet = athlete?.height_feet;
       const heightInch = athlete?.height_inch;
-      const height = heightFeet && heightInch ? `${heightFeet}'${heightInch}"` : '';
+      // Round height inches to nearest 0.1 inch
+      const roundedInch = heightInch ? Math.round(heightInch * 10) / 10 : null;
+      const height = heightFeet && roundedInch !== null ? `${heightFeet}'${roundedInch}"` : '';
+      
+      // Round weight to nearest pound
+      const roundedWeight = athlete?.weight ? Math.round(athlete.weight) : '';
 
       // Get the latest rating from our ratings map
       const latestRating = ratingsMap.get(athlete?.athlete_id);
       
       return {
-        key: (index + 1).toString(),
-        id: athlete?.athlete_id || '',
+        key: item.id, // Use recruiting_board_id as unique key (not index)
+        id: item.id, // Use recruiting_board_id as unique identifier for drag-and-drop
+        athlete_id: athlete?.athlete_id || '', // Keep athlete_id as separate field
         recruiting_board_id: item.id,
         fname: athlete?.first_name || '',
         lname: athlete?.last_name || '',
@@ -3959,11 +4413,16 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
         ht: height,
         high_school: athlete?.high_school || '',
         st: athlete?.address_state || '',
-        wt: athlete?.weight || '',
+        wt: roundedWeight,
         s: "540",
         h: "Y",
         direction: "Flat",
-        position: item.position || 'Unassigned',
+        position: columnIdToName.get(item.recruiting_board_column_id) || 'Unassigned',
+        primary_position: athlete?.primary_position || '',
+        school_id: athlete?.school_id || '',
+        conference: athlete?.conference || '',
+        status: athlete?.m_status || '',
+        survey_completed: athlete?.survey_completed === 'true' || athlete?.survey_completed === true,
         tier: null, // We're not using tiers anymore
         tierColor: latestRating?.color || null, // Use rating color for styling
         userFirstName: userDetail?.name_first || '',
@@ -3971,7 +4430,8 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
         ratingName: latestRating?.name || null,
         ratingColor: latestRating?.color || null,
         rank: item.rank,
-        source: item.source || null, // Add source information from recruiting_board
+        // Map data_source to source if source is not set
+        source: item.source || (athlete?.data_source === 'hs_athletes' ? 'high_school' : null),
         data_source: athlete?.data_source || 'unknown' // Add data source information
       };
     });
@@ -3986,9 +4446,6 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
     throw error;
   }
 }
-
-
-
 // New function to fetch sport-specific column configurations
 export async function fetchSportColumnConfig(sportId: string, allStats: boolean = false, deduplicate: boolean = true, dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'hs_athletes'): Promise<SportStatConfig[]> {
   // Check cache first
@@ -4432,6 +4889,59 @@ export async function convertStateIdsToAbbrevs(stateIds: number[]): Promise<stri
   }
 }
 
+// Convert county names with state abbreviations to county IDs
+export async function convertCountyNamesToIds(countyNames: string[]): Promise<number[]> {
+  try {
+    if (countyNames.length === 0) return [];
+    
+    // Parse county names in format "County Name (ST)" to extract county name and state abbreviation
+    const countyStatePairs = countyNames.map(name => {
+      const match = name.match(/^(.+?)\s*\(([A-Z]{2})\)$/);
+      if (match) {
+        return { countyName: match[1].trim(), stateAbbrev: match[2] };
+      }
+      return null;
+    }).filter((pair): pair is { countyName: string; stateAbbrev: string } => pair !== null);
+    
+    if (countyStatePairs.length === 0) return [];
+    
+    // Get state IDs for the abbreviations
+    const stateAbbrevs = [...new Set(countyStatePairs.map(pair => pair.stateAbbrev))];
+    const { data: statesData, error: statesError } = await supabase
+      .from('state')
+      .select('id, abbrev')
+      .in('abbrev', stateAbbrevs) as { data: { id: number; abbrev: string }[] | null; error: any };
+    
+    if (statesError) {
+      console.error('Error fetching states:', statesError);
+      return [];
+    }
+    
+    // Get county IDs
+    const countyIds: number[] = [];
+    for (const pair of countyStatePairs) {
+      const state = statesData?.find(s => s.abbrev === pair.stateAbbrev);
+      if (state) {
+        const { data: countyData, error: countyError } = await supabase
+          .from('county')
+          .select('id')
+          .eq('name', pair.countyName)
+          .eq('state_id', state.id)
+          .limit(1);
+        
+        if (!countyError && countyData && countyData.length > 0) {
+          countyIds.push(countyData[0].id);
+        }
+      }
+    }
+    
+    return countyIds;
+  } catch (error) {
+    console.error('❌ Error in convertCountyNamesToIds:', error);
+    return [];
+  }
+}
+
 // Specific function to fetch high school religious affiliations (data_type_id 961)
 export async function fetchHSReligiousAffiliations(): Promise<string[]> {
   return fetchHSDistinctValuesByDataTypeId(961);
@@ -4539,7 +5049,6 @@ async function fetchSchoolFactsWithBatching(schoolIds: string[]): Promise<any[]>
   // Debug log removed(`[PERF] Fallback school facts batching completed, total facts: ${schoolFactData.length}`);
   return schoolFactData;
 }
-
 // Cache for international options to prevent repeated expensive queries
 const internationalOptionsCache = new Map<string, string[]>();
 
@@ -4560,13 +5069,18 @@ export async function fetchInternationalOptions(sportId?: string): Promise<strin
         
         // Query the distinct_state_values_by_sport view for this specific sport
         // (US states are already excluded in the view)
-        const { data: viewData, error: viewError } = await supabase
+        // Add timeout to prevent hanging
+        const queryPromise = supabase
           .from('distinct_state_values_by_sport')
           .select('value')
-          .eq('sport_id', sportId)
-          .not('value', 'is', null)
-          .neq('value', '')
-          .order('value', { ascending: true});
+          .eq('sport_id', sportId);
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000);
+        });
+        
+        const result = await Promise.race([queryPromise, timeoutPromise]) as any;
+        const { data: viewData, error: viewError } = result;
 
         if (viewError) {
           console.error('View query failed:', viewError);
@@ -4591,12 +5105,20 @@ export async function fetchInternationalOptions(sportId?: string): Promise<strin
       try {
         // Debug log removed('Fetching all international locations from view');
         
-        const { data: allViewData, error: allViewError } = await supabase
+        // Add timeout to prevent hanging
+        const allQueryPromise = supabase
           .from('distinct_state_values_by_sport')
           .select('value')
           .not('value', 'is', null)
           .neq('value', '')
           .order('value', { ascending: true });
+        
+        const allTimeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000);
+        });
+        
+        const allResult = await Promise.race([allQueryPromise, allTimeoutPromise]) as any;
+        const { data: allViewData, error: allViewError } = allResult;
 
         if (allViewError) {
           console.error('Error fetching all international options from view:', allViewError);
@@ -4964,6 +5486,167 @@ export async function fetchConferences(sportAbbrev: string): Promise<string[]> {
   }
 }
 
+// Function to fetch conferences for activity feed (from recruiting college data)
+export async function fetchActivityFeedConferences(): Promise<string[]> {
+  try {
+    // Try different activity feed views in order of preference
+    const viewNames = [
+      'vw_activity_feed_fb_platinum',
+      'vw_activity_feed_fb_gold', 
+      'vw_activity_feed_fb_silver_plus'
+    ];
+
+    for (const viewName of viewNames) {
+      try {
+        const { data, error } = await supabase
+          .from(viewName)
+          .select('sfw_conference')
+          .not('sfw_conference', 'is', null)
+          .not('sfw_conference', 'eq', '')
+          .limit(1000); // Limit to prevent large queries
+
+        if (!error && data && data.length > 0) {
+          // Extract unique conference values
+          const conferences = [...new Set(
+            data
+              .map((item: any) => item.sfw_conference as string)
+              .filter((conf: string) => conf && conf.trim() !== '')
+          )].sort() as string[];
+
+          if (conferences.length > 0) {
+            return conferences;
+          }
+        }
+      } catch (viewError) {
+        console.warn(`View ${viewName} not available, trying next...`);
+        continue;
+      }
+    }
+
+    // If no views work, return empty array
+    console.warn('No activity feed views available for conferences');
+    return [];
+  } catch (error) {
+    console.error('Error fetching activity feed conferences:', error);
+    return [];
+  }
+}
+
+// Function to fetch level options for activity feed (from sfw_fbs_conf_group)
+export async function fetchActivityFeedLevels(): Promise<string[]> {
+  try {
+    // Try different activity feed views in order of preference
+    const viewNames = [
+      'vw_activity_feed_fb_platinum',
+      'vw_activity_feed_fb_gold', 
+      'vw_activity_feed_fb_silver_plus'
+    ];
+
+    for (const viewName of viewNames) {
+      try {
+        const { data, error } = await supabase
+          .from(viewName)
+          .select('sfw_fbs_conf_group')
+          .not('sfw_fbs_conf_group', 'is', null)
+          .not('sfw_fbs_conf_group', 'eq', '')
+          .limit(1000); // Limit to prevent large queries
+
+        if (!error && data && data.length > 0) {
+          // Extract unique level values
+          const levels = [...new Set(
+            data
+              .map((item: any) => item.sfw_fbs_conf_group as string)
+              .filter((level: string) => level && level.trim() !== '')
+          )].sort() as string[];
+
+          if (levels.length > 0) {
+            return levels;
+          }
+        }
+      } catch (viewError) {
+        console.warn(`View ${viewName} not available, trying next...`);
+        continue;
+      }
+    }
+
+    // If no views work, return fallback levels
+    console.warn('No activity feed views available for levels, using fallback');
+    return ['P4', 'G5', 'FCS', 'D2', 'NAIA', 'D3', 'Other'];
+  } catch (error) {
+    console.error('Error fetching activity feed levels:', error);
+    // Return fallback levels on error
+    return ['P4', 'G5', 'FCS', 'D2', 'NAIA', 'D3', 'Other'];
+  }
+}
+
+// Function to fetch school options for activity feed (from sfw_school_name)
+export async function fetchActivityFeedSchools(): Promise<string[]> {
+  try {
+    // Try different activity feed views in order of preference
+    const viewNames = [
+      'vw_activity_feed_fb_platinum',
+      'vw_activity_feed_fb_gold',
+      'vw_activity_feed_fb_silver_plus'
+    ];
+
+    for (const viewName of viewNames) {
+      try {
+        const { data, error } = await supabase
+          .from(viewName)
+          .select('sfw_school_name')
+          .not('sfw_school_name', 'is', null)
+          .not('sfw_school_name', 'eq', '');
+
+        if (!error && data && data.length > 0) {
+          const schools = [...new Set(
+            data
+              .map((item: any) => item.sfw_school_name as string)
+              .filter((school: string) => school && school.trim() !== '')
+          )].sort() as string[];
+
+          console.log(`Found ${schools.length} unique schools in ${viewName}`);
+          
+          if (schools.length > 0) {
+            return schools;
+          }
+        }
+      } catch (viewError) {
+        console.warn(`View ${viewName} not available, trying next...`);
+        continue;
+      }
+    }
+
+    // If no views work, try to get schools from the main school table as fallback
+    console.warn('No activity feed views available for schools, trying fallback...');
+    try {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('school')
+        .select('school_name')
+        .not('school_name', 'is', null)
+        .not('school_name', 'eq', '')
+        .limit(1000);
+
+      if (!fallbackError && fallbackData && fallbackData.length > 0) {
+        const fallbackSchools = [...new Set(
+          fallbackData
+            .map((item: any) => item.school_name as string)
+            .filter((school: string) => school && school.trim() !== '')
+        )].sort() as string[];
+
+        console.log(`Found ${fallbackSchools.length} schools from fallback source`);
+        return fallbackSchools;
+      }
+    } catch (fallbackError) {
+      console.error('Fallback school query failed:', fallbackError);
+    }
+
+    return [];
+  } catch (error) {
+    console.error('Error fetching activity feed schools:', error);
+    return [];
+  }
+}
+
 // Function to fetch school data and school facts
 export async function fetchSchoolWithFacts(schoolId: string): Promise<{
   school: any;
@@ -5004,7 +5687,6 @@ export async function fetchSchoolWithFacts(schoolId: string): Promise<{
     return null;
   }
 }
-
 // Fetch season data from sport_season_selector table
 export async function fetchSeasonData(sportId: number, dataSource: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes'): Promise<number | null> {
   try {
@@ -5038,7 +5720,8 @@ export async function fetchSeasonData(sportId: number, dataSource: 'transfer_por
 
 // Fetch user details by IDs (batch processing)
 export async function fetchUserDetailsByIds(userIds: string[]): Promise<any[]> {
-  const batchSize = 50;
+  // Use larger batch size for better throughput
+  const batchSize = 200; // Increased from 50 to reduce number of queries
   const results: any[] = [];
   
   for (let i = 0; i < userIds.length; i += batchSize) {
@@ -5479,7 +6162,14 @@ export async function insertCoachFact(coachId: string, dataTypeId: number, value
   }
 }
 
-export async function updateCoachBasicInfo(coachId: string, updates: { first_name?: string; last_name?: string }): Promise<void> {
+export async function updateCoachBasicInfo(coachId: string, updates: {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  twitter_handle?: string;
+  best_phone?: string;
+}): Promise<void> {
   const { supabase } = await import('./supabaseClient');
   const { error } = await supabase
     .from('coach')
@@ -5624,7 +6314,6 @@ export async function searchCustomers(searchTerm: string, limit: number = 25, sp
   
   return data || [];
 }
-
 // Search athletes with complex search logic - supports multiple table types
 export async function searchAthletes(
   searchTerm: string, 
@@ -6069,48 +6758,52 @@ export async function loadSportUsersWithData(packageIds: number[], getUserDetail
 
   const userIds = userCustomerMappings.map((item: any) => item.user_id);
 
+  // Steps 3, 4, and 5 can run in parallel since they're independent
   // Step 3: Get user details using cached helper function
-  const userDetails = await getUserDetails(userIds);
+  const userDetailsPromise = getUserDetails(userIds);
 
   // Step 4: Get user emails from auth table using dedicated API
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    throw new Error('Authentication required to fetch user emails');
-  }
-
-  const emailResponse = await fetch('/api/admin/get-user-emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ userIds }),
-  });
-
-  const emailResult = await emailResponse.json();
-  if (!emailResponse.ok) {
-    throw new Error(emailResult.error || 'Failed to fetch user emails');
-  }
-
-  const userEmailMap = new Map<string, string>();
-  if (emailResult.emails) {
-    if (Array.isArray(emailResult.emails)) {
-      // Handle array format
-      emailResult.emails.forEach((emailData: any) => {
-        userEmailMap.set(emailData.user_id, emailData.email);
-      });
-    } else if (typeof emailResult.emails === 'object') {
-      // Handle object format (key-value pairs where value is the email string)
-      Object.entries(emailResult.emails).forEach(([userId, email]) => {
-        userEmailMap.set(userId, email as string);
-      });
+  const emailPromise = (async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('Authentication required to fetch user emails');
     }
-  } else {
-    console.warn('No emails data received from API:', emailResult);
-  }
+
+    const emailResponse = await fetch('/api/admin/get-user-emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userIds }),
+    });
+
+    const emailResult = await emailResponse.json();
+    if (!emailResponse.ok) {
+      throw new Error(emailResult.error || 'Failed to fetch user emails');
+    }
+
+    const userEmailMap = new Map<string, string>();
+    if (emailResult.emails) {
+      if (Array.isArray(emailResult.emails)) {
+        // Handle array format
+        emailResult.emails.forEach((emailData: any) => {
+          userEmailMap.set(emailData.user_id, emailData.email);
+        });
+      } else if (typeof emailResult.emails === 'object') {
+        // Handle object format (key-value pairs where value is the email string)
+        Object.entries(emailResult.emails).forEach(([userId, email]) => {
+          userEmailMap.set(userId, email as string);
+        });
+      }
+    } else {
+      console.warn('No emails data received from API:', emailResult);
+    }
+    return userEmailMap;
+  })();
 
   // Step 5: Get customer details (including school info)
-  const { data: customerDetails, error: customerError } = await supabase
+  const customerDetailsPromise = supabase
     .from('customer')
     .select(`
       id,
@@ -6122,26 +6815,60 @@ export async function loadSportUsersWithData(packageIds: number[], getUserDetail
     `)
     .in('id', customerIds);
 
+  // Wait for all parallel operations to complete
+  const [userDetails, userEmailMap, customerDetailsResponse] = await Promise.all([
+    userDetailsPromise,
+    emailPromise,
+    customerDetailsPromise,
+  ]);
+
+  const { data: customerDetails, error: customerError } = customerDetailsResponse;
   if (customerError) {
     console.error('Error fetching customer details:', customerError);
     throw customerError;
   }
 
   // Transform the data using our multi-step results
-  // Group by user to combine multiple packages into single rows
+  // Pre-build Maps for O(1) lookups instead of O(n) filter/find operations
+  // This converts O(n³) complexity to O(n)
+  
+  // Map: user_id -> array of user-customer mappings
+  const userMappingsByUserId = new Map<string, any[]>();
+  userCustomerMappings?.forEach((mapping: any) => {
+    const existing = userMappingsByUserId.get(mapping.user_id) || [];
+    existing.push(mapping);
+    userMappingsByUserId.set(mapping.user_id, existing);
+  });
+  
+  // Map: customer_id -> customer details
+  const customerDetailsMap = new Map<string, any>();
+  customerDetails?.forEach((customer: any) => {
+    customerDetailsMap.set(customer.id, customer);
+  });
+  
+  // Map: customer_id -> array of customer packages
+  const packagesByCustomerId = new Map<string, any[]>();
+  customersWithPackages?.forEach((pkg: any) => {
+    const existing = packagesByCustomerId.get(pkg.customer_id) || [];
+    existing.push(pkg);
+    packagesByCustomerId.set(pkg.customer_id, existing);
+  });
+  
+  // Map: userKey -> user entry (for combining packages)
   const userMap = new Map<string, any>();
   
+  // Now iterate through user details with O(1) lookups
   userDetails?.forEach((user: any) => {
-    // Find all customer mappings for this user
-    const userMappings = userCustomerMappings?.filter((mapping: any) => mapping.user_id === user.id) || [];
+    // Get user mappings - O(1) lookup
+    const userMappings = userMappingsByUserId.get(user.id) || [];
     
     userMappings.forEach((mapping: any) => {
-      // Find customer details for this mapping
-      const customerDetail = customerDetails?.find((customer: any) => customer.id === mapping.customer_id);
+      // Get customer details - O(1) lookup
+      const customerDetail = customerDetailsMap.get(mapping.customer_id);
       const schoolName = customerDetail?.school?.name || 'Unknown School';
       
-      // Find all packages for this customer
-      const customerPackages = customersWithPackages?.filter((pkg: any) => pkg.customer_id === mapping.customer_id) || [];
+      // Get customer packages - O(1) lookup
+      const customerPackages = packagesByCustomerId.get(mapping.customer_id) || [];
       
       customerPackages.forEach((packageInfo: any) => {
         const packageName = packageInfo.customer_package?.package_name || `Package ${packageInfo.customer_package_id}`;
@@ -6275,7 +7002,6 @@ export async function updateAthleteBasicInfo(athleteId: string, updates: { first
     throw new Error(`Failed to update athlete: ${error.message}`);
   }
 }
-
 /**
  * Fetch athlete school history with school names
  */
@@ -6492,6 +7218,120 @@ export async function fetchAthleteVideos(athleteId: string): Promise<any[]> {
     return videos || [];
   } catch (error) {
     console.error('Error in fetchAthleteVideos:', error);
+    throw error;
+  }
+}
+
+// Update school facts
+export async function updateSchoolFact(schoolId: string, dataTypeId: number, value: string): Promise<void> {
+  try {
+    console.log(`[updateSchoolFact] Starting check for schoolId: ${schoolId}, dataTypeId: ${dataTypeId}, value: "${value}"`);
+    console.log(`[updateSchoolFact] Value type: ${typeof value}, length: ${value?.length}`);
+    console.log(`[updateSchoolFact] Value JSON: ${JSON.stringify(value)}`);
+    
+    // First, check if a fact already exists for this school and data type
+    const { data: existingFact, error: fetchError } = await supabase
+      .from('school_fact')
+      .select('id, value')
+      .eq('school_id', schoolId)
+      .eq('data_type_id', dataTypeId)
+      .is('inactive', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    console.log(`[updateSchoolFact] Existing fact query result:`, { existingFact, fetchError });
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.log(`[updateSchoolFact] Error fetching existing fact:`, fetchError);
+      throw fetchError;
+    }
+
+    // Check if the value has actually changed
+    if (existingFact && existingFact.value === value) {
+      console.log(`[updateSchoolFact] No change detected - value "${value}" is the same as existing value "${existingFact.value}". Skipping insert.`);
+      return;
+    }
+
+    // Insert new fact only if there's a change
+    console.log(`[updateSchoolFact] Value changed from "${existingFact?.value || 'none'}" to "${value}". Inserting new fact.`);
+    const { data: insertResult, error: insertError } = await supabase
+      .from('school_fact')
+      .insert({
+        school_id: schoolId,
+        data_type_id: dataTypeId,
+        value,
+        source: 'manual_college_coach'
+      })
+      .select();
+
+    if (insertError) {
+      console.log(`[updateSchoolFact] Error inserting new fact:`, insertError);
+      throw insertError;
+    }
+    console.log(`[updateSchoolFact] Insert result:`, insertResult);
+    console.log(`[updateSchoolFact] Successfully inserted new fact`);
+  } catch (error) {
+    console.error('Error in updateSchoolFact:', error);
+    throw error;
+  }
+}
+
+// Update coach facts
+export async function updateCoachFact(coachId: string, dataTypeId: number, value: string): Promise<void> {
+  try {
+    console.log(`[updateCoachFact] Starting check for coachId: ${coachId}, dataTypeId: ${dataTypeId}, value: "${value}"`);
+    
+    // Skip saving null, undefined, or empty values
+    if (value === null || value === undefined || value === '') {
+      console.log(`[updateCoachFact] Skipping save - value is null, undefined, or empty: "${value}"`);
+      return;
+    }
+    
+    // First, check if a fact already exists for this coach and data type
+    const { data: existingFact, error: fetchError } = await supabase
+      .from('coach_fact')
+      .select('id, value')
+      .eq('coach_id', coachId)
+      .eq('data_type_id', dataTypeId)
+      .is('inactive', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    console.log(`[updateCoachFact] Existing fact query result:`, { existingFact, fetchError });
+
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.log(`[updateCoachFact] Error fetching existing fact:`, fetchError);
+      throw fetchError;
+    }
+
+    // Check if the value has actually changed
+    if (existingFact && existingFact.value === value) {
+      console.log(`[updateCoachFact] No change detected - value "${value}" is the same as existing value "${existingFact.value}". Skipping insert.`);
+      return;
+    }
+
+    // Insert new fact only if there's a change
+    console.log(`[updateCoachFact] Value changed from "${existingFact?.value || 'none'}" to "${value}". Inserting new fact.`);
+    const { data: insertResult, error: insertError } = await supabase
+      .from('coach_fact')
+      .insert({
+        coach_id: coachId,
+        data_type_id: dataTypeId,
+        value,
+        source: 'manual_college_coach'
+      })
+      .select();
+
+    if (insertError) {
+      console.log(`[updateCoachFact] Error inserting new fact:`, insertError);
+      throw insertError;
+    }
+    console.log(`[updateCoachFact] Insert result:`, insertResult);
+    console.log(`[updateCoachFact] Successfully inserted new fact`);
+  } catch (error) {
+    console.error('Error in updateCoachFact:', error);
     throw error;
   }
 }

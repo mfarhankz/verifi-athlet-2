@@ -1,0 +1,206 @@
+.choose-board-dropdown {
+  position: absolute;
+  z-index: 1001;
+  animation: fadeIn 0.2s ease-out;
+  white-space: nowrap;
+}
+
+.choose-board-dropdown-bottomLeft {
+  top: calc(100% + 8px);
+  left: 0;
+}
+
+.choose-board-dropdown-bottomRight {
+  top: calc(100% + 8px);
+  right: 0;
+}
+
+.choose-board-dropdown-topLeft {
+  bottom: calc(100% + 8px);
+  left: 0;
+}
+
+.choose-board-dropdown-topRight {
+  bottom: calc(100% + 8px);
+  right: 0;
+}
+
+.choose-board-dropdown-content {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 350px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.choose-board-search {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.search-input {
+  border-radius: 6px;
+}
+
+.search-icon {
+  color: #8c8c8c;
+}
+
+.choose-board-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+  max-height: 350px;
+}
+
+.board-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  transition: background-color 0.2s;
+  gap: 8px;
+  min-height: 48px;
+  cursor: pointer;
+}
+
+.board-item:hover {
+  background-color: #f5f5f5;
+}
+
+.board-item-selected {
+  background-color: #e6f7ff;
+}
+
+.board-item-selected:hover {
+  background-color: #bae7ff;
+}
+
+.drag-handle {
+  color: #bfbfbf;
+  cursor: grab;
+  user-select: none;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.drag-handle:hover {
+  background-color: #f0f0f0;
+  color: #8c8c8c;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.board-name {
+  flex: 1;
+  font-size: 14px;
+  color: #262626;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  min-width: 0;
+}
+
+.edit-button,
+.delete-button {
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  padding: 4px 8px !important;
+  min-width: auto !important;
+}
+
+.board-item:hover .edit-button,
+.board-item:hover .delete-button {
+  opacity: 1;
+}
+
+.delete-button {
+  margin-right: 4px;
+}
+
+.add-button {
+  color: #52c41a;
+}
+
+.add-button:hover {
+  color: #73d13d;
+}
+
+.create-button {
+  color: white;
+  background-color: #1890ff;
+  border-color: #1890ff;
+  min-width: 40px;
+  padding: 8px;
+}
+
+.create-button:hover {
+  background-color: #40a9ff;
+  border-color: #40a9ff;
+}
+
+.create-button:disabled {
+  background-color: #d9d9d9;
+  border-color: #d9d9d9;
+  color: rgba(0, 0, 0, 0.25);
+}
+
+.choose-board-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.new-board-input {
+  flex: 1;
+  border-radius: 6px;
+}
+
+.loading-boards,
+.no-boards {
+  padding: 40px 20px;
+  text-align: center;
+  color: #8c8c8c;
+  font-size: 14px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Scrollbar styling */
+.choose-board-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.choose-board-list::-webkit-scrollbar-track {
+  background: #f5f5f5;
+}
+
+.choose-board-list::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 4px;
+}
+
+.choose-board-list::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+

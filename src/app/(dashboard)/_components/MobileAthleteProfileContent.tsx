@@ -20,6 +20,8 @@ import {
   useCustomer,
   useUserSafely,
 } from "@/contexts/CustomerContext";
+import ChooseBoardDropdown from './ChooseBoardDropdown';
+import SuccessPopover from './SuccessPopover';
 
 const formatDate = (dateInput: string | Date | null | undefined) => {
   if (!dateInput) return "-- na --";
@@ -53,6 +55,12 @@ export default function MobileAthleteProfileContent({
   const [session, setSession] = useState<any>(null);
   const [recruitingBoardAthletes, setRecruitingBoardAthletes] = useState<string[]>([]);
   const [isLoadingRecruitingBoard, setIsLoadingRecruitingBoard] = useState(false);
+  const [isBoardModalVisible, setIsBoardModalVisible] = useState(false);
+  const [availableBoards, setAvailableBoards] = useState<any[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const [selectedBoardName, setSelectedBoardName] = useState<string>('Main');
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const { activeCustomerId } = useCustomer();
   const { userDetails } = useUserSafely();
   const [ratings, setRatings] = useState<CustomerRating[]>([]);
@@ -121,9 +129,9 @@ export default function MobileAthleteProfileContent({
       try {
         setIsLoadingRecruitingBoard(true);
         const { data, error } = await supabase
-          .from("recruiting_board")
+          .from("recruiting_board_athlete")
           .select("athlete_id")
-          .eq("customer_id", userDetails.customer_id);
+          .is('ended_at', null);
 
         if (!error && data) {
           const athleteIds = data.map((item: { athlete_id: string }) => item.athlete_id);
@@ -141,28 +149,169 @@ export default function MobileAthleteProfileContent({
     }
   }, [session, userDetails]);
 
-  // Handle adding athlete to recruiting board
+  // Fetch available boards when customer is available
+  useEffect(() => {
+    const fetchBoards = async () => {
+      if (!activeCustomerId) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('recruiting_board_board')
+          .select('id, name')
+          .eq('customer_id', activeCustomerId)
+          .is('recruiting_board_column_id', null)
+          .is('ended_at', null)
+          .order('display_order');
+        
+        if (error) {
+          console.error('Error fetching boards:', error);
+          return;
+        }
+        
+        setAvailableBoards(data || []);
+        
+        // Set default board (Main or first available)
+        if (data && data.length > 0) {
+          const mainBoard = data.find((b: any) => b.name === 'Main') || data[0];
+          setSelectedBoardId(mainBoard.id);
+          setSelectedBoardName(mainBoard.name);
+        }
+      } catch (error) {
+        console.error('Error in fetchBoards:', error);
+      }
+    };
+    
+    fetchBoards();
+  }, [activeCustomerId]);
+
+  // Add athlete to recruiting board (now uses selected board)
   const handleAddToRecruitingBoard = async () => {
     if (!athlete) return;
 
+    if (!userDetails || !activeCustomerId) {
+      alert("You must be logged in to add athletes to the recruiting board.");
+      return;
+    }
+
     try {
-      if (!userDetails || !activeCustomerId) {
-        alert("You must be logged in to add athletes to the recruiting board.");
-        return;
+      // Use the selected board ID (or get/create Main if none selected)
+      let boardId = selectedBoardId;
+      
+      if (!boardId) {
+        // Get or create the Main board as fallback
+        const { data: boardData, error: boardError } = await supabase
+          .from('recruiting_board_board')
+          .select('id')
+          .eq('customer_id', activeCustomerId)
+          .eq('name', 'Main')
+          .is('recruiting_board_column_id', null)
+          .is('ended_at', null)
+          .single();
+
+        if (boardError && boardError.code !== 'PGRST116') {
+          alert(`Error finding recruiting board: ${boardError.message}`);
+          return;
+        }
+
+        boardId = boardData?.id;
+        
+        // Create Main board if it doesn't exist
+        if (!boardId) {
+          const { data: newBoard, error: createError } = await supabase
+            .from('recruiting_board_board')
+            .insert({
+              customer_id: activeCustomerId,
+              name: 'Main',
+              recruiting_board_column_id: null,
+              display_order: 1
+            })
+            .select('id')
+            .single();
+
+          if (createError) {
+            alert(`Error creating recruiting board: ${createError.message}`);
+            return;
+          }
+
+          boardId = newBoard.id;
+        }
       }
 
+      // Always assign to Unassigned column
+      const positionName = 'Unassigned';
+      
+      const { data: columnData, error: columnError } = await supabase
+        .from('recruiting_board_column')
+        .select('id')
+        .eq('customer_id', activeCustomerId)
+        .eq('recruiting_board_board_id', boardId)
+        .eq('name', positionName)
+        .is('ended_at', null)
+        .single();
+
+      let columnId = columnData?.id;
+
+      // Create column if it doesn't exist
+      if (!columnId && (columnError?.code === 'PGRST116' || !columnData)) {
+        // Get the max display order
+        const { data: maxOrderData } = await supabase
+          .from('recruiting_board_column')
+          .select('display_order')
+          .eq('customer_id', activeCustomerId)
+          .eq('recruiting_board_board_id', boardId)
+          .is('ended_at', null)
+          .order('display_order', { ascending: false })
+          .limit(1);
+
+        const nextOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
+
+        const { data: newColumn, error: createColumnError } = await supabase
+          .from('recruiting_board_column')
+          .insert({
+            customer_id: activeCustomerId,
+            recruiting_board_board_id: boardId,
+            name: positionName,
+            display_order: nextOrder
+          })
+          .select('id')
+          .single();
+
+        if (createColumnError) {
+          alert(`Error creating column: ${createColumnError.message}`);
+          return;
+        }
+
+        columnId = newColumn.id;
+      }
+
+      // Get the current max rank for this column to assign unique rank
+      const { data: maxRankData } = await supabase
+        .from('recruiting_board_athlete')
+        .select('rank')
+        .eq('recruiting_board_board_id', boardId)
+        .eq('recruiting_board_column_id', columnId)
+        .is('ended_at', null)
+        .order('rank', { ascending: false })
+        .limit(1);
+
+      const nextRank = (maxRankData?.[0]?.rank || 0) + 1;
+
+      // Prepare the data for insertion
       const recruitingBoardEntry = {
+        customer_id: activeCustomerId,
+        recruiting_board_board_id: boardId,
+        recruiting_board_column_id: columnId,
         athlete_id: athlete.id,
         user_id: userDetails.id,
-        customer_id: activeCustomerId,
-        position: 'Unassigned',
+        rank: nextRank, // Assign unique incremental rank
         source: dataSource === 'transfer_portal' ? 'portal' : 
                 dataSource === 'juco' ? 'juco' : 
+                dataSource === 'hs_athletes' ? 'high_school' :
                 dataSource === 'all_athletes' ? 'pre-portal' : null
       };
 
       const { error: insertError } = await supabase
-        .from('recruiting_board')
+        .from('recruiting_board_athlete')
         .insert(recruitingBoardEntry);
 
       if (insertError) {
@@ -170,12 +319,24 @@ export default function MobileAthleteProfileContent({
         return;
       }
 
-      alert(`Successfully added athlete to your recruiting board.`);
+      // Show success message with board name
+      setSuccessMessage(`Player added to ${selectedBoardName}!`);
+      setShowSuccessMessage(true);
       setRecruitingBoardAthletes(prev => [...prev, athlete.id]);
     } catch (error) {
       console.error("Error adding to recruiting board:", error);
       alert("An unexpected error occurred. Please try again.");
     }
+  };
+
+  // Handle board selection
+  const handleBoardSelected = async (boardName: string) => {
+    const board = availableBoards.find((b: any) => b.name === boardName);
+    if (board) {
+      setSelectedBoardId(board.id);
+      setSelectedBoardName(board.name);
+    }
+    setIsBoardModalVisible(false);
   };
 
   // Handle rating modal
@@ -262,16 +423,27 @@ export default function MobileAthleteProfileContent({
                 </div>
               )}
             </div>
-            <Button
-              onClick={handleAddToRecruitingBoard}
-              type="primary"
-              size="small"
-              disabled={recruitingBoardAthletes.includes(athlete?.id || "")}
+            <SuccessPopover
+              trigger="top"
+              content={successMessage}
+              visible={showSuccessMessage}
+              onClose={() => setShowSuccessMessage(false)}
             >
-              {recruitingBoardAthletes.includes(athlete?.id || "") 
-                ? 'On Board' 
-                : 'Add to Board'}
-            </Button>
+              <Button
+                onClick={() => {
+                  if (!recruitingBoardAthletes.includes(athlete?.id || "") && userDetails && activeCustomerId) {
+                    handleAddToRecruitingBoard();
+                  }
+                }}
+                type="primary"
+                size="small"
+                disabled={recruitingBoardAthletes.includes(athlete?.id || "")}
+              >
+                {recruitingBoardAthletes.includes(athlete?.id || "") 
+                  ? 'On Board' 
+                  : 'Add to Board'}
+              </Button>
+            </SuccessPopover>
           </div>
         </div>
       </div>
@@ -578,6 +750,7 @@ export default function MobileAthleteProfileContent({
           }))}
         />
       </Modal>
+
     </div>
   );
 }

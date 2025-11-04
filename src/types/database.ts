@@ -152,6 +152,7 @@ export interface AthleteData {
   commit_school_logo_url?: string;
   date?: string;
   year?: string;
+  grad_year?: string;
   division?: string;
   athletic_aid?: string;
   high_name?: string;
@@ -183,6 +184,7 @@ export interface AthleteData {
   hometown_state?: string;
   hometown_street?: string;
   hometown_zip?: string;
+  address_street2?: string;
   height_feet?: number | null;
   height_inch?: number | null;
   weight?: number | null;
@@ -198,6 +200,7 @@ export interface AthleteData {
   wtn_link?: string;
   utr_link?: string;
   game_logs?: any[];
+  ncaa_id?: string;
   
   // JUCO specific fields
   school_region?: string;
@@ -206,6 +209,7 @@ export interface AthleteData {
 
   // Highlight field for video icon
   highlight?: string;
+  highnamehighlight?: string;
 
   // Athlete videos
   athlete_videos?: AthleteVideo[];
@@ -412,19 +416,49 @@ export interface StatCategory {
   data: any[];
 }
 
-// Recruiting board data type
-export interface RecruitingBoardPosition {
+// Recruiting board data types - NEW SCHEMA
+export interface RecruitingBoardBoard {
   id: string;
   customer_id: string;
-  position_name: string;
+  name: string;
+  recruiting_board_column_id: string | null; // NULL for main boards, FK for sub-boards
   display_order: number;
   created_at: string;
   ended_at: string | null;
 }
 
+export interface RecruitingBoardColumn {
+  id: string;
+  customer_id: string;
+  recruiting_board_board_id: string;
+  name: string;
+  display_order: number;
+  created_at: string;
+  ended_at: string | null;
+}
+
+export interface RecruitingBoardAthlete {
+  id: string;
+  customer_id: string;
+  recruiting_board_board_id: string;
+  recruiting_board_column_id: string;
+  athlete_id: string;
+  user_id: string;
+  athlete_tier: string | null;
+  rank: number;
+  source: string | null;
+  dropped_reason: string | null;
+  created_at: string;
+  ended_at: string | null;
+}
+
+// Legacy type alias for backward compatibility
+export type RecruitingBoardPosition = RecruitingBoardColumn;
+
 export interface RecruitingBoardData {
   key: string;
   id: string;
+  athlete_id: string;
   recruiting_board_id: string;
   fname: string;
   lname: string;
@@ -449,7 +483,16 @@ export interface RecruitingBoardData {
   s: string;
   h: string;
   direction: string;
-  position: string;
+  position: string; // Column name (recruiting board column)
+  primary_position?: string; // Athlete's primary position
+  school_id?: string;
+  conference?: string;
+  status?: string;
+  survey_completed?: boolean;
+  honors?: string;
+  designated_student_athlete?: string;
+  // Dynamic stats - key will be the data_type_id from sport_stat_config
+  [key: string]: any;
   tier: number | null;
   tierColor: string | null;
   userFirstName: string;
@@ -485,6 +528,31 @@ export interface AthleteVideo {
   video_type: string;
   time?: string;
   event?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Score Tracker types
+export type ScoreTracker = {
+  id: string;
+  athlete_id: string;
+  customer_id: string;
+  user_id: string;
+  created_at: string;
+  ended_at: string | null;
+  created_by: string | null;
+  updated_at: string;
+}
+
+// Offer Alert types
+export type OfferAlert = {
+  id: string;
+  filter: string;
+  rule: string;
+  alert_frequency: string;
+  recipient: string;
+  user_id: string;
+  customer_id: string;
   created_at: string;
   updated_at: string;
 }

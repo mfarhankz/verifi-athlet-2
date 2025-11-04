@@ -28,6 +28,7 @@ import ImageWithAverage from "../_components/ImageWithAverage";
 import TableView from "../_components/TableView";
 import Filters from "../_components/Filters";
 import AthleteProfileContent from "../_components/AthleteProfileContent";
+import HSAthleteProfileContent from "../_components/HSAthleteProfileContent";
 import SchoolProfileContent from "../_components/SchoolProfileContent";
 import { fetchAthleteData, fetchSportColumnConfig, fetchSeasonData, fetchSchools, getUserPackagesForSport, fetchHighSchoolColumnConfig, fetchAthleteRatings, fetchRecruitingAreasForCoach, convertStateIdsToAbbrevs, convertCountyIdsToNames } from "@/lib/queries";
 import { US_STATE_ABBREVIATIONS } from '@/utils/constants';
@@ -40,11 +41,16 @@ import { Alert } from 'antd';
 import AddAlert from "../_components/AddAlert";
 import { useCustomer, useUser } from '@/contexts/CustomerContext';
 import UserDataProvider from '@/components/UserDataProvider';
-import { StarFilled } from '@ant-design/icons';
+import { StarFilled, DownOutlined } from '@ant-design/icons';
 import { CommentService } from '@/lib/commentService';
 import { useZoom } from '@/contexts/ZoomContext';
 import InfoIcon from '@/components/InfoIcon';
 import { getColumnTooltip } from '@/utils/columnTooltips';
+import ChooseBoardDropdown from './ChooseBoardDropdown';
+import ChooseBoardDropdownWithStatus from './ChooseBoardDropdownWithStatus';
+import SuccessPopover from './SuccessPopover';
+import { preparePrintRequestData, sendPrintRequest, convertSchoolId } from '@/utils/printUtils';
+import { fetchUserDetails } from '@/utils/utils';
 
 const boxStyle: React.CSSProperties = {
   width: "100%",
@@ -137,9 +143,21 @@ export function TableSearchContent({
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [selectedAthletes, setSelectedAthletes] = useState<AthleteData[]>([]);
   const [isAddingToRecruitingBoard, setIsAddingToRecruitingBoard] = useState(false);
+  const [isBoardModalVisible, setIsBoardModalVisible] = useState(false);
+  const [availableBoards, setAvailableBoards] = useState<any[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const [selectedBoardName, setSelectedBoardName] = useState<string>('Main');
+  
+  // High school selection state
+  const [selectedHighSchools, setSelectedHighSchools] = useState<HighSchoolData[]>([]);
+  const [isPrintingHighSchools, setIsPrintingHighSchools] = useState(false);
   const [recruitingBoardAthletes, setRecruitingBoardAthletes] = useState<string[]>([]);
+  const [athletesOnAllBoards, setAthletesOnAllBoards] = useState<string[]>([]); // Athletes that are on ALL boards
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [isLoadingRecruitingBoard, setIsLoadingRecruitingBoard] = useState(false);
   const [tableKey, setTableKey] = useState(0);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]); // Track selected row keys
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [displayedData, setDisplayedData] = useState<AthleteData[]>([]);
@@ -503,11 +521,12 @@ export function TableSearchContent({
       title: "Name",
       key: "name",
       fixed: "left",
-      onCell: (record: AthleteData) => ({
-        style: recruitingBoardAthletes.includes(record.id)
-          ? { backgroundColor: '#f0f9f0' }
-          : {},
-      }),
+      onCell: (record: AthleteData) => {
+        const isOnBoard = recruitingBoardAthletes.includes(record.id);
+        return {
+          style: isOnBoard ? { backgroundColor: '#d4edda' } : {},
+        };
+      },
       render: (record: AthleteData) => {
         const handlePlayerClick = async (e: React.MouseEvent) => {
           e.stopPropagation();
@@ -966,7 +985,7 @@ export function TableSearchContent({
       if (filters.hsState && filters.hsState.length > 0 && dataTypeColumnMap[24]) filterColumns.add(dataTypeColumnMap[24]);
       if (filters.hsCounty && filters.hsCounty.length > 0 && dataTypeColumnMap[991]) filterColumns.add(dataTypeColumnMap[991]);
       if (filters.hsReligiousAffiliation && filters.hsReligiousAffiliation.length > 0 && dataTypeColumnMap[961]) filterColumns.add(dataTypeColumnMap[961]);
-      if (filters.hsSchoolType && filters.hsSchoolType.schoolType && filters.hsSchoolType.schoolType.length > 0 && dataTypeColumnMap[928]) filterColumns.add(dataTypeColumnMap[928]);
+      if (filters.hsSchoolType && filters.hsSchoolType.length > 0 && dataTypeColumnMap[928]) filterColumns.add(dataTypeColumnMap[928]);
       if ((filters.hsProspectsScore?.minValue !== undefined || filters.hsProspectsScore?.maxValue !== undefined) && dataTypeColumnMap[956]) filterColumns.add(dataTypeColumnMap[956]);
       if ((filters.hsD1ProspectsScore?.minValue !== undefined || filters.hsD1ProspectsScore?.maxValue !== undefined) && dataTypeColumnMap[957]) filterColumns.add(dataTypeColumnMap[957]);
       if ((filters.hsTeamQualityScore?.minValue !== undefined || filters.hsTeamQualityScore?.maxValue !== undefined) && dataTypeColumnMap[958]) filterColumns.add(dataTypeColumnMap[958]);
@@ -1116,17 +1135,9 @@ export function TableSearchContent({
         query = query.in(dataTypeColumnMap[961], filters.hsReligiousAffiliation);
       }
 
-      // School Type filter - Combined HS/JUCO and Private/Public
-      if (filters.hsSchoolType) {
-        // Add HS/JUCO filter using school_type column
-        if (filters.hsSchoolType.schoolType && filters.hsSchoolType.schoolType.length > 0) {
-          query = query.in('school_type', filters.hsSchoolType.schoolType);
-        }
-        
-        // Add Private/Public filter using school_type column
-        if (filters.hsSchoolType.publicPrivate && filters.hsSchoolType.publicPrivate.length > 0) {
-          query = query.in('school_type', filters.hsSchoolType.publicPrivate);
-        }
+      // School Type filter - HS/JUCO selection
+      if (filters.hsSchoolType && filters.hsSchoolType.length > 0) {
+        query = query.in('school_type', filters.hsSchoolType);
       }
 
       // Prospects Score filter (data_type_id 956) - min/max range
@@ -1606,12 +1617,10 @@ export function TableSearchContent({
     activeCustomerId, 
     activeSport, 
     sportId, 
-    displayedData, 
-    athleteCommentCounts, 
     dataCache,
     activeSportAbbrev,
     userDetails?.packages
-  ]);
+  ]); // Removed displayedData and athleteCommentCounts from dependencies to prevent infinite loop
 
   // Initial data load
   useEffect(() => {
@@ -1739,14 +1748,22 @@ export function TableSearchContent({
   }, [debouncedFilters, searchQuery, sortField, sortOrder]); // Use debounced filters and simplified dependencies
 
   const rowSelection: TableProps<AthleteData>["rowSelection"] = {
-    onChange: (selectedRowKeys: React.Key[], selectedRows: AthleteData[]) => {
-
+    selectedRowKeys: selectedRowKeys,
+    onChange: (newSelectedRowKeys: React.Key[], selectedRows: AthleteData[]) => {
+      setSelectedRowKeys(newSelectedRowKeys);
       setSelectedAthletes(selectedRows);
     },
     getCheckboxProps: (record: AthleteData) => ({
-      disabled: recruitingBoardAthletes.includes(record.id),
+      disabled: athletesOnAllBoards.includes(record.id),
       name: record.athlete_name,
     }),
+  };
+
+  // High school row selection
+  const highSchoolRowSelection: TableProps<HighSchoolData>["rowSelection"] = {
+    onChange: (selectedRowKeys: React.Key[], selectedRows: HighSchoolData[]) => {
+      setSelectedHighSchools(selectedRows);
+    },
   };
 
   const handleCancel = () => {
@@ -1881,21 +1898,54 @@ export function TableSearchContent({
 
   // Add this function to fetch athletes already in the user's recruiting board
   const fetchRecruitingBoardAthletes = async () => {
-    if (!userDetails?.id) return;
+    if (!userDetails?.id || !activeCustomerId) return;
     
     try {
-      // RLS policies already filter by customer_id, so we don't need to filter here
+      // Get all boards for this customer
+      const { data: boardsData, error: boardsError } = await supabase
+        .from('recruiting_board_board')
+        .select('id')
+        .eq('customer_id', activeCustomerId)
+        .is('recruiting_board_column_id', null)
+        .is('ended_at', null);
+      
+      if (boardsError || !boardsData || boardsData.length === 0) {
+        return;
+      }
+      
+      const totalBoardCount = boardsData.length;
+      const boardIds = boardsData.map((b: { id: string }) => b.id);
+      
+      // Get all athletes on any board for row highlighting
       const { data, error } = await supabase
-        .from('recruiting_board')
-        .select('athlete_id');
+        .from('recruiting_board_athlete')
+        .select('athlete_id, recruiting_board_board_id')
+        .in('recruiting_board_board_id', boardIds)
+        .is('ended_at', null);
         
       if (error) {
         return;
       }
       
-      // Extract athlete IDs from the response
-      const athleteIds = data.map((item: { athlete_id: string }) => item.athlete_id);
+      // Extract unique athlete IDs for row highlighting
+      type AthleteBoardData = { athlete_id: string; recruiting_board_board_id: string };
+      const athleteIds: string[] = [...new Set(((data || []) as AthleteBoardData[]).map((item: AthleteBoardData) => item.athlete_id))];
       setRecruitingBoardAthletes(athleteIds);
+      
+      // Calculate which athletes are on ALL boards
+      const athleteBoardCount = new Map<string, Set<string>>();
+      data.forEach((item: { athlete_id: string; recruiting_board_board_id: string }) => {
+        if (!athleteBoardCount.has(item.athlete_id)) {
+          athleteBoardCount.set(item.athlete_id, new Set());
+        }
+        athleteBoardCount.get(item.athlete_id)!.add(item.recruiting_board_board_id);
+      });
+      
+      const athletesOnAll = Array.from(athleteBoardCount.entries())
+        .filter(([_, boards]) => boards.size === totalBoardCount)
+        .map(([athleteId, _]) => athleteId);
+      
+      setAthletesOnAllBoards(athletesOnAll);
     } catch (error) {
       // Error handled silently
     } finally {
@@ -1905,62 +1955,250 @@ export function TableSearchContent({
 
   // Call this function when the component mounts and when the session changes
   useEffect(() => {
-    if (userDetails?.id && recruitingBoardAthletes.length === 0) {
+    if (userDetails?.id && activeCustomerId) {
       fetchRecruitingBoardAthletes();
     }
-  }, [userDetails?.id, recruitingBoardAthletes.length]);
+  }, [userDetails?.id, activeCustomerId, availableBoards.length]);
   
   // Reset the comment counts ref when user changes
   useEffect(() => {
     fetchedCommentCountsRef.current.clear();
   }, [userTeamId]);
 
-  // Add this function to handle adding athletes to recruiting board
-  const handleAddToRecruitingBoard = async () => {
+  // Fetch available boards when customer is available
+  useEffect(() => {
+    const fetchBoards = async () => {
+      if (!activeCustomerId) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('recruiting_board_board')
+          .select('id, name')
+          .eq('customer_id', activeCustomerId)
+          .is('recruiting_board_column_id', null)
+          .is('ended_at', null)
+          .order('display_order');
+        
+        if (error) {
+          console.error('Error fetching boards:', error);
+          return;
+        }
+        
+        setAvailableBoards(data || []);
+        
+        // Set default board (Main or first available)
+        if (data && data.length > 0) {
+          const mainBoard = data.find((b: any) => b.name === 'Main') || data[0];
+          setSelectedBoardId(mainBoard.id);
+          setSelectedBoardName(mainBoard.name);
+        }
+      } catch (error) {
+        console.error('Error in fetchBoards:', error);
+      }
+    };
+    
+    fetchBoards();
+  }, [activeCustomerId]);
+
+  // Add athletes to recruiting board (now uses selected board)
+  const handleAddToRecruitingBoard = async (boardIdOverride?: string, boardNameOverride?: string) => {
     if (selectedAthletes.length === 0) {
       alert("Please select at least one athlete to add to the recruiting board.");
+      return;
+    }
+
+    if (!userDetails) {
+      alert("You must be logged in to add athletes to the recruiting board.");
+      return;
+    }
+    if (!activeCustomerId) {
+      alert("No active customer ID found. Please make sure your account is properly set up.");
       return;
     }
 
     setIsAddingToRecruitingBoard(true);
     
     try {
-      if (!userDetails) {
-        alert("You must be logged in to add athletes to the recruiting board.");
-        return;
-      }
-      if (!activeCustomerId) {
-        alert("No active customer ID found. Please make sure your account is properly set up.");
-        return;
-      }
       const userId = userDetails.id;
 
-      // Prepare the data for insertion - no need to include id as it's auto-generated
-      const recruitingBoardEntries = selectedAthletes.map(athlete => ({
-        athlete_id: athlete.id,
-        user_id: userId,
-        customer_id: activeCustomerId,
-        position: 'Unassigned', // Always assign to Unassigned position
-        source: dataSource === 'transfer_portal' ? 'portal' : 
-                dataSource === 'juco' ? 'juco' : 
-                dataSource === 'all_athletes' ? 'pre-portal' : null
-      }));
+      // Use the override if provided, otherwise fall back to selected board ID
+      let boardId = boardIdOverride || selectedBoardId;
+      const boardName = boardNameOverride || selectedBoardName;
+      
+      if (!boardId) {
+        // Get or create the Main board as fallback
+        const { data: boardData, error: boardError } = await supabase
+          .from('recruiting_board_board')
+          .select('id')
+          .eq('customer_id', activeCustomerId)
+          .eq('name', 'Main')
+          .is('recruiting_board_column_id', null)
+          .is('ended_at', null)
+          .single();
 
-      // Insert the data into the recruiting_board table
+        if (boardError && boardError.code !== 'PGRST116') {
+          alert(`Error finding recruiting board: ${boardError.message}`);
+          return;
+        }
+
+        boardId = boardData?.id;
+        
+        // Create Main board if it doesn't exist
+        if (!boardId) {
+          const { data: newBoard, error: createError } = await supabase
+            .from('recruiting_board_board')
+            .insert({
+              customer_id: activeCustomerId,
+              name: 'Main',
+              recruiting_board_column_id: null,
+              display_order: 1
+            })
+            .select('id')
+            .single();
+
+          if (createError) {
+            alert(`Error creating recruiting board: ${createError.message}`);
+            return;
+          }
+
+          boardId = newBoard.id;
+        }
+      }
+
+      // For each athlete, find or create the appropriate column based on their position
+      const recruitingBoardEntries = [];
+      
+      // Always assign to Unassigned column
+      const positionName = 'Unassigned';
+      
+      // Get or create the column
+      const { data: columnData, error: columnError } = await supabase
+        .from('recruiting_board_column')
+        .select('id')
+        .eq('customer_id', activeCustomerId)
+        .eq('recruiting_board_board_id', boardId)
+        .eq('name', positionName)
+        .is('ended_at', null)
+        .single();
+
+      let columnId = columnData?.id;
+
+      // Create column if it doesn't exist
+      if (!columnId && (columnError?.code === 'PGRST116' || !columnData)) {
+        // Get the max display order
+        const { data: maxOrderData } = await supabase
+          .from('recruiting_board_column')
+          .select('display_order')
+          .eq('customer_id', activeCustomerId)
+          .eq('recruiting_board_board_id', boardId)
+          .is('ended_at', null)
+          .order('display_order', { ascending: false })
+          .limit(1);
+
+        const nextOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
+
+        const { data: newColumn, error: createColumnError } = await supabase
+          .from('recruiting_board_column')
+          .insert({
+            customer_id: activeCustomerId,
+            recruiting_board_board_id: boardId,
+            name: positionName,
+            display_order: nextOrder
+          })
+          .select('id')
+          .single();
+
+        if (createColumnError) {
+          alert(`Error creating Unassigned column: ${createColumnError.message}`);
+          return;
+        }
+
+        columnId = newColumn.id;
+      }
+
+      // Check which selected athletes are already on this board
+      const selectedAthleteIds = selectedAthletes.map(a => a.id);
+      const { data: existingOnBoard, error: checkError } = await supabase
+        .from('recruiting_board_athlete')
+        .select('athlete_id')
+        .eq('recruiting_board_board_id', boardId)
+        .in('athlete_id', selectedAthleteIds)
+        .is('ended_at', null);
+
+      if (checkError) {
+        console.error('Error checking existing athletes on board:', checkError);
+        // Continue anyway - we'll attempt to add all
+      }
+
+      // Filter out athletes already on this board
+      const existingAthleteIds = new Set(existingOnBoard?.map((item: { athlete_id: string }) => item.athlete_id) || []);
+      const athletesToAdd = selectedAthletes.filter(athlete => !existingAthleteIds.has(athlete.id));
+
+      if (athletesToAdd.length === 0) {
+        alert(`All selected athletes are already on ${selectedBoardName}.`);
+        setIsAddingToRecruitingBoard(false);
+        return;
+      }
+
+      // Get the current max rank for this column to assign unique ranks
+      const { data: maxRankData } = await supabase
+        .from('recruiting_board_athlete')
+        .select('rank')
+        .eq('recruiting_board_board_id', boardId)
+        .eq('recruiting_board_column_id', columnId)
+        .is('ended_at', null)
+        .order('rank', { ascending: false })
+        .limit(1);
+
+      let nextRank = (maxRankData?.[0]?.rank || 0) + 1;
+
+      // Create entries for athletes not already on the board
+      for (const athlete of athletesToAdd) {
+        recruitingBoardEntries.push({
+          customer_id: activeCustomerId,
+          recruiting_board_board_id: boardId,
+          recruiting_board_column_id: columnId,
+          athlete_id: athlete.id,
+          user_id: userId,
+          rank: nextRank++, // Assign unique incremental rank
+          source: dataSource === 'transfer_portal' ? 'portal' : 
+                  dataSource === 'juco' ? 'juco' : 
+                  dataSource === 'hs_athletes' ? 'high_school' :
+                  dataSource === 'all_athletes' ? 'pre-portal' : null
+        });
+      }
+
+      // Insert the data into the recruiting_board_athlete table
       const { data: insertData, error: insertError } = await supabase
-        .from('recruiting_board')
+        .from('recruiting_board_athlete')
         .insert(recruitingBoardEntries)
         .select();
+        
       if (insertError) {
         alert(`Error adding athletes to recruiting board: ${insertError.message || 'Unknown error'}`);
         return;
       }
 
-      alert(`Successfully added ${selectedAthletes.length} athlete(s) to your recruiting board.`);
-      // Update the recruiting board athletes list
-      const newAthleteIds = selectedAthletes.map(athlete => athlete.id);
-      setRecruitingBoardAthletes(prev => [...prev, ...newAthleteIds]);
+      // Show success message with accurate count
+      const totalSelected = selectedAthletes.length;
+      const addedCount = athletesToAdd.length;
+      const alreadyOnBoardCount = totalSelected - addedCount;
+      
+      let message = '';
+      if (alreadyOnBoardCount === 0) {
+        message = `${addedCount} player${addedCount > 1 ? 's' : ''} added to ${boardName}!`;
+      } else {
+        message = `Added ${addedCount} of ${totalSelected} selected athlete${totalSelected > 1 ? 's' : ''} to ${boardName} (${alreadyOnBoardCount} already on board)`;
+      }
+      
+      setSuccessMessage(message);
+      setShowSuccessMessage(true);
+
+      // Refetch to update both recruiting board athletes and athletes on all boards
+      await fetchRecruitingBoardAthletes();
+      
       setSelectedAthletes([]); // Clear selection after successful addition
+      setSelectedRowKeys([]); // Clear row selection keys to uncheck checkboxes
     } catch (error) {
       if (error instanceof Error) {
         alert(`An unexpected error occurred: ${error.message}`);
@@ -1969,6 +2207,82 @@ export function TableSearchContent({
       }
     } finally {
       setIsAddingToRecruitingBoard(false);
+    }
+  };
+
+  // Handle board selection
+  const handleBoardSelected = async (boardId: string, boardName: string) => {
+    setSelectedBoardId(boardId);
+    setSelectedBoardName(boardName);
+    setIsBoardModalVisible(false);
+  };
+
+  // Handle printing selected high schools
+  const handlePrintHighSchools = async () => {
+    if (selectedHighSchools.length === 0) {
+      alert("Please select at least one high school to print.");
+      return;
+    }
+
+    setIsPrintingHighSchools(true);
+
+    try {
+      // Get the current user session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        alert("You must be logged in to print. Please log in and try again.");
+        setIsPrintingHighSchools(false);
+        return;
+      }
+
+      // Fetch user details to get customer ID
+      const userDetails = await fetchUserDetails();
+      if (!userDetails?.customer_id) {
+        alert("Unable to print: Missing user details. Please try refreshing the page.");
+        setIsPrintingHighSchools(false);
+        return;
+      }
+
+      // Convert all school IDs
+      const convertedSchoolIds = [];
+      for (const school of selectedHighSchools) {
+        try {
+          const convertedId = await convertSchoolId(school.id);
+          convertedSchoolIds.push(convertedId);
+        } catch (conversionError) {
+          console.error(`Error converting school ID ${school.id}:`, conversionError);
+          alert(`Error converting school ID for ${school.school}. Please try again.`);
+          setIsPrintingHighSchools(false);
+          return;
+        }
+      }
+
+      // Get email from the authentication session
+      const coachEmail = session.user.email || "";
+
+      // Prepare the request data (without cover_page)
+      const requestData = await preparePrintRequestData(
+        convertedSchoolIds,
+        userDetails,
+        coachEmail,
+        {
+          min_print_level: null,
+          min_grad_year: null
+        }
+      );
+
+      // Send request to the cloud function
+      await sendPrintRequest(requestData);
+
+      // Show success message
+      alert(`Print request submitted successfully for ${selectedHighSchools.length} school(s)! You'll receive the PDF via email shortly.`);
+
+    } catch (error) {
+      console.error("Error with print request:", error);
+      alert("An error occurred while processing your print request. Please try again.");
+    } finally {
+      setIsPrintingHighSchools(false);
     }
   };
 
@@ -2087,6 +2401,37 @@ export function TableSearchContent({
         item === 'ALL_INTERNATIONAL' ? 'All International' : item
       );
       filterLabels.push(`International: ${internationalLabels.join(", ")}`);
+    }
+    
+    // Handle unified location filter
+    if (activeFilters.location) {
+      const { type, values, radius, recruitingArea } = activeFilters.location;
+      
+      switch (type) {
+        case 'hometown_state':
+          filterLabels.push(`Hometown State: ${values?.join(', ') || 'None'}`);
+          break;
+        case 'international':
+          const internationalLabels = values?.map((item: string) => 
+            item === 'ALL_INTERNATIONAL' ? 'All International' : item
+          );
+          filterLabels.push(`International: ${internationalLabels?.join(', ') || 'None'}`);
+          break;
+        case 'county':
+          filterLabels.push(`School County: ${values?.join(', ') || 'None'}`);
+          break;
+        case 'school_state':
+          filterLabels.push(`School State: ${values?.join(', ') || 'None'}`);
+          break;
+        case 'radius':
+          filterLabels.push(`Radius: ${radius?.center || 'No center'} (${radius?.distance || 0} miles)`);
+          break;
+        case 'recruiting_area':
+          filterLabels.push(`Recruiting Area: ${recruitingArea?.coachId ? 'Coach Selected' : 'No Coach'}`);
+          break;
+        default:
+          filterLabels.push(`Location: ${values?.join(', ') || 'None'}`);
+      }
     }
     if (activeFilters.years?.length) {
       const yearName = await getDataTypeName(1);
@@ -2336,13 +2681,65 @@ export function TableSearchContent({
                 onSearch={handleSearch}
               />
               {dataSource !== 'high_schools' && (
+                <div style={{ position: 'relative' }}>
+                  <SuccessPopover
+                    trigger="top"
+                    content={successMessage}
+                    visible={showSuccessMessage}
+                    onClose={() => setShowSuccessMessage(false)}
+                  >
+                    <Button 
+                      onClick={() => {
+                        if (selectedAthletes.length === 0) return;
+                        
+                        // If multiple boards, show dropdown to select
+                        if (availableBoards.length > 1) {
+                          setIsBoardModalVisible(!isBoardModalVisible);
+                        } else {
+                          // If single board, add directly
+                          if (userDetails && activeCustomerId) {
+                            handleAddToRecruitingBoard();
+                          }
+                        }
+                      }}
+                      type="primary"
+                      loading={isAddingToRecruitingBoard}
+                      disabled={selectedAthletes.length === 0}
+                    >
+                      Add to Recruiting Board ({selectedAthletes.length})
+                    </Button>
+                  </SuccessPopover>
+                  
+                  {/* Board dropdown appears below button when multiple boards */}
+                  {availableBoards.length > 1 && isBoardModalVisible && (
+                    <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', zIndex: 1000 }}>
+                      <ChooseBoardDropdownWithStatus
+                        isVisible={isBoardModalVisible}
+                        onClose={() => setIsBoardModalVisible(false)}
+                        onSelect={(boardId, boardName) => {
+                          handleBoardSelected(boardId, boardName);
+                          setIsBoardModalVisible(false);
+                          // Automatically add after selection, passing board info directly
+                          handleAddToRecruitingBoard(boardId, boardName);
+                        }}
+                        customerId={activeCustomerId || ''}
+                        athleteIds={selectedAthletes.map(a => a.id)}
+                        placement="bottomRight"
+                        simpleMode={true}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+              {dataSource === 'high_schools' && (
                 <Button 
-                  onClick={handleAddToRecruitingBoard} 
+                  onClick={handlePrintHighSchools} 
                   type="primary"
-                  loading={isAddingToRecruitingBoard}
-                  disabled={selectedAthletes.length === 0}
+                  loading={isPrintingHighSchools}
+                  disabled={selectedHighSchools.length === 0}
+                  icon={<i className="icon-printer"></i>}
                 >
-                  Add to Recruiting Board ({selectedAthletes.length})
+                  Print School Packets ({selectedHighSchools.length})
                 </Button>
               )}
             </Space>
@@ -2415,7 +2812,7 @@ export function TableSearchContent({
             <Table<any>
               key={tableKey}
               rowKey="id"
-              rowSelection={dataSource === 'high_schools' ? undefined : { type: selectionType, ...rowSelection }}
+              rowSelection={dataSource === 'high_schools' ? { type: 'checkbox', ...highSchoolRowSelection } : { type: selectionType, ...rowSelection }}
               columns={columns}
               dataSource={displayedData}
               loading={loading || isLoadingRecruitingBoard}
@@ -2432,11 +2829,11 @@ export function TableSearchContent({
               }}
               onChange={handleTableChange}
               onRow={(record) => {
+                const isOnBoard = recruitingBoardAthletes.includes(record.id);
                 return {
-                  style: {
-                    backgroundColor: recruitingBoardAthletes.includes(record.id) ? '#f0f9f0' : undefined,
-                  },
-                  className: recruitingBoardAthletes.includes(record.id) ? 'recruiting-board-row' : '',
+                  style: isOnBoard ? {
+                    backgroundColor: '#d4edda',
+                  } : {},
                 };
               }}
             />
@@ -2557,20 +2954,39 @@ export function TableSearchContent({
       >
         {selectedPlayerId ? (
           <div style={{ height: '100%', overflow: 'auto' }}>
-            {searchParams?.get('use_main_tp_page_id') === 'true' ? (
-              <AthleteProfileContent 
-                mainTpPageId={selectedPlayerId} 
-                onAddToBoard={handleModalAddToRecruitingBoard}
-                isInModal={true}
-                dataSource={searchParams?.get('dataSource') as 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null}
-              />
+            {searchParams?.get('dataSource') === 'hs_athletes' ? (
+              // Use HS-specific profile content when browsing HS athletes
+              searchParams?.get('use_main_tp_page_id') === 'true' ? (
+                <HSAthleteProfileContent
+                  mainTpPageId={selectedPlayerId}
+                  onAddToBoard={handleModalAddToRecruitingBoard}
+                  isInModal={true}
+                  dataSource={'hs_athletes'}
+                />
+              ) : (
+                <HSAthleteProfileContent
+                  athleteId={selectedPlayerId}
+                  onAddToBoard={handleModalAddToRecruitingBoard}
+                  isInModal={true}
+                  dataSource={'hs_athletes'}
+                />
+              )
             ) : (
-              <AthleteProfileContent 
-                athleteId={selectedPlayerId} 
-                onAddToBoard={handleModalAddToRecruitingBoard}
-                isInModal={true}
-                dataSource={searchParams?.get('dataSource') as 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null}
-              />
+              searchParams?.get('use_main_tp_page_id') === 'true' ? (
+                <AthleteProfileContent
+                  mainTpPageId={selectedPlayerId}
+                  onAddToBoard={handleModalAddToRecruitingBoard}
+                  isInModal={true}
+                  dataSource={searchParams?.get('dataSource') as 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null}
+                />
+              ) : (
+                <AthleteProfileContent
+                  athleteId={selectedPlayerId}
+                  onAddToBoard={handleModalAddToRecruitingBoard}
+                  isInModal={true}
+                  dataSource={searchParams?.get('dataSource') as 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null}
+                />
+              )
             )}
           </div>
         ) : (
@@ -2618,6 +3034,7 @@ export function TableSearchContent({
           </div>
         )}
       </Modal>
+
     </div>
   );
 }

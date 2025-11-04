@@ -15,6 +15,8 @@
 @use "scss/tableView";
 @use "scss/coachInvite";
 @use "scss/header" as *;
+@use "scss/activityFeed" as *;
+@use "scss/scoreTracker" as *;
 
 @import url("https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,100..900;1,100..900&display=swap");
 
@@ -656,6 +658,55 @@ body,
   display: inline-flex;
   vertical-align: middle;
   border: 1px solid rgba(28, 29, 77, 0.2);
+}
+
+.add-to-tracker-btn {
+  background: url(/svgicons/wave-triangle.svg) no-repeat center center#b3cfbb;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  vertical-align: middle;
+  border: 1px solid rgba(28, 29, 77, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+  
+  &:hover {
+    background: #22c55e;
+  }
+  
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  &::before {
+    content: '+';
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    line-height: 1;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 12px solid rgba(255, 255, 255, 0.3);
+    z-index: 1;
+  }
 }
 
 .agreement-badge {

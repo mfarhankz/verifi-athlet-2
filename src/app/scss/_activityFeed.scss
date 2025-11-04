@@ -1,0 +1,112 @@
+// Activity Feed Styles
+
+// Table row hover effects
+.activity-feed-row-even:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.activity-feed-row-odd:hover {
+  background-color: #f8f8f8 !important;
+}
+
+// Filter drawer styles
+.activity-feed-filters {
+  .ant-drawer-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .ant-drawer-body {
+    padding: 20px;
+  }
+
+  .ant-collapse {
+    .ant-collapse-header {
+      font-weight: 500;
+      padding: 12px 0;
+    }
+
+    .ant-collapse-content-box {
+      padding: 12px;
+    }
+  }
+}
+
+// Saved filters section
+.saved-filters-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+
+  .filter-input-container {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .filter-list {
+    max-height: 425px;
+    overflow-y: auto;
+    margin-top: 12px;
+
+    .filter-item {
+      padding: 8px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+
+      &:hover {
+        background-color: #f5f5f5;
+      }
+
+      &.active {
+        background-color: #e6f7ff;
+      }
+    }
+  }
+}
+
+// Action buttons at bottom of drawer
+.filter-actions {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+  background-color: white;
+
+  .ant-btn {
+    width: 100%;
+    height: 40px;
+    font-weight: 500;
+  }
+}
+
+// Table styles matching Figma
+.timeline-events-table {
+  .ant-table {
+    .ant-table-thead > tr > th {
+      background: #e9e9eb;
+      border-radius: 0;
+      text-align: center;
+      padding: 10px 12px;
+      font-size: 18px;
+      font-weight: 500;
+      color: #1c1d4d;
+
+      &:first-child {
+        text-align: left;
+      }
+    }
+
+    .ant-table-tbody > tr > td {
+      background: white;
+      text-align: center;
+      padding: 10px 12px;
+      border-bottom: 6px solid #f2f2f2;
+      border-left: 1px solid #f2f2f2;
+    }
+  }
+}
+

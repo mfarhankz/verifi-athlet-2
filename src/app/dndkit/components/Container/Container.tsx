@@ -21,6 +21,7 @@ export interface Props {
   placeholder?: boolean;
   unstyled?: boolean;
   onClick?(): void;
+  onDoubleClick?(): void;
   onRemove?(): void;
   onPositionDelete?(positionName?: string): void;
   hasPlayers?: boolean;
@@ -35,6 +36,7 @@ export const Container = forwardRef<HTMLDivElement, Props>(
       horizontal,
       hover,
       onClick,
+      onDoubleClick,
       onRemove,
       onPositionDelete,
       hasPlayers,
@@ -80,6 +82,7 @@ export const Container = forwardRef<HTMLDivElement, Props>(
           {
             ...style,
             "--columns": columns,
+            cursor: onDoubleClick ? 'pointer' : undefined,
           } as React.CSSProperties
         }
         className={classNames(
@@ -92,6 +95,7 @@ export const Container = forwardRef<HTMLDivElement, Props>(
           shadow && styles.shadow
         )}
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
         tabIndex={onClick ? 0 : undefined}
       >
         {label ? (

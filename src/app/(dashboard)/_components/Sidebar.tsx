@@ -150,8 +150,10 @@ function SidebarContent() {
       newSelectedKey = '6';
     } else if (pathname === '/admin') {
       newSelectedKey = '13';
-    } else if (pathname === '/new-pages') {
-      newSelectedKey = '14';
+    }  else if (pathname === '/activity-feed') {
+        newSelectedKey = '18';
+      } else if (pathname === '/score-tracker') {
+        newSelectedKey = '19';
     } else if (pathname === '/cap-manager') {
       newIsCapManagerSelected = true;
       // Handle Cap Manager and its submenus
@@ -353,14 +355,20 @@ function SidebarContent() {
       label: <StyledLink href="/cap-manager?view=positional-ranking">Cap Manager</StyledLink>,
     },
     {
+      key: "18",
+      icon: <i className="icon-calendar" />,
+      label: <StyledLink href="/activity-feed">Activity Feed</StyledLink>,
+    },
+    {
+      key: "19",
+      icon: <UnclickableIcon className="icon-flash" />,
+      label: <UnclickableMenuItem>Score Tracker</UnclickableMenuItem>,
+      disabled: true,
+    },
+    {
       key: "13",
       icon: <i className="icon-setting-2" />,
       label: <StyledLink href="/admin">Admin</StyledLink>,
-    },
-    {
-      key: "14",
-      icon: <i className="icon-setting-2" />,
-      label: <StyledLink href="/new-pages">New Pages</StyledLink>,
     },
   ];
 

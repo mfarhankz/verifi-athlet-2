@@ -90,16 +90,22 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
 
           // Fetch current coach assignment and position from recruiting board
           const { data: recruitingBoardData, error: recruitingBoardError } = await supabase
-            .from('recruiting_board')
-            .select('user_id, athlete_tier, position, source')
+            .from('recruiting_board_athlete')
+            .select(`
+              user_id, 
+              athlete_tier, 
+              source,
+              recruiting_board_column_id,
+              recruiting_board_column!inner(name)
+            `)
             .eq('athlete_id', athleteId)
-            .eq('customer_id', activeCustomerId)
+            .is('ended_at', null)
             .single();
 
           if (!recruitingBoardError && recruitingBoardData) {
             setCurrentCoachId(recruitingBoardData.user_id);
             setSelectedCoachId(recruitingBoardData.user_id);
-            setRecruitingBoardPosition(recruitingBoardData.position || null);
+            setRecruitingBoardPosition(recruitingBoardData.recruiting_board_column?.name || null);
             // Initialize form data with athlete data including tier and source
             setFormData({
               tier: recruitingBoardData.athlete_tier || "", // Use stored tier or empty string for no tier
@@ -239,10 +245,10 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
       // Save coach assignment if changed
       if (selectedCoachId && selectedCoachId !== currentCoachId) {
         const { error: coachError } = await supabase
-          .from('recruiting_board')
+          .from('recruiting_board_athlete')
           .update({ user_id: selectedCoachId })
           .eq('athlete_id', athleteId)
-          .eq('customer_id', activeCustomerId);
+          .is('ended_at', null);
 
         if (coachError) throw coachError;
         setCurrentCoachId(selectedCoachId);
@@ -252,13 +258,13 @@ export default function PlayerEditModal({ athleteId, athleteData, onClose }: Pla
       const tierValue = formData.tier === "" ? null : formData.tier;
       const sourceValue = formData.source === "" ? null : formData.source;
       const { error: updateError } = await supabase
-        .from('recruiting_board')
+        .from('recruiting_board_athlete')
         .update({ 
           athlete_tier: tierValue,
           source: sourceValue
         })
         .eq('athlete_id', athleteId)
-        .eq('customer_id', activeCustomerId);
+        .is('ended_at', null);
 
       if (updateError) throw updateError;
 

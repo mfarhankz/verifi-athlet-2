@@ -3,7 +3,7 @@
 import { Button, Dropdown, Flex, MenuProps, Modal, Skeleton } from "antd";
 import React, { useState } from "react";
 import ImageWithAverage from "../_components/ImageWithAverage";
-import PlayerInformationOld from "../_components/PlayerInformationOld";
+import PlayerInformation from "../_components/PlayerInformation";
 import Image from "next/image";
 import ProgressBar from "@/components/ProgressBar";
 import { Rate } from 'antd';
@@ -332,7 +332,7 @@ export default function NewPages() {
                   </div>
                 </div>
                 <div className="col-span-8 card-withou-pading gray-scale">
-                  <PlayerInformationOld />
+                  <PlayerInformation athlete={null} useMockData={true} />
                 </div>
 
                 <div className="mt-5 flex gap-4">

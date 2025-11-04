@@ -1,4 +1,5 @@
 export interface FilterState {
+  columns?: string[]; // Filter by recruiting board column names (position columns)
   years?: string[];
   divisions?: string[];
   // Unified location filter structure
@@ -24,7 +25,7 @@ export interface FilterState {
   schools?: string[]; // New school filter - contains school IDs
   athleticAid?: string[];
   status?: string[]; // New status filter
-  position?: string[]; // New position filter
+  position?: string[]; // New position filter (uses primary_position)
   // Dynamic stat filters - key will be the data_type_id from sport_stat_config
   [key: string]: any;
   gamesPlayed?: {
@@ -84,10 +85,7 @@ export interface FilterState {
   hsState?: string[]; // High school state (data_type_id 1013)
   hsCounty?: string[]; // High school county (data_type_id 991)
   hsReligiousAffiliation?: string[]; // Religious affiliation (data_type_id 929)
-  hsSchoolType?: {
-    schoolType?: string[]; // HS/JUCO selection
-    publicPrivate?: string[]; // Private/Public selection
-  };
+  hsSchoolType?: string[]; // HS/JUCO selection (High School, Junior College)
   hsProspectsScore?: { minValue?: number; maxValue?: number }; // Prospects Score (data_type_id 956)
   hsD1ProspectsScore?: { minValue?: number; maxValue?: number }; // D1 Prospects Score (data_type_id 957)
   hsTeamQualityScore?: { minValue?: number; maxValue?: number }; // Team Quality Score (data_type_id 958)

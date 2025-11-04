@@ -57,6 +57,7 @@ function DroppableContainer({
   positionConfig,
   onPositionDelete,
   onRemove,
+  onDoubleClick,
   ...props
 }: ContainerProps & {
   disabled?: boolean;
@@ -67,7 +68,11 @@ function DroppableContainer({
   positionConfig?: RecruitingBoardPosition[];
   onPositionDelete?: (positionName: string) => void;
   onRemove?: () => void;
+  onDoubleClick?: () => void;
 }) {
+  // Disable dragging for "Unassigned" column
+  const isUnassigned = id === "Unassigned";
+  
   const {
     active,
     attributes,
@@ -84,6 +89,7 @@ function DroppableContainer({
       children: items,
     },
     animateLayoutChanges,
+    disabled: isUnassigned || disabled,
   });
   const isOverContainer = over
     ? (id === over.id && active?.data.current?.type !== "container") ||
@@ -94,11 +100,11 @@ function DroppableContainer({
   const hasPlayers = items.length > 0;
   
   // Find the position config for this container
-  const positionInfo = positionConfig?.find(pos => pos.position_name === id);
+  const positionInfo = positionConfig?.find(pos => pos.name === id);
 
   return (
     <Container
-      ref={disabled ? undefined : setNodeRef}
+      ref={isUnassigned || disabled ? undefined : setNodeRef}
       style={{
         ...style,
         transition,
@@ -106,13 +112,14 @@ function DroppableContainer({
         opacity: isDragging ? 0.5 : undefined,
       }}
       hover={isOverContainer}
-      handleProps={{
+      handleProps={isUnassigned ? {} : {
         ...attributes,
         ...listeners,
       }}
       columns={columns}
       onPositionDelete={onPositionDelete ? () => onPositionDelete(id as string) : undefined}
       onRemove={onRemove}
+      onDoubleClick={onDoubleClick}
       hasPlayers={hasPlayers}
       {...props}
     >
@@ -162,10 +169,13 @@ interface Props {
   scrollable?: boolean;
   vertical?: boolean;
   refreshCallback?: () => void;
-  onRankUpdate?: (updates: { athleteId: string; rank: number; position?: string }[]) => void;
+  onRankUpdate?: (updates: { recruitingBoardId: string; rank: number; position?: string }[]) => void;
   onPositionDelete?: (positionName: string) => void;
   onPositionCreate?: (positionName: string) => void;
   onRemoveFromBoard?: (recruitingBoardId: string, athleteName: string) => void;
+  onColumnDoubleClick?: (columnName: string) => void;
+  onColumnOrderUpdate?: (columns: { id: string; display_order: number }[]) => void;
+  allowMultiples?: boolean;
 }
 
 export const TRASH_ID = "void";
@@ -196,6 +206,9 @@ function MultipleContainers({
   onPositionDelete,
   onPositionCreate,
   onRemoveFromBoard,
+  onColumnDoubleClick,
+  onColumnOrderUpdate,
+  allowMultiples = false,
 }: Props) {
   const [items, setItems] = useState<Items>(() => {
     if (Array.isArray(data)) {
@@ -213,7 +226,7 @@ function MultipleContainers({
         // Create containers based on position config order, including empty positions
         const orderedItems: Items = {};
         positionConfig.forEach((pos) => {
-          orderedItems[pos.position_name] = itemsByPosition[pos.position_name] || [];
+          orderedItems[pos.name] = itemsByPosition[pos.name] || [];
         });
 
         // Always add Unassigned container if there are unassigned athletes
@@ -247,15 +260,35 @@ function MultipleContainers({
 
   const [containers, setContainers] = useState<UniqueIdentifier[]>(() => {
     if (positionConfig && positionConfig.length > 0) {
-      const configuredContainers = positionConfig.map(pos => pos.position_name);
-      // Add Unassigned if there are any unassigned athletes
+      // Sort positionConfig to ensure Unassigned is last
+      const sortedPositions = [...positionConfig].sort((a, b) => {
+        if (a.name === 'Unassigned') return 1;
+        if (b.name === 'Unassigned') return -1;
+        return a.display_order - b.display_order;
+      });
+      
+      const configuredContainers = sortedPositions.map(pos => pos.name);
+      // Add Unassigned at the end if there are any unassigned athletes and it's not already there
       const hasUnassigned = Array.isArray(data) && data.some(item => !item.position);
       if (hasUnassigned && !configuredContainers.includes("Unassigned")) {
         configuredContainers.push("Unassigned");
       }
+      // Ensure Unassigned is always last
+      const unassignedIndex = configuredContainers.indexOf("Unassigned");
+      if (unassignedIndex !== -1 && unassignedIndex !== configuredContainers.length - 1) {
+        configuredContainers.splice(unassignedIndex, 1);
+        configuredContainers.push("Unassigned");
+      }
       return configuredContainers;
     }
-    return Object.keys(items) as UniqueIdentifier[];
+    // Fallback: ensure Unassigned is last if it exists
+    const fallbackContainers = Object.keys(items) as UniqueIdentifier[];
+    const unassignedIndex = fallbackContainers.indexOf("Unassigned");
+    if (unassignedIndex !== -1 && unassignedIndex !== fallbackContainers.length - 1) {
+      fallbackContainers.splice(unassignedIndex, 1);
+      fallbackContainers.push("Unassigned");
+    }
+    return fallbackContainers;
   });
 
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
@@ -355,7 +388,7 @@ function MultipleContainers({
         // Create containers based on position config order, including empty positions
         const orderedItems: Items = {};
         positionConfig.forEach((pos) => {
-          orderedItems[pos.position_name] = itemsByPosition[pos.position_name] || [];
+          orderedItems[pos.name] = itemsByPosition[pos.name] || [];
         });
 
         // Always add Unassigned container if there are unassigned athletes
@@ -363,7 +396,7 @@ function MultipleContainers({
           orderedItems["Unassigned"] = itemsByPosition["Unassigned"];
         }
 
-        const configuredContainers = positionConfig.map(pos => pos.position_name);
+        const configuredContainers = positionConfig.map(pos => pos.name);
         if (itemsByPosition["Unassigned"] && itemsByPosition["Unassigned"].length > 0 && !configuredContainers.includes("Unassigned")) {
           configuredContainers.push("Unassigned");
         }
@@ -437,16 +470,16 @@ function MultipleContainers({
   const generateRankUpdates = (affectedContainers: UniqueIdentifier[]) => {
     if (!onRankUpdate || !data) return;
 
-    const updates: { athleteId: string; rank: number; position?: string }[] = [];
+    const updates: { recruitingBoardId: string; rank: number; position?: string }[] = [];
 
     affectedContainers.forEach(containerId => {
       const containerItems = items[containerId] || [];
       
-      containerItems.forEach((athleteId, index) => {
-        const athleteData = data.find(athlete => athlete.id === athleteId);
+      containerItems.forEach((itemId, index) => {
+        const athleteData = data.find(athlete => athlete.id === itemId);
         if (athleteData) {
-          const update: { athleteId: string; rank: number; position?: string } = {
-            athleteId: athleteId.toString(),
+          const update: { recruitingBoardId: string; rank: number; position?: string } = {
+            recruitingBoardId: itemId.toString(), // itemId is now recruiting_board_id
             rank: index + 1, // Array index 0 = rank 1, index 1 = rank 2, etc.
             position: containerId.toString() // Update position to match container
           };
@@ -537,13 +570,72 @@ function MultipleContainers({
         }
       }}
       onDragEnd={({ active, over }) => {
-        if (active.id in items && over?.id) {
+        // Check if both active and over are containers (columns being reordered)
+        const isActiveContainer = active.id in items;
+        const isOverContainer = over?.id && over.id in items;
+        
+        if (isActiveContainer && isOverContainer) {
+          // Prevent "Unassigned" from being dragged
+          if (active.id === "Unassigned" || over.id === "Unassigned") {
+            console.log('[MultipleContainers] Cannot drag Unassigned column');
+            setActiveId(null);
+            return;
+          }
+          
+          console.log('[MultipleContainers] Column reorder detected:', { active: active.id, over: over.id });
+          
           setContainers((containers) => {
             const activeIndex = containers.indexOf(active.id);
             const overIndex = containers.indexOf(over.id);
+            
+            // Only proceed if indices are valid and different
+            if (activeIndex === -1 || overIndex === -1 || activeIndex === overIndex) {
+              console.log('[MultipleContainers] Invalid indices, skipping:', { activeIndex, overIndex });
+              return containers;
+            }
 
-            return arrayMove(containers, activeIndex, overIndex);
+            let newContainers = arrayMove(containers, activeIndex, overIndex);
+            
+            // Ensure "Unassigned" is always last
+            const unassignedIndex = newContainers.indexOf("Unassigned");
+            if (unassignedIndex !== -1 && unassignedIndex !== newContainers.length - 1) {
+              newContainers = [...newContainers.filter(c => c !== "Unassigned"), "Unassigned"];
+            }
+            
+            console.log('[MultipleContainers] New container order:', newContainers);
+            
+            // Persist column order to database if callback provided and positionConfig exists
+            if (onColumnOrderUpdate && positionConfig) {
+              // Calculate display_order only for non-Unassigned columns
+              // Unassigned should always be last, so we exclude it from numbering
+              let displayOrderCounter = 1;
+              const columnUpdates = newContainers
+                .map((containerId) => {
+                  const position = positionConfig.find(p => p.name === containerId);
+                  if (position && containerId !== 'Unassigned') {
+                    const order = displayOrderCounter++;
+                    return {
+                      id: position.id,
+                      display_order: order
+                    };
+                  }
+                  return null;
+                })
+                .filter((update): update is { id: string; display_order: number } => update !== null);
+              
+              console.log('[MultipleContainers] Column updates to send:', columnUpdates);
+              
+              if (columnUpdates.length > 0) {
+                // Call asynchronously to avoid blocking UI
+                onColumnOrderUpdate(columnUpdates);
+              }
+            }
+            
+            return newContainers;
           });
+          // Return early to prevent processing as item move
+          setActiveId(null);
+          return;
         }
 
         const activeContainer = findContainer(active.id);
@@ -596,23 +688,60 @@ function MultipleContainers({
           const activeIndex = items[activeContainer].indexOf(active.id);
           const overIndex = items[overContainer].indexOf(overId);
 
-          if (activeIndex !== overIndex) {
-            setItems((items) => ({
-              ...items,
-              [overContainer]: arrayMove(
-                items[overContainer],
-                activeIndex,
-                overIndex
-              ),
-            }));
-          }
+          if (allowMultiples && activeContainer !== overContainer) {
+            // Copy mode: Add item to destination without removing from source
+            const activeItemId = active.id;
+            
+            setItems((items) => {
+              // Check if item already exists in the destination
+              if (items[overContainer].includes(activeItemId)) {
+                // Just reorder within the destination
+                const currentIndex = items[overContainer].indexOf(activeItemId);
+                if (currentIndex !== overIndex) {
+                  return {
+                    ...items,
+                    [overContainer]: arrayMove(
+                      items[overContainer],
+                      currentIndex,
+                      overIndex
+                    ),
+                  };
+                }
+                return items;
+              }
+              
+              // Add to destination container
+              return {
+                ...items,
+                [overContainer]: arrayMove(
+                  [...items[overContainer], activeItemId],
+                  items[overContainer].length,
+                  overIndex
+                ),
+              };
+            });
 
-          // Update ranks for both containers if they're different
-          const containersToUpdate = activeContainer === overContainer 
-            ? [activeContainer] 
-            : [activeContainer, overContainer];
-          
-          setAffectedContainers(containersToUpdate);
+            setAffectedContainers([overContainer]);
+          } else {
+            // Move mode (default): Move item from source to destination
+            if (activeIndex !== overIndex) {
+              setItems((items) => ({
+                ...items,
+                [overContainer]: arrayMove(
+                  items[overContainer],
+                  activeIndex,
+                  overIndex
+                ),
+              }));
+            }
+
+            // Update ranks for both containers if they're different
+            const containersToUpdate = activeContainer === overContainer 
+              ? [activeContainer] 
+              : [activeContainer, overContainer];
+            
+            setAffectedContainers(containersToUpdate);
+          }
         }
 
         setActiveId(null);
@@ -690,6 +819,7 @@ function MultipleContainers({
               data={data}
               positionConfig={positionConfig}
               onPositionDelete={onPositionDelete}
+              onDoubleClick={() => onColumnDoubleClick?.(containerId as string)}
             >
               <SortableContext items={items[containerId]} strategy={strategy}>
                 {items[containerId].map((value, index) => {

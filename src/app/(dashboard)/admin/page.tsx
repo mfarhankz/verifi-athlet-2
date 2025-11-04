@@ -1363,6 +1363,7 @@ export default function AdminPage() {
       'Package Name',
       'Access Date',
       'Access End',
+      'Last Sign In',
       'Customer ID'
     ];
 
@@ -1378,6 +1379,7 @@ export default function AdminPage() {
         `"${user.package_name || ''}"`,
         `"${user.access_date || ''}"`,
         `"${user.access_end || ''}"`,
+        `"${user.last_sign_in_at || ''}"`,
         `"${user.customer_id || ''}"`
       ].join(','))
     ].join('\n');

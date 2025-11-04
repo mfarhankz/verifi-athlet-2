@@ -29,10 +29,14 @@ import {
   useCustomer,
   useUserSafely,
 } from "@/contexts/CustomerContext";
-import { StarFilled, CopyOutlined } from "@ant-design/icons";
+import { StarFilled, CopyOutlined, DownOutlined } from "@ant-design/icons";
 import { useZoom } from "@/contexts/ZoomContext";
 import { useState, useEffect } from 'react';
 import MobileAthleteProfileContent from './MobileAthleteProfileContent';
+import ChooseBoardDropdown from './ChooseBoardDropdown';
+import ChooseBoardDropdownWithStatus from './ChooseBoardDropdownWithStatus';
+import SuccessPopover from './SuccessPopover';
+import HSAthleteProfileContent from './HSAthleteProfileContent';
 
 const formatDate = (dateInput: string | Date | null | undefined) => {
   if (!dateInput) return "-- na --";
@@ -83,12 +87,24 @@ export default function AthleteProfileContent({
   const [userTeamId, setUserTeamId] = useState<string | null>(null);
   const [isAddingToRecruitingBoard, setIsAddingToRecruitingBoard] = useState(false);
   const [recruitingBoardAthletes, setRecruitingBoardAthletes] = useState<string[]>([]);
+  const [boardsAthleteIsOn, setBoardsAthleteIsOn] = useState<string[]>([]); // Track which board IDs athlete is on
   const [isLoadingRecruitingBoard, setIsLoadingRecruitingBoard] = useState(false);
+  const [isBoardModalVisible, setIsBoardModalVisible] = useState(false);
+  const [availableBoards, setAvailableBoards] = useState<any[]>([]);
+  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const [selectedBoardName, setSelectedBoardName] = useState<string>('Main');
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const { activeCustomerId } = useCustomer();
   const { userDetails } = useUserSafely();
   const [ratings, setRatings] = useState<CustomerRating[]>([]);
   const { zoom } = useZoom();
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  
+  // Score tracker state
+  const [isInScoreTracker, setIsInScoreTracker] = useState(false);
+  const [isLoadingScoreTracker, setIsLoadingScoreTracker] = useState(false);
+  const [isAddingToScoreTracker, setIsAddingToScoreTracker] = useState(false);
 
   // Set userTeamId when userDetails becomes available
   useEffect(() => {
@@ -207,9 +223,9 @@ export default function AthleteProfileContent({
     try {
       setIsLoadingRecruitingBoard(true);
       const { data, error } = await supabase
-        .from("recruiting_board")
-        .select("athlete_id")
-        .eq("customer_id", userDetails.customer_id);
+        .from("recruiting_board_athlete")
+        .select("athlete_id, recruiting_board_board_id")
+        .is('ended_at', null);
 
       if (error) {
         console.error("Error fetching recruiting board athletes:", error);
@@ -220,6 +236,18 @@ export default function AthleteProfileContent({
         (item: { athlete_id: string }) => item.athlete_id
       );
       setRecruitingBoardAthletes(athleteIds);
+      
+      // If we have the actual athlete ID, track which boards they're on
+      if (actualAthleteId) {
+        const boardIds = data
+          .filter((item: { athlete_id: string; recruiting_board_board_id: string }) => 
+            item.athlete_id === actualAthleteId
+          )
+          .map((item: { recruiting_board_board_id: string }) => 
+            item.recruiting_board_board_id
+          );
+        setBoardsAthleteIsOn(boardIds);
+      }
     } catch (error) {
       console.error("Error in fetchRecruitingBoardAthletes:", error);
     } finally {
@@ -232,41 +260,191 @@ export default function AthleteProfileContent({
     if (session?.user?.id && userDetails?.customer_id) {
       fetchRecruitingBoardAthletes();
     }
-  }, [session, userDetails]);
+  }, [session, userDetails, actualAthleteId]);
 
-  const handleAddToRecruitingBoard = async () => {
+  // Fetch available boards when customer is available
+  useEffect(() => {
+    const fetchBoards = async () => {
+      if (!activeCustomerId) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('recruiting_board_board')
+          .select('id, name')
+          .eq('customer_id', activeCustomerId)
+          .is('recruiting_board_column_id', null)
+          .is('ended_at', null)
+          .order('display_order');
+        
+        if (error) {
+          console.error('Error fetching boards:', error);
+          return;
+        }
+        
+        setAvailableBoards(data || []);
+        
+        // Set default board (Main or first available)
+        if (data && data.length > 0) {
+          const mainBoard = data.find((b: { id: string; name: string }) => b.name === 'Main') || data[0];
+          setSelectedBoardId(mainBoard.id);
+          setSelectedBoardName(mainBoard.name);
+        }
+      } catch (error) {
+        console.error('Error in fetchBoards:', error);
+      }
+    };
+    
+    fetchBoards();
+  }, [activeCustomerId]);
+
+  // Check score tracker status when athlete and customer are available
+  useEffect(() => {
+    if (athlete?.id && activeCustomerId) {
+      checkScoreTrackerStatus();
+    }
+  }, [athlete?.id, activeCustomerId]);
+
+  // Add athlete to recruiting board (now uses selected board)
+  const handleAddToRecruitingBoard = async (boardIdOverride?: string, boardNameOverride?: string) => {
     if (!athlete) {
       alert("No athlete selected.");
+      return;
+    }
+
+    if (!userDetails) {
+      alert("You must be logged in to add athletes to the recruiting board.");
+      return;
+    }
+    if (!activeCustomerId) {
+      alert("No active customer ID found. Please make sure your account is properly set up.");
       return;
     }
 
     setIsAddingToRecruitingBoard(true);
     
     try {
-      if (!userDetails) {
-        alert("You must be logged in to add athletes to the recruiting board.");
-        return;
-      }
-      if (!activeCustomerId) {
-        alert("No active customer ID found. Please make sure your account is properly set up.");
-        return;
-      }
       const userId = userDetails.id;
+
+      // Use the override if provided, otherwise fall back to selected board ID
+      let boardId = boardIdOverride || selectedBoardId;
+      const boardName = boardNameOverride || selectedBoardName;
+      
+      if (!boardId) {
+        // Get or create the Main board as fallback
+        const { data: boardData, error: boardError } = await supabase
+          .from('recruiting_board_board')
+          .select('id')
+          .eq('customer_id', activeCustomerId)
+          .eq('name', 'Main')
+          .is('recruiting_board_column_id', null)
+          .is('ended_at', null)
+          .single();
+
+        if (boardError && boardError.code !== 'PGRST116') {
+          alert(`Error finding recruiting board: ${boardError.message}`);
+          return;
+        }
+
+        boardId = boardData?.id;
+        
+        // Create Main board if it doesn't exist
+        if (!boardId) {
+          const { data: newBoard, error: createError } = await supabase
+            .from('recruiting_board_board')
+            .insert({
+              customer_id: activeCustomerId,
+              name: 'Main',
+              recruiting_board_column_id: null,
+              display_order: 1
+            })
+            .select('id')
+            .single();
+
+          if (createError) {
+            alert(`Error creating recruiting board: ${createError.message}`);
+            return;
+          }
+
+          boardId = newBoard.id;
+        }
+      }
+
+      // Always assign to Unassigned column
+      const positionName = 'Unassigned';
+      
+      const { data: columnData, error: columnError } = await supabase
+        .from('recruiting_board_column')
+        .select('id')
+        .eq('customer_id', activeCustomerId)
+        .eq('recruiting_board_board_id', boardId)
+        .eq('name', positionName)
+        .is('ended_at', null)
+        .single();
+
+      let columnId = columnData?.id;
+
+      // Create column if it doesn't exist
+      if (!columnId && (columnError?.code === 'PGRST116' || !columnData)) {
+        // Get the max display order
+        const { data: maxOrderData } = await supabase
+          .from('recruiting_board_column')
+          .select('display_order')
+          .eq('customer_id', activeCustomerId)
+          .eq('recruiting_board_board_id', boardId)
+          .is('ended_at', null)
+          .order('display_order', { ascending: false })
+          .limit(1);
+
+        const nextOrder = (maxOrderData?.[0]?.display_order || 0) + 1;
+
+        const { data: newColumn, error: createColumnError } = await supabase
+          .from('recruiting_board_column')
+          .insert({
+            customer_id: activeCustomerId,
+            recruiting_board_board_id: boardId,
+            name: positionName,
+            display_order: nextOrder
+          })
+          .select('id')
+          .single();
+
+        if (createColumnError) {
+          alert(`Error creating column: ${createColumnError.message}`);
+          return;
+        }
+
+        columnId = newColumn.id;
+      }
+
+      // Get the current max rank for this column to assign unique rank
+      const { data: maxRankData } = await supabase
+        .from('recruiting_board_athlete')
+        .select('rank')
+        .eq('recruiting_board_board_id', boardId)
+        .eq('recruiting_board_column_id', columnId)
+        .is('ended_at', null)
+        .order('rank', { ascending: false })
+        .limit(1);
+
+      const nextRank = (maxRankData?.[0]?.rank || 0) + 1;
 
       // Prepare the data for insertion
       const recruitingBoardEntry = {
+        customer_id: activeCustomerId,
+        recruiting_board_board_id: boardId,
+        recruiting_board_column_id: columnId,
         athlete_id: athlete.id,
         user_id: userId,
-        customer_id: activeCustomerId,
-        position: 'Unassigned',
+        rank: nextRank, // Assign unique incremental rank
         source: dataSource === 'transfer_portal' ? 'portal' : 
                 dataSource === 'juco' ? 'juco' : 
+                dataSource === 'hs_athletes' ? 'high_school' :
                 dataSource === 'all_athletes' ? 'pre-portal' : null
       };
 
-      // Insert the data into the recruiting_board table
+      // Insert the data into the recruiting_board_athlete table
       const { data: insertData, error: insertError } = await supabase
-        .from('recruiting_board')
+        .from('recruiting_board_athlete')
         .insert(recruitingBoardEntry)
         .select();
 
@@ -276,8 +454,13 @@ export default function AthleteProfileContent({
         return;
       }
 
-      alert(`Successfully added athlete to your recruiting board.`);
+      // Show success message with board name
+      setSuccessMessage(`Player added to ${boardName}!`);
+      setShowSuccessMessage(true);
       setRecruitingBoardAthletes(prev => [...prev, athlete.id]);
+      if (boardId) {
+        setBoardsAthleteIsOn(prev => [...prev, boardId]);
+      }
     } catch (error) {
       console.error("Error in handleAddToRecruitingBoard:", error);
       if (error instanceof Error) {
@@ -287,6 +470,80 @@ export default function AthleteProfileContent({
       }
     } finally {
       setIsAddingToRecruitingBoard(false);
+    }
+  };
+
+  // Handle board selection
+  const handleBoardSelected = async (boardId: string, boardName: string) => {
+    setSelectedBoardId(boardId);
+    setSelectedBoardName(boardName);
+    setIsBoardModalVisible(false);
+  };
+
+  // Score tracker functions
+  const checkScoreTrackerStatus = async () => {
+    if (!athlete?.id || !activeCustomerId) return;
+
+    try {
+      setIsLoadingScoreTracker(true);
+      const { data, error } = await supabase
+        .from('score_tracker')
+        .select('id')
+        .eq('athlete_id', athlete.id)
+        .eq('customer_id', activeCustomerId)
+        .is('ended_at', null)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking score tracker status:', error);
+        return;
+      }
+
+      setIsInScoreTracker(!!data);
+    } catch (error) {
+      console.error('Error in checkScoreTrackerStatus:', error);
+    } finally {
+      setIsLoadingScoreTracker(false);
+    }
+  };
+
+  const handleAddToScoreTracker = async () => {
+    if (!athlete?.id || !activeCustomerId || !userDetails) {
+      alert("You must be logged in to add athletes to the score tracker.");
+      return;
+    }
+
+    setIsAddingToScoreTracker(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('score_tracker')
+        .insert({
+          athlete_id: athlete.id,
+          customer_id: activeCustomerId,
+          user_id: userDetails.id,
+        })
+        .select();
+
+      if (error) {
+        console.error('Error adding athlete to score tracker:', error);
+        alert(`Error adding athlete to score tracker: ${error.message || 'Unknown error'}`);
+        return;
+      }
+
+      // Update state
+      setIsInScoreTracker(true);
+      setSuccessMessage("Added to Score Tracker!");
+      setShowSuccessMessage(true);
+    } catch (error) {
+      console.error('Error in handleAddToScoreTracker:', error);
+      if (error instanceof Error) {
+        alert(`An unexpected error occurred: ${error.message}`);
+      } else {
+        alert("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setIsAddingToScoreTracker(false);
     }
   };
 
@@ -367,6 +624,17 @@ export default function AthleteProfileContent({
     };
     loadRatings();
   }, [activeCustomerId]);
+
+  // Use the new HS Athlete Profile for hs_athletes dataSource
+  if (dataSource === 'hs_athletes') {
+    return <HSAthleteProfileContent
+      athleteId={athleteId}
+      mainTpPageId={mainTpPageId}
+      onAddToBoard={onAddToBoard}
+      isInModal={isInModal}
+      dataSource={dataSource}
+    />;
+  }
 
   return isMobile ? (
     <MobileAthleteProfileContent
@@ -723,19 +991,63 @@ export default function AthleteProfileContent({
                               <div></div>
                             )}
                           </Flex>
-                          <Flex>
-                            <Button
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleAddToRecruitingBoard();
-                              }}
-                              type="primary"
-                              disabled={recruitingBoardAthletes.includes(athlete?.id || "")}
-                              className={recruitingBoardAthletes.includes(athlete?.id || "") ? 'cursor-not-allowed hover:cursor-not-allowed' : ''}
+                          <Flex vertical align="flex-end" gap={8}>
+                            <SuccessPopover
+                              trigger="bottom"
+                              content={successMessage}
+                              visible={showSuccessMessage}
+                              onClose={() => setShowSuccessMessage(false)}
                             >
-                              <i className={`icon-user text-[16px] ${recruitingBoardAthletes.includes(athlete?.id || "") ? 'text-gray-400' : 'text-white'}`}></i>{" "}
-                              {recruitingBoardAthletes.includes(athlete?.id || "") ? 'Already on Board' : 'Add to Board'}
-                            </Button>
+                              <Button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  // Check if athlete is on all boards
+                                  const isOnAllBoards = boardsAthleteIsOn.length === availableBoards.length && availableBoards.length > 0;
+                                  if (isOnAllBoards) return;
+                                  
+                                  // If multiple boards, show dropdown to select
+                                  if (availableBoards.length > 1) {
+                                    setIsBoardModalVisible(!isBoardModalVisible);
+                                  } else {
+                                    // If single board and not on it, add directly
+                                    if (userDetails && activeCustomerId && boardsAthleteIsOn.length === 0) {
+                                      handleAddToRecruitingBoard();
+                                    }
+                                  }
+                                }}
+                                type="primary"
+                                disabled={boardsAthleteIsOn.length === availableBoards.length && availableBoards.length > 0 || isAddingToRecruitingBoard}
+                                loading={isAddingToRecruitingBoard}
+                                className={boardsAthleteIsOn.length === availableBoards.length && availableBoards.length > 0 ? 'cursor-not-allowed hover:cursor-not-allowed' : ''}
+                              >
+                                <i className={`icon-user text-[16px] ${boardsAthleteIsOn.length === availableBoards.length && availableBoards.length > 0 ? 'text-gray-400' : 'text-white'}`}></i>{" "}
+                                {boardsAthleteIsOn.length === availableBoards.length && availableBoards.length > 0 
+                                  ? 'On All Boards' 
+                                  : boardsAthleteIsOn.length > 0 
+                                    ? `On ${boardsAthleteIsOn.length} of ${availableBoards.length} Boards`
+                                    : 'Add to Recruiting Board'}
+                              </Button>
+                            </SuccessPopover>
+                            
+                            {/* Board dropdown appears below button when multiple boards */}
+                            {availableBoards.length > 1 && isBoardModalVisible && (
+                              <div style={{ position: 'relative', width: '100%' }}>
+                                <ChooseBoardDropdownWithStatus
+                                  isVisible={isBoardModalVisible}
+                                  onClose={() => setIsBoardModalVisible(false)}
+                                  onSelect={(boardId, boardName) => {
+                                    handleBoardSelected(boardId, boardName);
+                                    setIsBoardModalVisible(false);
+                                    // Automatically add after selection, passing board info directly
+                                    handleAddToRecruitingBoard(boardId, boardName);
+                                  }}
+                                  customerId={activeCustomerId || ''}
+                                  athleteId={actualAthleteId || undefined}
+                                  placement="bottomRight"
+                                  simpleMode={true}
+                                />
+                              </div>
+                            )}
                           </Flex>
                         </Flex>
                         <h1>
@@ -1131,6 +1443,7 @@ export default function AthleteProfileContent({
           }))}
         />
       </Modal>
+
     </div>
   );
 }

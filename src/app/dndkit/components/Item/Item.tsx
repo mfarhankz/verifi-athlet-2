@@ -202,7 +202,9 @@ export const Item = React.memo(
                 disabled && styles.disabled,
                 player?.tierColor && styles.color,
                 player?.source === 'juco' && styles.jucoSource,
-                player?.source === 'pre-portal' && styles.prePortalSource
+                player?.source === 'pre-portal' && styles.prePortalSource,
+                player?.source === 'portal' && styles.portalSource,
+                player?.source === 'high_school' && styles.highSchoolSource
               )}
               style={style}
               data-cypress="draggable-item"
@@ -255,7 +257,7 @@ export const Item = React.memo(
 
           <Drawer width={1000} onClose={onClose} open={open}>
             <PlayerEditModal 
-              athleteId={player?.id} 
+              athleteId={player?.athlete_id} 
               athleteData={player} 
               onClose={() => {
                 console.log('Modal onClose called');
