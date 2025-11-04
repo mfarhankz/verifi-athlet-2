@@ -1,8 +1,17 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
-import { useRouter } from 'next/navigation';
-import { GoogleMap, useJsApiLoader, MarkerF, DirectionsRenderer, Libraries, InfoWindow, OverlayView, OverlayViewF } from '@react-google-maps/api';
+import { useEffect, useState, useCallback, useRef, Fragment } from "react";
+import { useRouter } from "next/navigation";
+import {
+  GoogleMap,
+  useJsApiLoader,
+  MarkerF,
+  DirectionsRenderer,
+  Libraries,
+  InfoWindow,
+  OverlayView,
+  OverlayViewF,
+} from "@react-google-maps/api";
 import {
   DndContext,
   closestCenter,
@@ -11,36 +20,40 @@ import {
   useSensor,
   useSensors,
   DragEndEvent,
-} from '@dnd-kit/core';
+} from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { School } from '../types';
-import { supabase } from '@/lib/supabaseClient';
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { School } from "../types";
+import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/contexts/CustomerContext";
 import { formatPhoneNumber } from "@/utils/utils";
-import { getPackageIdsBySport } from '@/lib/queries';
-import HighSchoolPrintComponent from '@/components/HighSchoolPrintComponent';
+import { getPackageIdsBySport } from "@/lib/queries";
+import HighSchoolPrintComponent from "@/components/HighSchoolPrintComponent";
 
 // Helper function to determine score color
 function getScoreColor(score: number | undefined | null): string {
-  if (score === undefined || score === null) {return 'transparent'}
-  if (score >= 9) {return 'rgba(0, 255, 0, 0.5)'}
+  if (score === undefined || score === null) {
+    return "transparent";
+  }
+  if (score >= 9) {
+    return "rgba(0, 255, 0, 0.5)";
+  }
   if (score >= 7) {
-    return 'rgba(173, 255, 47, 0.5)'; // Faded Yellow-Green
+    return "rgba(173, 255, 47, 0.5)"; // Faded Yellow-Green
   }
   if (score >= 5) {
-    return 'rgba(255, 255, 0, 0.5)'; // Faded Yellow
+    return "rgba(255, 255, 0, 0.5)"; // Faded Yellow
   }
   if (score >= 3) {
-    return 'rgba(255, 140, 0, 0.5)'; // Faded Orange
+    return "rgba(255, 140, 0, 0.5)"; // Faded Orange
   }
-  return 'rgba(255, 0, 0, 0.5)'; // Faded Red
+  return "rgba(255, 0, 0, 0.5)"; // Faded Red
 }
 
 interface RouteInfo {
@@ -52,8 +65,16 @@ interface RouteInfo {
   }[];
 }
 
-function SortableItem({ location, index, routeInfo, totalLocations, onRemove, userDetails, hasFootballPackage }: { 
-  location: School; 
+function SortableItem({
+  location,
+  index,
+  routeInfo,
+  totalLocations,
+  onRemove,
+  userDetails,
+  hasFootballPackage,
+}: {
+  location: School;
   index: number;
   routeInfo?: RouteInfo;
   totalLocations: number;
@@ -61,13 +82,8 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
   userDetails?: any;
   hasFootballPackage?: boolean;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: index });
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: index });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -75,9 +91,261 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
   };
 
   return (
-    <div
+    <>
+      <div className="card-list flex justify-between relative" style={style}>
+        <div
+          ref={setNodeRef}
+          className="cursor-move flex flex-1 justify-between"
+          {...attributes}
+          {...listeners}
+        >
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <div className="school-icon">
+                <img src="/svgicons/school-icon.svg" alt="X Feed" height={89} />
+              </div>
+              <div className="flex flex-col text-left mt-1">
+                <h4 className="mb-1">
+                  {location.school}
+                  {location.private_public && (
+                    <span
+                      style={{
+                        backgroundColor:
+                          location.private_public.toLowerCase() === "public"
+                            ? "#c8ff24"
+                            : "#88FBFF",
+                      }}
+                    >
+                      {location.private_public}
+                    </span>
+                  )}
+                </h4>
+                <p className="mb-0">
+                  {location.address} <br />
+                  {(location.county || location.state) && (
+                    <div>
+                      {location.county && <span>{location.county}</span>}
+                      {location.county && location.state && <span>, </span>}
+                      {location.state && <span>{location.state}</span>}
+                    </div>
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 mx-3 mb-3">
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Liam James</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Moxen Galin</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Richard Mark</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Alex James</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 p-2">
+            <div className="flex flex-col text-left w-[650px]">
+              <div className="flex gap-2 mb-2 justify-end">
+                {location.league_classification && (
+                  <div className="text-lg font-medium bg-[#126DB8] text-white px-2">
+                    {location.league_classification}
+                  </div>
+                )}
+                {location.record_2024 && hasFootballPackage && (
+                  <div className="text-lg font-medium border border-solid border-[#ccc] px-2">
+                    {location.record_2024}
+                  </div>
+                )}
+                <div className="text-lg bg-[#000] text-white px-2">
+                  @virginiabeach
+                </div>
+                <div
+                  className="border border-solid border-[#ccc] px-2 flex items-center justify-center cursor-pointer hover:bg-gray-100"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRemove(index);
+                  }}
+                >
+                  <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
+                </div>
+              </div>
+              <div className="flex justify-between gap-2">
+                <div>
+                  <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
+                    Coach
+                  </span>
+                  <h6 className="mb-0 !text-lg leading-3">
+                    {(location.head_coach_first || location.head_coach_last) &&
+                      hasFootballPackage && (
+                        <>
+                          {location.head_coach_first} {location.head_coach_last}
+                        </>
+                      )}
+                  </h6>
+                  <p className="mb-0 leading-5">
+                    {location.head_coach_email} <br />
+                    {location.head_coach_cell && (
+                      <>
+                        Cell {formatPhoneNumber(location.head_coach_cell)}{" "}
+                        {(location.coach_best_contact === "cell" ||
+                          location.best_phone === "Cell") &&
+                          hasFootballPackage && (
+                            <span className="text-blue-600 font-medium">
+                              (best)
+                            </span>
+                          )}
+                        {(location.head_coach_work_phone ||
+                          location.head_coach_home_phone ||
+                          location.coach_twitter_handle) &&
+                          ", "}
+                      </>
+                    )}
+                    {location.head_coach_work_phone && (
+                      <>
+                        Work {formatPhoneNumber(location.head_coach_work_phone)}{" "}
+                        {(location.coach_best_contact === "work" ||
+                          location.best_phone === "Office") &&
+                          hasFootballPackage && (
+                            <span className="text-blue-600 font-medium">
+                              (best)
+                            </span>
+                          )}
+                        {(location.head_coach_home_phone ||
+                          location.coach_twitter_handle) &&
+                          ", "}
+                      </>
+                    )}
+                    {location.head_coach_home_phone && (
+                      <>
+                        Home {formatPhoneNumber(location.head_coach_home_phone)}{" "}
+                        {(location.coach_best_contact === "home" ||
+                          location.best_phone === "Home") &&
+                          hasFootballPackage && (
+                            <span className="text-blue-600 font-medium">
+                              (best)
+                            </span>
+                          )}
+                        {location.coach_twitter_handle && ", "}
+                      </>
+                    )}
+                    {location.coach_twitter_handle && (
+                      <>Twitter {location.coach_twitter_handle}</>
+                    )}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
+                    AD
+                  </span>
+                  <h6 className="mb-0 !text-lg leading-3">
+                    {location.ad_name_first} {location.ad_name_last}
+                  </h6>
+                  <p className="mb-0 leading-5">
+                    {location.ad_email && <>{location.ad_email}</>}
+                    <br />
+                    {location.school_phone && (
+                      <>School {location.school_phone}</>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {(location.score_college_player !== undefined ||
+                  location.score_d1_producing !== undefined ||
+                  location.score_team_quality !== undefined ||
+                  location.score_income !== undefined ||
+                  location.score_academics !== undefined) && (
+                  <ul className="co-title bg-[#eaf8ed]">
+                    <li>
+                      {location.score_college_player !== undefined && (
+                        <>
+                          <h6>{location.score_college_player}</h6>
+                          <p>College</p>
+                        </>
+                      )}
+                    </li>
+                    <li>
+                      {location.score_d1_producing !== undefined && (
+                        <>
+                          <h6>{location.score_d1_producing}</h6>
+                          <p>D1</p>
+                        </>
+                      )}
+                    </li>
+                    <li>
+                      {location.score_team_quality !== undefined && (
+                        <>
+                          <h6>{location.score_team_quality}</h6>
+                          <p>Team</p>
+                        </>
+                      )}
+                    </li>
+                    <li>
+                      {location.score_income !== undefined && (
+                        <>
+                          <h6>{location.score_income}</h6>
+                          <p>Income</p>
+                        </>
+                      )}
+                    </li>
+                    <li>
+                      {location.score_academics !== undefined && (
+                        <>
+                          <h6>{location.score_academics}</h6>
+                          <p>Acad</p>
+                        </>
+                      )}
+                    </li>
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="absolute right-0 left-0 bottom-[-92px] m-auto flex flex-col items-center justify-center">
+          <span className="font-semibold text-lg bg-[#1C1D4D] text-white w-8 h-8 flex items-center justify-center">
+            {index + 1}
+          </span>
+          {routeInfo && index < routeInfo.legs.length && (
+            <div className="bg-[#1C1D4D]  text-white pl-3 pr-10 py-1 !text-lg font-medium italic mt-10">
+              {index < totalLocations - 1 && (
+                <div className="relative">
+                  <span className="mile-flage"></span>
+                  <span className="mile-car"></span>
+                  Next Stop {routeInfo.legs[index].duration} (
+                  {routeInfo.legs[index].distance})
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* <div
       style={style}
-      className="p-3 border rounded-lg bg-white hover:bg-gray-50 relative group"
     >
       <div className="flex items-start">
         <div
@@ -88,9 +356,7 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
         >
           <span className="mr-3 font-semibold text-lg mt-1">{index + 1}.</span>
           <div className="flex-grow">
-            {/* Top row - school, badges, and contact info in a 3-column layout */}
             <div className="grid grid-cols-3 gap-4 mb-2">
-              {/* First column - School info */}
               <div>
                 <div className="flex items-center flex-wrap mb-1">
                   <div className="font-semibold text-lg mr-2">{location.school}</div>
@@ -99,22 +365,26 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
                       {location.record_2024}
                     </div>
                   )}
-                  {location.private_public && (
-                    <div className="text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-xs mr-1">
-                      {location.private_public}
-                    </div>
-                  )}
                   {location.league_classification && (
                     <div className="text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-xs">
                       {location.league_classification}
                     </div>
                   )}
+                  {location.private_public && (
+                    <div 
+                      className="text-gray-700 px-2 py-0.5 rounded text-xs mr-1"
+                      style={{
+                        backgroundColor: location.private_public.toLowerCase() === 'public' ? '#c8ff24' : '#88FBFF'
+                      }}
+                    >
+                      {location.private_public}
+                    </div>
+                  )}
+                  
                 </div>
                 
-                {/* Address */}
                 <div className="text-gray-600 text-sm mb-1">{location.address}</div>
                 
-                {/* County and state with pipe separator */}
                 {(location.county || location.state) && (
                   <div className="text-sm font-semibold">
                     {location.county && <span>{location.county}</span>}
@@ -124,7 +394,6 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
                 )}
               </div>
               
-              {/* Second column - Coach information */}
               <div className="text-sm">
                 {(location.head_coach_first || location.head_coach_last) && hasFootballPackage && (
                   <div className="font-medium text-gray-800 mb-1">
@@ -165,7 +434,6 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
                 )}
               </div>
               
-              {/* Third column - AD and school information */}
               <div className="text-sm">
                 {(location.ad_name_first || location.ad_name_last) && (
                   <div className="font-medium text-gray-800 mb-1">
@@ -185,14 +453,12 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
               </div>
             </div>
             
-            {/* Visit info row that spans all columns */}
             {location.visit_info && (
               <div className="text-sm text-gray-700 border-t border-b py-1 mb-2">
                 <span className="font-medium">Visit Info:</span> {location.visit_info}
               </div>
             )}
             
-            {/* Score display with same styling as page.tsx */}
             {(location.score_college_player !== undefined || 
               location.score_d1_producing !== undefined || 
               location.score_team_quality !== undefined || 
@@ -259,7 +525,8 @@ function SortableItem({ location, index, routeInfo, totalLocations, onRemove, us
           )}
         </div>
       )}
-    </div>
+    </div> */}
+    </>
   );
 }
 
@@ -267,7 +534,8 @@ export default function MapPage() {
   const [selectedAddresses, setSelectedAddresses] = useState<string[]>([]);
   const [storedSchoolData, setStoredSchoolData] = useState<School[]>([]);
   const [locations, setLocations] = useState<School[]>([]);
-  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [directions, setDirections] =
+    useState<google.maps.DirectionsResult | null>(null);
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -276,11 +544,15 @@ export default function MapPage() {
   const pdfContentRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const userDetails = useUser();
-  
+
   // Check if user has any football package to determine if coach info should be shown
-  const footballPackageIds = getPackageIdsBySport('fb');
-  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) => Number(pkg));
-  const hasFootballPackage = footballPackageIds.some(id => userPackageNumbers.includes(id));
+  const footballPackageIds = getPackageIdsBySport("fb");
+  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) =>
+    Number(pkg)
+  );
+  const hasFootballPackage = footballPackageIds.some((id) =>
+    userPackageNumbers.includes(id)
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -290,7 +562,7 @@ export default function MapPage() {
   );
 
   const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
     libraries,
   });
 
@@ -301,9 +573,12 @@ export default function MapPage() {
     }
   }, [isLoaded, loadError]);
 
-  const geocodeAddress = async (address: string, schoolName: string = ''): Promise<School | null> => {
+  const geocodeAddress = async (
+    address: string,
+    schoolName: string = ""
+  ): Promise<School | null> => {
     if (!isLoaded) return null;
-    
+
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
@@ -311,21 +586,25 @@ export default function MapPage() {
         )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
       );
       const data = await response.json();
-      
+
       if (data.results && data.results[0]) {
         // If schoolName is provided via parameter, use it directly
         // otherwise try to find from storedSchoolData state
         let school = schoolName;
         if (!school) {
-          const schoolInfo = storedSchoolData.find(item => item.address === address);
-          school = schoolInfo?.school || 'Unknown School';
+          const schoolInfo = storedSchoolData.find(
+            (item) => item.address === address
+          );
+          school = schoolInfo?.school || "Unknown School";
         }
-        
+
         // Debug log removed(`Geocoding ${address}, school: ${school}`);
-        
+
         // Find the corresponding school info for all additional data
-        const schoolInfo = storedSchoolData.find(item => item.address === address);
-        
+        const schoolInfo = storedSchoolData.find(
+          (item) => item.address === address
+        );
+
         return {
           address,
           school,
@@ -355,28 +634,34 @@ export default function MapPage() {
           ad_name_last: schoolInfo?.ad_name_last,
           ad_email: schoolInfo?.ad_email,
           record_2024: schoolInfo?.record_2024,
-          raw_data: schoolInfo?.raw_data
+          raw_data: schoolInfo?.raw_data,
         };
       }
       return null;
     } catch (error) {
-      console.error('Geocoding error:', error);
+      console.error("Geocoding error:", error);
       return null;
     }
   };
 
   const updateRouteInfo = (result: google.maps.DirectionsResult) => {
     const legs = result.routes[0].legs;
-    const totalTimeSeconds = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
-    const totalDistanceMeters = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+    const totalTimeSeconds = legs.reduce(
+      (sum, leg) => sum + (leg.duration?.value || 0),
+      0
+    );
+    const totalDistanceMeters = legs.reduce(
+      (sum, leg) => sum + (leg.distance?.value || 0),
+      0
+    );
 
     setRouteInfo({
       totalTime: formatDuration(totalTimeSeconds),
       totalDistance: formatDistance(totalDistanceMeters),
-      legs: legs.map(leg => ({
-        duration: leg.duration?.text || '',
-        distance: leg.distance?.text || ''
-      }))
+      legs: legs.map((leg) => ({
+        duration: leg.duration?.text || "",
+        distance: leg.distance?.text || "",
+      })),
     });
   };
 
@@ -394,82 +679,126 @@ export default function MapPage() {
     return `${Math.round(miles)} mi`;
   };
 
-  const calculateRoute = useCallback(async (locs: School[]) => {
-    if (!locs.length || !isLoaded || !isMapLoaded || !window.google || !window.google.maps) return;
+  const calculateRoute = useCallback(
+    async (locs: School[]) => {
+      if (
+        !locs.length ||
+        !isLoaded ||
+        !isMapLoaded ||
+        !window.google ||
+        !window.google.maps
+      )
+        return;
 
-    try {
-      const directionsService = new window.google.maps.DirectionsService();
+      try {
+        const directionsService = new window.google.maps.DirectionsService();
 
-      if (locs.length >= 2) {
-        const origin = locs[0].position || { lat: 0, lng: 0 };
-        const destination = locs[locs.length - 1].position || { lat: 0, lng: 0 };
-        const waypoints = locs.slice(1, -1).map(loc => ({
-          location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
-          stopover: true
-        }));
+        if (locs.length >= 2) {
+          const origin = locs[0].position || { lat: 0, lng: 0 };
+          const destination = locs[locs.length - 1].position || {
+            lat: 0,
+            lng: 0,
+          };
+          const waypoints = locs.slice(1, -1).map((loc) => ({
+            location: new window.google.maps.LatLng(
+              loc.position?.lat || 0,
+              loc.position?.lng || 0
+            ),
+            stopover: true,
+          }));
 
-        const result = await directionsService.route({
-          origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-          destination: new window.google.maps.LatLng(destination.lat, destination.lng),
-          waypoints: waypoints,
-          optimizeWaypoints: false,
-          travelMode: window.google.maps.TravelMode.DRIVING
-        });
+          const result = await directionsService.route({
+            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+            destination: new window.google.maps.LatLng(
+              destination.lat,
+              destination.lng
+            ),
+            waypoints: waypoints,
+            optimizeWaypoints: false,
+            travelMode: window.google.maps.TravelMode.DRIVING,
+          });
 
-        setDirections(result);
-        updateRouteInfo(result);
+          setDirections(result);
+          updateRouteInfo(result);
+        }
+      } catch (error) {
+        console.error("Error calculating route:", error);
       }
-    } catch (error) {
-      console.error('Error calculating route:', error);
-    }
-  }, [isLoaded, isMapLoaded]);
+    },
+    [isLoaded, isMapLoaded]
+  );
 
   const optimizeRoute = async () => {
-    if (locations.length < 2 || !isLoaded || !isMapLoaded || !window.google || !window.google.maps) return;
+    if (
+      locations.length < 2 ||
+      !isLoaded ||
+      !isMapLoaded ||
+      !window.google ||
+      !window.google.maps
+    )
+      return;
     setIsOptimizing(true);
 
     try {
       const directionsService = new window.google.maps.DirectionsService();
 
-      const allWaypoints = locations.slice(1).map(loc => ({
-        location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
-        stopover: true
+      const allWaypoints = locations.slice(1).map((loc) => ({
+        location: new window.google.maps.LatLng(
+          loc.position?.lat || 0,
+          loc.position?.lng || 0
+        ),
+        stopover: true,
       }));
 
       const result = await directionsService.route({
-        origin: new window.google.maps.LatLng(locations[0].position?.lat || 0, locations[0].position?.lng || 0),
-        destination: new window.google.maps.LatLng(locations[0].position?.lat || 0, locations[0].position?.lng || 0),
+        origin: new window.google.maps.LatLng(
+          locations[0].position?.lat || 0,
+          locations[0].position?.lng || 0
+        ),
+        destination: new window.google.maps.LatLng(
+          locations[0].position?.lat || 0,
+          locations[0].position?.lng || 0
+        ),
         waypoints: allWaypoints,
         optimizeWaypoints: true,
-        travelMode: window.google.maps.TravelMode.DRIVING
+        travelMode: window.google.maps.TravelMode.DRIVING,
       });
 
       if (result.routes[0].waypoint_order) {
         const waypointOrder = result.routes[0].waypoint_order;
-        
+
         const optimizedLocations = [
-          ...waypointOrder.map(index => locations[index + 1]),
-          locations[0]
+          ...waypointOrder.map((index) => locations[index + 1]),
+          locations[0],
         ];
 
         let shortestDistance = Number.MAX_VALUE;
         let bestRotation = 0;
-        
+
         for (let i = 0; i < optimizedLocations.length; i++) {
           const rotated = [
             ...optimizedLocations.slice(i),
-            ...optimizedLocations.slice(0, i)
+            ...optimizedLocations.slice(0, i),
           ];
 
           const routeResult = await directionsService.route({
-            origin: new window.google.maps.LatLng(rotated[0].position?.lat || 0, rotated[0].position?.lng || 0),
-            destination: new window.google.maps.LatLng(rotated[rotated.length - 1].position?.lat || 0, rotated[rotated.length - 1].position?.lng || 0),
-            waypoints: rotated.slice(1, -1).map(loc => ({
-              location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
-              stopover: true
+            origin: new window.google.maps.LatLng(
+              rotated[0].position?.lat || 0,
+              rotated[0].position?.lng || 0
+            ),
+            destination: new window.google.maps.LatLng(
+              rotated[rotated.length - 1].position?.lat || 0,
+              rotated[rotated.length - 1].position?.lng || 0
+            ),
+            waypoints: rotated.slice(1, -1).map((loc) => ({
+              location: new window.google.maps.LatLng(
+                loc.position?.lat || 0,
+                loc.position?.lng || 0
+              ),
+              stopover: true,
             })),
             optimizeWaypoints: false,
-            travelMode: window.google.maps.TravelMode.DRIVING
+            travelMode: window.google.maps.TravelMode.DRIVING,
           });
 
           const totalDistance = routeResult.routes[0].legs.reduce(
@@ -485,27 +814,36 @@ export default function MapPage() {
 
         const finalOrder = [
           ...optimizedLocations.slice(bestRotation),
-          ...optimizedLocations.slice(0, bestRotation)
+          ...optimizedLocations.slice(0, bestRotation),
         ];
 
         setLocations(finalOrder);
-        setSelectedAddresses(finalOrder.map(loc => loc.address));
+        setSelectedAddresses(finalOrder.map((loc) => loc.address));
 
         const finalRoute = await directionsService.route({
-          origin: new window.google.maps.LatLng(finalOrder[0].position?.lat || 0, finalOrder[0].position?.lng || 0),
-          destination: new window.google.maps.LatLng(finalOrder[finalOrder.length - 1].position?.lat || 0, finalOrder[finalOrder.length - 1].position?.lng || 0),
-          waypoints: finalOrder.slice(1, -1).map(loc => ({
-            location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
-            stopover: true
+          origin: new window.google.maps.LatLng(
+            finalOrder[0].position?.lat || 0,
+            finalOrder[0].position?.lng || 0
+          ),
+          destination: new window.google.maps.LatLng(
+            finalOrder[finalOrder.length - 1].position?.lat || 0,
+            finalOrder[finalOrder.length - 1].position?.lng || 0
+          ),
+          waypoints: finalOrder.slice(1, -1).map((loc) => ({
+            location: new window.google.maps.LatLng(
+              loc.position?.lat || 0,
+              loc.position?.lng || 0
+            ),
+            stopover: true,
           })),
           optimizeWaypoints: false,
-          travelMode: window.google.maps.TravelMode.DRIVING
+          travelMode: window.google.maps.TravelMode.DRIVING,
         });
 
         setDirections(finalRoute);
       }
     } catch (error) {
-      console.error('Error optimizing route:', error);
+      console.error("Error optimizing route:", error);
     }
     setIsOptimizing(false);
   };
@@ -513,7 +851,7 @@ export default function MapPage() {
   const reverseOrder = () => {
     const reversedLocations = [...locations].reverse();
     setLocations(reversedLocations);
-    setSelectedAddresses(reversedLocations.map(loc => loc.address));
+    setSelectedAddresses(reversedLocations.map((loc) => loc.address));
     calculateRoute(reversedLocations);
   };
 
@@ -526,11 +864,11 @@ export default function MapPage() {
 
       const newLocations = arrayMove(locations, oldIndex, newIndex);
       setLocations(newLocations);
-      
+
       // Update selected addresses but maintain the association with schools
-      const newAddresses = newLocations.map(loc => loc.address);
+      const newAddresses = newLocations.map((loc) => loc.address);
       setSelectedAddresses(newAddresses);
-      
+
       calculateRoute(newLocations);
     }
   };
@@ -539,11 +877,11 @@ export default function MapPage() {
     const newLocations = [...locations];
     newLocations.splice(index, 1);
     setLocations(newLocations);
-    
+
     // Update selected addresses
-    const newAddresses = newLocations.map(loc => loc.address);
+    const newAddresses = newLocations.map((loc) => loc.address);
     setSelectedAddresses(newAddresses);
-    
+
     if (newLocations.length >= 2) {
       calculateRoute(newLocations);
     } else {
@@ -552,22 +890,20 @@ export default function MapPage() {
     }
   };
 
-
-
   useEffect(() => {
     const loadAddresses = async () => {
       try {
-        const addresses = localStorage.getItem('selectedAddresses');
-        const schoolDataStr = localStorage.getItem('schoolData');
-        
+        const addresses = localStorage.getItem("selectedAddresses");
+        const schoolDataStr = localStorage.getItem("schoolData");
+
         if (!addresses || !isLoaded || !window.google || !window.google.maps) {
           setIsLoading(false);
           return;
         }
-        
+
         const parsedAddresses = JSON.parse(addresses);
         setSelectedAddresses(parsedAddresses);
-        
+
         // Try to load school data from localStorage
         let schoolData: School[] = [];
         try {
@@ -575,19 +911,19 @@ export default function MapPage() {
             schoolData = JSON.parse(schoolDataStr);
           }
         } catch (e) {
-          console.error('Error parsing school data:', e);
+          console.error("Error parsing school data:", e);
         }
-        
+
         setStoredSchoolData(schoolData);
-        
+
         // Wait for state to update before proceeding
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         const geocodedLocations = await Promise.all(
           parsedAddresses.map(async (address: string) => {
             // Find matching school info directly
-            const schoolInfo = schoolData.find(s => s.address === address);
-            
+            const schoolInfo = schoolData.find((s) => s.address === address);
+
             // Get geocoded location with position data
             const geocodeResponse = await fetch(
               `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
@@ -595,16 +931,16 @@ export default function MapPage() {
               )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
             );
             const geocodeData = await geocodeResponse.json();
-            
+
             if (!geocodeData.results || !geocodeData.results[0]) {
-              console.error('No geocode results for address:', address);
+              console.error("No geocode results for address:", address);
               return null;
             }
-            
+
             // Combine the geocode position with all the school metadata
             return {
               address,
-              school: schoolInfo?.school || 'Unknown School',
+              school: schoolInfo?.school || "Unknown School",
               position: geocodeData.results[0].geometry.location,
               // Include additional fields from the school info
               county: schoolInfo?.county,
@@ -631,16 +967,18 @@ export default function MapPage() {
               ad_name_last: schoolInfo?.ad_name_last,
               ad_email: schoolInfo?.ad_email,
               record_2024: schoolInfo?.record_2024,
-              raw_data: schoolInfo?.raw_data
+              raw_data: schoolInfo?.raw_data,
             };
           })
         );
 
-        const validLocations = geocodedLocations.filter((loc): loc is School => loc !== null);
+        const validLocations = geocodedLocations.filter(
+          (loc): loc is School => loc !== null
+        );
         setLocations(validLocations);
         calculateRoute(validLocations);
       } catch (err) {
-        console.error('Error loading addresses:', err);
+        console.error("Error loading addresses:", err);
       } finally {
         setIsLoading(false);
       }
@@ -655,11 +993,11 @@ export default function MapPage() {
   useEffect(() => {
     if (locations.length > 0) {
       // Update the selected addresses in localStorage
-      const addresses = locations.map(loc => loc.address);
-      localStorage.setItem('selectedAddresses', JSON.stringify(addresses));
-      
+      const addresses = locations.map((loc) => loc.address);
+      localStorage.setItem("selectedAddresses", JSON.stringify(addresses));
+
       // Also update the school data to match the current order
-      const schoolData = locations.map(loc => ({
+      const schoolData = locations.map((loc) => ({
         school: loc.school,
         address: loc.address,
         county: loc.county,
@@ -686,10 +1024,11 @@ export default function MapPage() {
         ad_name_last: loc.ad_name_last,
         ad_email: loc.ad_email,
         record_2024: loc.record_2024,
-        raw_data: storedSchoolData.find(s => s.address === loc.address)?.raw_data
+        raw_data: storedSchoolData.find((s) => s.address === loc.address)
+          ?.raw_data,
       }));
-      
-      localStorage.setItem('schoolData', JSON.stringify(schoolData));
+
+      localStorage.setItem("schoolData", JSON.stringify(schoolData));
     }
   }, [locations, storedSchoolData]);
 
@@ -697,18 +1036,20 @@ export default function MapPage() {
     <div className="flex flex-col h-screen">
       {/* Main content with scrolling */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-4 pb-20"> {/* Added pb-20 for bottom padding */}
+        <div className="w-full">
+          {" "}
+          {/* Added pb-20 for bottom padding */}
           {/* Controls section - moved from fixed header to scrollable content */}
-          <div className="mb-6 top-0 z-10 pt-2 pb-4 border-b border-gray-100">
+          <div className="bg-white p-4 mb-3">
             <div className="flex flex-wrap gap-4 items-start justify-between">
-               {/* Print component - only show if user has football package */}
-               <HighSchoolPrintComponent
-                 locations={locations}
-                 storedSchoolData={storedSchoolData}
-                 pdfContentRef={pdfContentRef}
-                 hasFootballPackage={hasFootballPackage}
-               />
-              
+              {/* Print component - only show if user has football package */}
+              <HighSchoolPrintComponent
+                locations={locations}
+                storedSchoolData={storedSchoolData}
+                pdfContentRef={pdfContentRef}
+                hasFootballPackage={hasFootballPackage}
+              />
+
               <div className="flex flex-wrap gap-4 items-center">
                 <button
                   disabled={isOptimizing || locations.length < 2}
@@ -736,7 +1077,7 @@ export default function MapPage() {
                   <span className="!text-white">Reverse Order</span>
                 </button>
                 <button
-                  onClick={() => router.push('/road-planner')}
+                  onClick={() => router.push("/road-planner")}
                   className="px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 border border-gray-200"
                 >
                   Back to Search
@@ -744,25 +1085,27 @@ export default function MapPage() {
               </div>
             </div>
           </div>
-          
           {/* PDF content begins here - this is what we'll capture for the PDF */}
           <div ref={pdfContentRef}>
             {isLoading || !isLoaded || !isMapLoaded ? (
               <div className="text-center py-8">Loading map...</div>
             ) : (
-              <div className="space-y-6">
-                <div className="border rounded-lg overflow-hidden">
+              <div className="space-y-6 relative">
+                <div className="bg-white p-4 overflow-hidden">
                   <GoogleMap
-                    mapContainerStyle={{ ...mapContainerStyle, height: '500px' }}
+                    mapContainerStyle={{
+                      ...mapContainerStyle,
+                      height: "545px",
+                    }}
                     zoom={4}
                     center={center}
                     options={{
                       mapTypeControl: true,
                       streetViewControl: true,
-                      mapTypeId: 'roadmap',
+                      mapTypeId: "roadmap",
                       fullscreenControl: true,
                       zoomControl: true,
-                      gestureHandling: 'greedy'
+                      gestureHandling: "greedy",
                     }}
                   >
                     {directions ? (
@@ -771,94 +1114,98 @@ export default function MapPage() {
                         options={{
                           suppressMarkers: true,
                           polylineOptions: {
-                            strokeColor: '#1E40AF',
-                            strokeWeight: 5,
-                            strokeOpacity: 0.7
-                          }
+                            strokeColor: "#1C1D4D",
+                            strokeWeight: 4,
+                            strokeOpacity: 1,
+                          },
                         }}
                       />
                     ) : null}
-                    {locations.map((location, index) => (
-                      location.position && (
-                        <Fragment key={`marker-${index}`}>
-                          <MarkerF
-                            position={location.position}
-                            label={{
-                              text: `${index + 1}`,
-                              color: 'white',
-                              fontWeight: 'bold'
-                            }}
-                            icon={{
-                              path: window.google.maps.SymbolPath.CIRCLE,
-                              scale: 14,
-                              fillColor: '#1E40AF',
-                              fillOpacity: 1,
-                              strokeColor: 'white',
-                              strokeWeight: 2
-                            }}
-                            title={`${index + 1}. ${location.school}`}
-                          />
-                          
-                          {/* School label */}
-                          <OverlayViewF
-                            position={location.position}
-                            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                            getPixelPositionOffset={(width, height) => ({
-                              x: -width / 2,
-                              y: -height - 30
-                            })}
-                          >
-                            <div 
-                              className="school-label-text bg-white px-2 py-1 rounded shadow-md text-sm font-medium mb-1"
-                              style={{ minWidth: 'max-content' }}
+                    {locations.map(
+                      (location, index) =>
+                        location.position && (
+                          <Fragment key={`marker-${index}`}>
+                            <MarkerF
+                              position={location.position}
+                              label={{
+                                text: `${index + 1}`,
+                                color: "#1C1D4D",
+                                fontWeight: "bold",
+                              }}
+                              icon={{
+                                url: "/svgicons/map-dot.svg",
+                                scaledSize: window.google && window.google.maps ? new window.google.maps.Size(28, 28) : undefined,
+                                anchor: window.google && window.google.maps ? new window.google.maps.Point(14, 14) : undefined,
+                              }}
+                              title={`${index + 1}. ${location.school}`}
+                            />
+
+                            {/* School label */}
+                            <OverlayViewF
+                              position={location.position}
+                              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                              getPixelPositionOffset={(width, height) => ({
+                                x: -width / 2,
+                                y: -height - 30,
+                              })}
                             >
-                              {location.school}
-                            </div>
-                          </OverlayViewF>
-                        </Fragment>
-                      )
-                    ))}
+                              <div
+                                className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-[#FF7525] pr-3 !text-base italic font-medium text-[#fff]"
+                                style={{ minWidth: "max-content" }}
+                              >
+                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full">
+                                  <img src="/svgicons/map-img.png" alt="X Feed" height={38} />
+                                </div>
+                                <h6 className="flex flex-col text-white items-start justify-start mb-0 text-[16px] !font-semibold !leading-1">
+                                {location.school}
+                                <span className="text-white bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">4.5</span>
+                                </h6>
+                              </div>
+                            </OverlayViewF>
+                          </Fragment>
+                        )
+                    )}
                   </GoogleMap>
                 </div>
 
                 {routeInfo && (
-                  <div className="text-center p-4 bg-gray-50 rounded-lg border">
+                  <div className="text-left p-4 bg-white/60 w-64 border-2 border-[#1C1D4D] border-solid absolute top-[380px] left-[31px] z-10">
                     <div className="text-2xl font-bold text-gray-700">
-                      Total Drive Time: {routeInfo.totalTime}
+                      Total Drive Time <br /> {routeInfo.totalTime}
                     </div>
                     <div className="text-gray-600 mt-1">
-                      Total Distance: {routeInfo.totalDistance}
+                      {routeInfo.totalDistance}
                     </div>
                   </div>
                 )}
 
-                 <div className="mt-6">
-                   <DndContext
-                     sensors={sensors}
-                     collisionDetection={closestCenter}
-                     onDragEnd={handleDragEnd}
-                   >
-                     <SortableContext
-                       items={locations.map((_, index) => index)}
-                       strategy={verticalListSortingStrategy}
-                     >
-                       <div className="space-y-2">
-                         {locations.map((location, index) => (
-                           <SortableItem
-                             key={index}
-                             location={location}
-                             index={index}
-                             routeInfo={routeInfo || undefined}
-                             totalLocations={locations.length}
-                             onRemove={handleRemoveLocation}
-                             userDetails={userDetails}
-                             hasFootballPackage={hasFootballPackage}
-                           />
-                         ))}
-                       </div>
-                     </SortableContext>
-                   </DndContext>
-                 </div>
+                <div className="map-schools-container mx-8 !mt-[-50px]">
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={locations.map((_, index) => index)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {locations.map((location, index) => (
+                          <SortableItem
+                            key={index}
+                            location={location}
+                            index={index}
+                            routeInfo={routeInfo || undefined}
+                            totalLocations={locations.length}
+                            onRemove={handleRemoveLocation}
+                            userDetails={userDetails}
+                            hasFootballPackage={hasFootballPackage}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </div>
               </div>
             )}
 
@@ -883,8 +1230,8 @@ export default function MapPage() {
           padding: 4px 8px !important;
           border-radius: 4px !important;
           border: 1px solid #ccc !important;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-          margin-top: 0 !important; 
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+          margin-top: 0 !important;
           white-space: nowrap !important;
           z-index: 100 !important;
           font-size: 12px !important;
@@ -970,13 +1317,13 @@ export default function MapPage() {
 }
 
 const mapContainerStyle = {
-  width: '100%',
-  height: '600px'
+  width: "100%",
+  height: "600px",
 };
 
 const center = {
   lat: 39.8283, // Center of US
-  lng: -98.5795
+  lng: -98.5795,
 };
 
-const libraries: Libraries = ['places'];
+const libraries: Libraries = ["places"];

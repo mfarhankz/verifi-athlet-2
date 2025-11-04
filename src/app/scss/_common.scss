@@ -932,7 +932,6 @@ button:hover {
 .map-schools-container {
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(5px);
-  margin: 17px;
   padding: 17px;
 
   .card-list {
@@ -940,7 +939,7 @@ button:hover {
     background: #fff;
     display: flex;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 122px !important;
     .school-icon {
       border: 1px solid #c8ff24;
       background: rgba(200, 255, 36, 0.1);
@@ -981,8 +980,7 @@ button:hover {
       li {
         display: flex;
         flex-direction: column;
-        width: 110px;
-        background-color: #f4f4f6;
+        width: 130px;
         text-align: center;
         padding: 8px 0 4px 0;
         position: relative;
@@ -1014,5 +1012,32 @@ button:hover {
         }
       }
     }
+  }
+
+  .mile-flage {
+    background: url(/svgicons/mile-flage.svg);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    width: 60px;
+    height: 70px;
+    position: absolute;
+    top: -46px;
+    right: -42px;
+    display: inline-block;
+  }
+  .mile-car {
+    width: 96%;
+    display: block;
+    height: 40px;
+    border-bottom: 3px dashed #d4d4d4;
+    position: absolute;
+    top: -46px;
+    left: -12px;
+    z-index: 99;
+    background: url(/svgicons/mile-car.svg);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: left;
   }
 }
