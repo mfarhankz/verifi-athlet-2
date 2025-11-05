@@ -885,7 +885,7 @@ button:hover {
   cursor: pointer !important;
 }
 .ant-btn {
-  border: 1px solid rgba(28, 29, 77, 0.4) !important;
+  // border: 1px solid rgba(28, 29, 77, 0.4) !important;
   border-radius: 0 !important;
 }
 .p-0 {
@@ -1012,6 +1012,13 @@ button:hover {
         }
       }
     }
+
+    .gradient-text {
+      background: -webkit-linear-gradient(#6affab, #c8ff24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    
   }
 
   .mile-flage {
@@ -1040,4 +1047,65 @@ button:hover {
     background-repeat: no-repeat;
     background-position: left;
   }
+}
+
+.icon-svg-optimize {
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px;
+  background: url(/svgicons/road-location-01.svg) no-repeat center center;
+}
+
+.icon-svg-route {
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px;
+  background: url(/svgicons/arrow-left-right.svg) no-repeat center center;
+}
+
+.icon-svg-print {
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px;
+  background: url(/svgicons/pdf-01.svg) no-repeat center center;
+}
+
+.icon-svg-add-location {
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px;
+  background: url(/svgicons/location-add-01.svg) no-repeat center center;
+}
+
+.icon-svg-left-arrow {
+  width: 15px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px;
+  background: url(/svgicons/left-arrow.svg) no-repeat center center;
+}
+
+.custom-select {
+  .ant-select-selector {
+    border: 1px solid #d9d9d9 !important;
+  }
+  .ant-select-selection-search, .ant-select-selection-placeholder {
+    padding-inline-end: 0 !important;
+    color: #1C1D4D !important;
+  }
+}
+.custom-input {
+  color: #1C1D4D !important;
+  border-radius: 0;
+  padding: 0 11px;
+  height: 42px;
 }

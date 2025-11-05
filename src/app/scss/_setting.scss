@@ -307,6 +307,39 @@ h2.setting-heading {
     opacity: 0.8;
   }
 }
+.ant-btn-text {
+  height: 42px;
+  border: 1px solid rgba(28, 29, 77, 0.20);
+  background: --bg-white;
+  box-shadow: 0 2px 2px 0 rgba(0, 0, 0, 0.10);
+  min-width: 80px;
+  padding: 11px !important;
+  span {
+    color: #1C1D4D;
+    font-size: 16px;
+    font-style: italic;
+    font-weight: 600;
+    line-height: normal;
+    letter-spacing: -0.32px;
+  }
+  &:hover {
+    background-color:  rgba(0, 0, 0, 0.10) !important;
+    opacity: 0.8;
+  }
+}
+
+.ant-btn-link {
+  color: var(--primary) !important;
+  border: none !important;
+  font-size: 22px;
+  font-style: italic;
+  font-weight: 600;
+  line-height: normal;
+  letter-spacing: -0.32px;
+  &:hover {
+    color: var(--primary) !important;
+  }
+}
 .ant-btn-color-dangerous {
   display: flex;
   padding: 0;
