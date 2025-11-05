@@ -1193,20 +1193,42 @@ export default function MapPage() {
                                 <div className="space-y-2 min-w-[200px]">
                                   <div>
                                     <h4 className="font-semibold text-sm mb-1">{location.school}</h4>
-                                    <p className="text-xs text-gray-600">{location.address}</p>
+                                    <p className="text-xs text-gray-600">
+                                      {location.address} <br />
+                                      {(location.county || location.state) && (
+                                        <div>
+                                          {location.county && <span>{location.county}</span>}
+                                          {location.county && location.state && <span>, </span>}
+                                          {location.state && <span>{location.state}</span>}
+                                        </div>
+                                      )}
+                                      <br />
+                                      {location.school_phone}
+                                      <br />
+                                      {location.ad_email}
+                                    </p>
                                   </div>
-                                  {location.head_coach_first && hasFootballPackage && (
+
+                                  <div className="text-xs flex items-center justify-between">
+                                    <div>
+                                    {location.head_coach_first && hasFootballPackage && (
                                     <div className="text-xs">
                                       <span className="font-medium">Coach: </span>
                                       {location.head_coach_first} {location.head_coach_last}
                                     </div>
                                   )}
-                                  {location.school_phone && (
+                                    </div>
+                                    <div>
+                                    {location.school_phone && (
                                     <div className="text-xs">
                                       <span className="font-medium">Phone: </span>
                                       {location.school_phone}
                                     </div>
                                   )}
+                                    </div>
+                                  </div>
+                                  
+                                  
                                 </div>
                               }
                               title={null}
@@ -1243,13 +1265,28 @@ export default function MapPage() {
                 </div>
 
                 {routeInfo && (
-                  <div className="text-left p-4 bg-white/60 w-64 border-2 border-[#1C1D4D] border-solid absolute top-[380px] left-[31px] z-10">
-                    <div className="text-2xl font-bold text-gray-700">
-                      Total Drive Time <br /> {routeInfo.totalTime}
+                  <div className="text-left p-2 bg-white/60 w-[290px] border-2 border-[#1C1D4D] border-solid absolute top-[370px] left-[31px] z-10">
+                    <div className="text-2xl font-bold text-gray-700 flex items-center justify-center">
+                    <img
+                        src="/svgicons/big-flag.svg"
+                        alt="X Feed"
+                        height={85}
+                        className="mr-2"
+                      />
+                    <div className="text-gray-600 mt-1 text-right">
+                       <h5 className="font-semibold !text-[22px] italic mb-1">Total Drive Time</h5>
+                       <h3 className="!text-[30px] font-bold italic mb-2">{routeInfo.totalTime}</h3>
+                       <h6 className="font-semibold !text-[22px] italic flex items-center justify-end"><img
+                        src="/svgicons/mile-car.svg"
+                        alt="X Feed"
+                        height={20}
+                        className="mr-2"
+                      />
+                      {routeInfo.totalDistance}</h6>
                     </div>
-                    <div className="text-gray-600 mt-1">
-                       {routeInfo.totalDistance}
+                      
                     </div>
+                    
                   </div>
                 )}
 
