@@ -763,7 +763,7 @@ export default function RoadPlannerPage() {
         </div>
       </div>
 
-      <div className="map-schools-container">
+      {/* <div className="map-schools-container">
         <div className="card-list flex justify-between">
           <div className="flex flex-col gap-2">
             <div className="flex gap-2">
@@ -958,7 +958,7 @@ export default function RoadPlannerPage() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
       
       {/* Main content container with relative positioning */}
       <div className="flex-1 overflow-hidden flex flex-col relative">

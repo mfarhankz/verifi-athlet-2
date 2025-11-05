@@ -35,6 +35,7 @@ import { useUser } from "@/contexts/CustomerContext";
 import { formatPhoneNumber } from "@/utils/utils";
 import { getPackageIdsBySport } from "@/lib/queries";
 import HighSchoolPrintComponent from "@/components/HighSchoolPrintComponent";
+import { Button, Input, Select } from "antd";
 
 // Helper function to determine score color
 function getScoreColor(score: number | undefined | null): string {
@@ -1040,49 +1041,72 @@ export default function MapPage() {
           {" "}
           {/* Added pb-20 for bottom padding */}
           {/* Controls section - moved from fixed header to scrollable content */}
-          <div className="bg-white p-4 mb-3">
-            <div className="flex flex-wrap gap-4 items-start justify-between">
-              {/* Print component - only show if user has football package */}
-              <HighSchoolPrintComponent
+          <div className="flex items-center justify-between bg-white p-4 mb-3">
+            
+            <Button
+                 type="text"
+                 onClick={() => router.push("/road-planner")}
+
+               >
+                 Map Route
+               </Button>
+            <div className="flex items-center justify-end gap-2">
+            
+              <Button
+                 type="text"
+                 disabled={isOptimizing || locations.length < 2}
+                 onClick={optimizeRoute}
+               >
+                 {isOptimizing ? (
+                  <>
+                    Optimizing...
+                  </>
+                ) : (
+                  <>
+                    Optimize Route
+                  </>
+                )}
+               </Button>
+
+              <Button
+                 type="text"
+                 disabled={locations.length < 2}
+                onClick={reverseOrder}
+               >
+                 Reverse Order
+               </Button>
+              
+              <Button
+                 type="text"
+                 onClick={() => true}
+               >
+                 Print PDF
+               </Button>
+              {/* <HighSchoolPrintComponent
                 locations={locations}
                 storedSchoolData={storedSchoolData}
                 pdfContentRef={pdfContentRef}
                 hasFootballPackage={hasFootballPackage}
-              />
+              /> */}
 
-              <div className="flex flex-wrap gap-4 items-center">
-                <button
-                  disabled={isOptimizing || locations.length < 2}
-                  onClick={optimizeRoute}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-green-600 flex items-center gap-2"
-                >
-                  {isOptimizing ? (
-                    <>
-                      <span className="animate-spin inline-block">⟳</span>
-                      <span className="!text-white">Optimizing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>⟲</span>
-                      <span className="!text-white">Optimize Route</span>
-                    </>
-                  )}
-                </button>
-                <button
-                  disabled={locations.length < 2}
-                  onClick={reverseOrder}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600 flex items-center gap-2"
-                >
-                  <span>↔</span>
-                  <span className="!text-white">Reverse Order</span>
-                </button>
-                <button
-                  onClick={() => router.push("/road-planner")}
-                  className="px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 border border-gray-200"
-                >
-                  Back to Search
-                </button>
-              </div>
+          <Select
+            placeholder="Saved Journeys"
+            style={{ width: '120px' }}
+            options={[
+              { value: 'Call', label: 'Call' },
+              { value: 'Text', label: 'Text' },
+              { value: 'Email', label: 'Email' }
+            ]}
+          />
+          <Input placeholder="Enter Address" style={{ width: '120px' }} />
+          <Input placeholder="Name Journey" style={{ width: '120px' }} />
+      
+              <Button
+                 type="primary"
+                 onClick={() => true}
+               >
+                 Save
+               </Button>
             </div>
           </div>
           {/* PDF content begins here - this is what we'll capture for the PDF */}
@@ -1134,8 +1158,14 @@ export default function MapPage() {
                               }}
                               icon={{
                                 url: "/svgicons/map-dot.svg",
-                                scaledSize: window.google && window.google.maps ? new window.google.maps.Size(28, 28) : undefined,
-                                anchor: window.google && window.google.maps ? new window.google.maps.Point(14, 14) : undefined,
+                                scaledSize:
+                                  window.google && window.google.maps
+                                    ? new window.google.maps.Size(28, 28)
+                                    : undefined,
+                                anchor:
+                                  window.google && window.google.maps
+                                    ? new window.google.maps.Point(14, 14)
+                                    : undefined,
                               }}
                               title={`${index + 1}. ${location.school}`}
                             />
@@ -1154,11 +1184,17 @@ export default function MapPage() {
                                 style={{ minWidth: "max-content" }}
                               >
                                 <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full">
-                                  <img src="/svgicons/map-img.png" alt="X Feed" height={38} />
+                                  <img
+                                    src="/svgicons/map-img.png"
+                                    alt="X Feed"
+                                    height={38}
+                                  />
                                 </div>
                                 <h6 className="flex flex-col text-white items-start justify-start mb-0 text-[16px] !font-semibold !leading-1">
-                                {location.school}
-                                <span className="text-white bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">4.5</span>
+                                  {location.school}
+                                  <span className="text-white bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
+                                    4.5
+                                  </span>
                                 </h6>
                               </div>
                             </OverlayViewF>
