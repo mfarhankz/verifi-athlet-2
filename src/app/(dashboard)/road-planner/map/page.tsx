@@ -75,7 +75,7 @@ function SortableItem({
   userDetails,
   hasFootballPackage,
 }: {
-  location: School; 
+  location: School;
   index: number;
   routeInfo?: RouteInfo;
   totalLocations: number;
@@ -101,11 +101,11 @@ function SortableItem({
           {...listeners}
         >
           <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                <div className="school-icon">
-                  <img src="/svgicons/school-icon.svg" alt="X Feed" height={89} />
-                </div>
-                <div className="flex flex-col text-left mt-1">
+            <div className="flex gap-2">
+              <div className="school-icon">
+                <img src="/svgicons/school-icon.svg" alt="X Feed" height={89} />
+              </div>
+              <div className="flex flex-col text-left mt-1">
                 <h4 className="mb-1">
                   {location.school}
                   {location.private_public && (
@@ -120,7 +120,7 @@ function SortableItem({
                       {location.private_public}
                     </span>
                   )}
-                  </h4>
+                </h4>
                 <div className="mb-0">
                   {location.address} <br />
                   {(location.county || location.state) && (
@@ -131,41 +131,41 @@ function SortableItem({
                     </div>
                   )}
                 </div>
-                </div>
               </div>
-              <div className="flex gap-2 mx-3 mb-3">
-                <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                  <h6 className="mb-1">Liam James</h6>
-                  <p className="mb-0 !leading-5">
-                    D3 <br />
-                    2025
-                  </p>
-                </div>
-
-                <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                  <h6 className="mb-1">Moxen Galin</h6>
-                  <p className="mb-0 !leading-5">
-                    D3 <br />
-                    2025
-                  </p>
-                </div>
-
-                <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                  <h6 className="mb-1">Richard Mark</h6>
-                  <p className="mb-0 !leading-5">
-                    D3 <br />
-                    2025
-                  </p>
-                </div>
-
-                <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                  <h6 className="mb-1">Alex James</h6>
-                  <p className="mb-0 !leading-5">
-                    D3 <br />
-                    2025
-                  </p>
-                </div>
+            </div>
+            <div className="flex gap-2 mx-3 mb-3">
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Liam James</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
               </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Moxen Galin</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Richard Mark</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+
+              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
+                <h6 className="mb-1">Alex James</h6>
+                <p className="mb-0 !leading-5">
+                  D3 <br />
+                  2025
+                </p>
+              </div>
+            </div>
           </div>
           <div className="flex gap-2 p-2">
             <div className="flex flex-col text-left w-[650px]">
@@ -181,7 +181,7 @@ function SortableItem({
                   </div>
                 )}
                 <div className="text-lg bg-[#000] px-2">
-                  <img src="/x-logo.svg" alt="X Feed" height={24} />  
+                  <img src="/x-logo.svg" alt="X Feed" height={24} />
                   <span className="gradient-text ml-2">@virginiabeach</span>
                 </div>
                 <div
@@ -192,14 +192,14 @@ function SortableItem({
                     onRemove(index);
                   }}
                 >
-                <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
+                  <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
                 </div>
               </div>
               <div className="flex justify-between gap-2">
                 <div>
                   <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
-                Coach
-                </span>
+                    Coach
+                  </span>
                   <h6 className="mb-0 !text-lg leading-3">
                     {(location.head_coach_first || location.head_coach_last) &&
                       hasFootballPackage && (
@@ -257,12 +257,12 @@ function SortableItem({
                     {location.coach_twitter_handle && (
                       <>Twitter {location.coach_twitter_handle}</>
                     )}
-                </p>
+                  </p>
                 </div>
                 <div className="text-right">
                   <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
-                AD
-                </span>
+                    AD
+                  </span>
                   <h6 className="mb-0 !text-lg leading-3">
                     {location.ad_name_first} {location.ad_name_last}
                   </h6>
@@ -272,7 +272,7 @@ function SortableItem({
                     {location.school_phone && (
                       <>School {location.school_phone}</>
                     )}
-                </p>
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2">
@@ -286,43 +286,43 @@ function SortableItem({
                       {location.score_college_player !== undefined && (
                         <>
                           <h6>{location.score_college_player}</h6>
-                    <p>College</p>
+                          <p>College</p>
                         </>
                       )}
-                  </li>
-                  <li>
+                    </li>
+                    <li>
                       {location.score_d1_producing !== undefined && (
                         <>
                           <h6>{location.score_d1_producing}</h6>
-                    <p>D1</p>
+                          <p>D1</p>
                         </>
                       )}
-                  </li>
-                  <li>
+                    </li>
+                    <li>
                       {location.score_team_quality !== undefined && (
                         <>
                           <h6>{location.score_team_quality}</h6>
-                    <p>Team</p>
+                          <p>Team</p>
                         </>
                       )}
-                  </li>
-                  <li>
+                    </li>
+                    <li>
                       {location.score_income !== undefined && (
                         <>
                           <h6>{location.score_income}</h6>
-                    <p>Income</p>
+                          <p>Income</p>
                         </>
                       )}
-                  </li>
-                  <li>
+                    </li>
+                    <li>
                       {location.score_academics !== undefined && (
                         <>
                           <h6>{location.score_academics}</h6>
-                    <p>Acad</p>
+                          <p>Acad</p>
                         </>
                       )}
-                  </li>
-                </ul>
+                    </li>
+                  </ul>
                 )}
               </div>
             </div>
@@ -340,7 +340,7 @@ function SortableItem({
                   <span className="mile-car"></span>
                   Next Stop {routeInfo.legs[index].duration} (
                   {routeInfo.legs[index].distance})
-      </div>
+                </div>
               )}
             </div>
           )}
@@ -542,12 +542,14 @@ export default function MapPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [popoverOpen, setPopoverOpen] = useState<{ [key: number]: boolean }>({});
+  const [popoverOpen, setPopoverOpen] = useState<{ [key: number]: boolean }>(
+    {}
+  );
   const mapContentRef = useRef<HTMLDivElement>(null);
   const pdfContentRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const userDetails = useUser();
-  
+
   // Check if user has any football package to determine if coach info should be shown
   const footballPackageIds = getPackageIdsBySport("fb");
   const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) =>
@@ -581,7 +583,7 @@ export default function MapPage() {
     schoolName: string = ""
   ): Promise<School | null> => {
     if (!isLoaded) return null;
-    
+
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
@@ -589,7 +591,7 @@ export default function MapPage() {
         )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
       );
       const data = await response.json();
-      
+
       if (data.results && data.results[0]) {
         // If schoolName is provided via parameter, use it directly
         // otherwise try to find from storedSchoolData state
@@ -600,14 +602,14 @@ export default function MapPage() {
           );
           school = schoolInfo?.school || "Unknown School";
         }
-        
+
         // Debug log removed(`Geocoding ${address}, school: ${school}`);
-        
+
         // Find the corresponding school info for all additional data
         const schoolInfo = storedSchoolData.find(
           (item) => item.address === address
         );
-        
+
         return {
           address,
           school,
@@ -693,11 +695,11 @@ export default function MapPage() {
       )
         return;
 
-    try {
-      const directionsService = new window.google.maps.DirectionsService();
+      try {
+        const directionsService = new window.google.maps.DirectionsService();
 
-      if (locs.length >= 2) {
-        const origin = locs[0].position || { lat: 0, lng: 0 };
+        if (locs.length >= 2) {
+          const origin = locs[0].position || { lat: 0, lng: 0 };
           const destination = locs[locs.length - 1].position || {
             lat: 0,
             lng: 0,
@@ -708,25 +710,25 @@ export default function MapPage() {
               loc.position?.lng || 0
             ),
             stopover: true,
-        }));
+          }));
 
-        const result = await directionsService.route({
-          origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+          const result = await directionsService.route({
+            origin: new window.google.maps.LatLng(origin.lat, origin.lng),
             destination: new window.google.maps.LatLng(
               destination.lat,
               destination.lng
             ),
-          waypoints: waypoints,
-          optimizeWaypoints: false,
+            waypoints: waypoints,
+            optimizeWaypoints: false,
             travelMode: window.google.maps.TravelMode.DRIVING,
-        });
+          });
 
-        setDirections(result);
-        updateRouteInfo(result);
-      }
-    } catch (error) {
+          setDirections(result);
+          updateRouteInfo(result);
+        }
+      } catch (error) {
         console.error("Error calculating route:", error);
-    }
+      }
     },
     [isLoaded, isMapLoaded]
   );
@@ -769,7 +771,7 @@ export default function MapPage() {
 
       if (result.routes[0].waypoint_order) {
         const waypointOrder = result.routes[0].waypoint_order;
-        
+
         const optimizedLocations = [
           ...waypointOrder.map((index) => locations[index + 1]),
           locations[0],
@@ -777,7 +779,7 @@ export default function MapPage() {
 
         let shortestDistance = Number.MAX_VALUE;
         let bestRotation = 0;
-        
+
         for (let i = 0; i < optimizedLocations.length; i++) {
           const rotated = [
             ...optimizedLocations.slice(i),
@@ -867,11 +869,11 @@ export default function MapPage() {
 
       const newLocations = arrayMove(locations, oldIndex, newIndex);
       setLocations(newLocations);
-      
+
       // Update selected addresses but maintain the association with schools
       const newAddresses = newLocations.map((loc) => loc.address);
       setSelectedAddresses(newAddresses);
-      
+
       calculateRoute(newLocations);
     }
   };
@@ -880,11 +882,11 @@ export default function MapPage() {
     const newLocations = [...locations];
     newLocations.splice(index, 1);
     setLocations(newLocations);
-    
+
     // Update selected addresses
     const newAddresses = newLocations.map((loc) => loc.address);
     setSelectedAddresses(newAddresses);
-    
+
     if (newLocations.length >= 2) {
       calculateRoute(newLocations);
     } else {
@@ -898,15 +900,15 @@ export default function MapPage() {
       try {
         const addresses = localStorage.getItem("selectedAddresses");
         const schoolDataStr = localStorage.getItem("schoolData");
-        
+
         if (!addresses || !isLoaded || !window.google || !window.google.maps) {
           setIsLoading(false);
           return;
         }
-        
+
         const parsedAddresses = JSON.parse(addresses);
         setSelectedAddresses(parsedAddresses);
-        
+
         // Try to load school data from localStorage
         let schoolData: School[] = [];
         try {
@@ -916,9 +918,9 @@ export default function MapPage() {
         } catch (e) {
           console.error("Error parsing school data:", e);
         }
-        
+
         setStoredSchoolData(schoolData);
-        
+
         // Wait for state to update before proceeding
         await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -926,7 +928,7 @@ export default function MapPage() {
           parsedAddresses.map(async (address: string) => {
             // Find matching school info directly
             const schoolInfo = schoolData.find((s) => s.address === address);
-            
+
             // Get geocoded location with position data
             const geocodeResponse = await fetch(
               `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
@@ -934,12 +936,12 @@ export default function MapPage() {
               )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
             );
             const geocodeData = await geocodeResponse.json();
-            
+
             if (!geocodeData.results || !geocodeData.results[0]) {
               console.error("No geocode results for address:", address);
               return null;
             }
-            
+
             // Combine the geocode position with all the school metadata
             return {
               address,
@@ -998,7 +1000,7 @@ export default function MapPage() {
       // Update the selected addresses in localStorage
       const addresses = locations.map((loc) => loc.address);
       localStorage.setItem("selectedAddresses", JSON.stringify(addresses));
-      
+
       // Also update the school data to match the current order
       const schoolData = locations.map((loc) => ({
         school: loc.school,
@@ -1030,7 +1032,7 @@ export default function MapPage() {
         raw_data: storedSchoolData.find((s) => s.address === loc.address)
           ?.raw_data,
       }));
-      
+
       localStorage.setItem("schoolData", JSON.stringify(schoolData));
     }
   }, [locations, storedSchoolData]);
@@ -1044,80 +1046,68 @@ export default function MapPage() {
           {/* Added pb-20 for bottom padding */}
           {/* Controls section - moved from fixed header to scrollable content */}
           <div className="flex items-center justify-between bg-white p-4 mb-3">
-            
             <Button type="link" onClick={() => router.push("/road-planner")}>
               <i className="icon-svg-left-arrow"></i>
               Map Route
             </Button>
             <div className="flex items-center justify-end gap-2">
-            
               <Button
-                 type="text"
-                  disabled={isOptimizing || locations.length < 2}
-                  onClick={optimizeRoute}
-                >
-                  <i className="icon-svg-optimize"></i>
-                  {isOptimizing ? (
-                    <>
-                    Optimizing...
-                    </>
-                  ) : (
-                    <>
-                    Optimize Route
-                    </>
-                  )}
-               </Button>
+                type="text"
+                disabled={isOptimizing || locations.length < 2}
+                onClick={optimizeRoute}
+              >
+                <i className="icon-svg-optimize"></i>
+                {isOptimizing ? <>Optimizing...</> : <>Optimize Route</>}
+              </Button>
 
               <Button
-                 type="text"
-                  disabled={locations.length < 2}
-                  onClick={reverseOrder}
-               >
-                 <i className="icon-svg-route"></i>
-                 Reverse Route
-               </Button>
-              
-              <Button
-                 type="text"
-                 onClick={() => true}
-               >
-                 <i className="icon-svg-print"></i>
-                 Print PDF
-               </Button>
+                type="text"
+                disabled={locations.length < 2}
+                onClick={reverseOrder}
+              >
+                <i className="icon-svg-route"></i>
+                Reverse Route
+              </Button>
+
+              <Button type="text" onClick={() => true}>
+                <i className="icon-svg-print"></i>
+                Print PDF
+              </Button>
               {/* <HighSchoolPrintComponent
                 locations={locations}
                 storedSchoolData={storedSchoolData}
                 pdfContentRef={pdfContentRef}
                 hasFootballPackage={hasFootballPackage}
               /> */}
-          <Input 
-            placeholder="Enter Address" 
-            className="custom-input" 
-            style={{ width: '180px' }}
-            suffix={<i className="icon-svg-add-location" />}
-          />
-          
-          <Select
-            placeholder="Saved Journeys"
-            className="custom-select mt-[-10px]"
-            style={{ width: '160px' }}
-            options={[
-              { value: 'Call', label: 'Call' },
-              { value: 'Text', label: 'Text' },
-              { value: 'Email', label: 'Email' }
-            ]}
-          />
-          
-          <Input placeholder="Name Journey" className="custom-input" style={{ width: '140px' }} />
-      
-              <Button
-                 type="primary"
-                 onClick={() => true}
-               >
-                 Save
-               </Button>
-              </div>
+              <Input
+                placeholder="Enter Address"
+                className="custom-input"
+                style={{ width: "180px" }}
+                suffix={<i className="icon-svg-add-location" />}
+              />
+
+              <Select
+                placeholder="Saved Journeys"
+                className="custom-select mt-[-10px]"
+                style={{ width: "160px" }}
+                options={[
+                  { value: "Call", label: "Call" },
+                  { value: "Text", label: "Text" },
+                  { value: "Email", label: "Email" },
+                ]}
+              />
+
+              <Input
+                placeholder="Name Journey"
+                className="custom-input"
+                style={{ width: "140px" }}
+              />
+
+              <Button type="primary" onClick={() => true}>
+                Save
+              </Button>
             </div>
+          </div>
           {/* PDF content begins here - this is what we'll capture for the PDF */}
           <div ref={pdfContentRef}>
             {isLoading || !isLoaded || !isMapLoaded ? (
@@ -1156,16 +1146,16 @@ export default function MapPage() {
                     ) : null}
                     {locations.map(
                       (location, index) =>
-                      location.position && (
-                        <Fragment key={`marker-${index}`}>
-                          <MarkerF
-                            position={location.position}
-                            label={{
-                              text: `${index + 1}`,
+                        location.position && (
+                          <Fragment key={`marker-${index}`}>
+                            <MarkerF
+                              position={location.position}
+                              label={{
+                                text: `${index + 1}`,
                                 color: "#1C1D4D",
                                 fontWeight: "bold",
-                            }}
-                            icon={{
+                              }}
+                              icon={{
                                 url: "/svgicons/map-dot.svg",
                                 scaledSize:
                                   window.google && window.google.maps
@@ -1175,10 +1165,10 @@ export default function MapPage() {
                                   window.google && window.google.maps
                                     ? new window.google.maps.Point(14, 14)
                                     : undefined,
-                            }}
-                            title={`${index + 1}. ${location.school}`}
-                          />
-                          
+                              }}
+                              title={`${index + 1}. ${location.school}`}
+                            />
+
                             {/* School label */}
                             <OverlayViewF
                               position={location.position}
@@ -1188,78 +1178,109 @@ export default function MapPage() {
                                 y: -height - 30,
                               })}
                             >
-                            <Popover
-                              content={
-                                <div className="space-y-2 min-w-[200px]">
-                                  <div>
-                                    <h4 className="font-semibold text-sm mb-1">{location.school}</h4>
-                                    <p className="text-xs text-gray-600">
-                                      {location.address} <br />
-                                      {(location.county || location.state) && (
-                                        <div>
-                                          {location.county && <span>{location.county}</span>}
-                                          {location.county && location.state && <span>, </span>}
-                                          {location.state && <span>{location.state}</span>}
-                                        </div>
-                                      )}
-                                      <br />
-                                      {location.school_phone}
-                                      <br />
-                                      {location.ad_email}
-                                    </p>
-                                  </div>
+                              <Popover
+                                content={
+                                  <div className="space-y-2 min-w-[350px]">
+                                    <div className="mb-4">
+                                      <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
+                                        {location.school} <span className="!text-[16px]"> <i className="icon-svg-location1"></i> 0.3 Miles</span>
+                                      </h4>
+                                      <p className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                        {location.address} <br />
+                                        {(location.county ||
+                                          location.state) && (
+                                          <div>
+                                            {location.county && (
+                                              <span>{location.county}</span>
+                                            )}
+                                            {location.county &&
+                                              location.state && <span>, </span>}
+                                            {location.state && (
+                                              <span>{location.state}</span>
+                                            )}
+                                          </div>
+                                        )}
+                                        <a href="javascript:void(0)" className="text-[14px] text-blue-600">{location.ad_email}</a>
+                                        <br />
+                                        <a href="javascript:void(0)" className="text-[14px] text-blue-600">{location.school_phone}</a>                                        
+                                      </p>
+                                    </div>
 
-                                  <div className="text-xs flex items-center justify-between">
-                                    <div>
-                                    {location.head_coach_first && hasFootballPackage && (
-                                    <div className="text-xs">
-                                      <span className="font-medium">Coach: </span>
-                                      {location.head_coach_first} {location.head_coach_last}
-                                    </div>
-                                  )}
-                                    </div>
-                                    <div>
-                                    {location.school_phone && (
-                                    <div className="text-xs">
-                                      <span className="font-medium">Phone: </span>
-                                      {location.school_phone}
-                                    </div>
-                                  )}
+                                    <div className="text-xs flex items-center justify-between">
+                                      <div>
+                                        {location.head_coach_first &&
+                                          hasFootballPackage && (
+                                            <div className="text-xs flex items-center justify-start gap-2">
+                                              <img
+                                                src="/svgicons/plyer1.png"
+                                                alt="X Feed"
+                                                height={50}
+                                              />
+                                              <div>
+                                              <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">Liam James</h6>
+                                              <span className="!text-[14px] !leading-[16px] mb-0">
+                                                D2 <br />
+                                                2024
+                                              </span>
+                                            </div>
+                                            </div>
+                                          )}
+                                      </div>
+                                      <div>
+                                        {location.school_phone && (
+                                          <div className="text-xs flex items-center justify-start gap-2">
+                                            <img
+                                              src="/svgicons/plyer1.png"
+                                              alt="X Feed"
+                                              height={50}
+                                            />
+                                            <div>
+                                              <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">Liam James</h6>
+                                              <span className="!text-[14px] !leading-[16px] mb-0">
+                                                D2 <br />
+                                                2024
+                                              </span>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
-                                  
-                                  
-                                </div>
-                              }
-                              title={null}
-                              trigger="click"
-                              open={popoverOpen[index]}
-                              onOpenChange={(open) => {
-                                setPopoverOpen({ ...popoverOpen, [index]: open });
-                              }}
-                            >
-                              <div 
-                                className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-[#FF7525] pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
-                                style={{ minWidth: "max-content" }}
+                                }
+                                title={null}
+                                trigger="click"
+                                open={popoverOpen[index]}
+                                onOpenChange={(open) => {
+                                  setPopoverOpen({
+                                    ...popoverOpen,
+                                    [index]: open,
+                                  });
+                                }}
                               >
-                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full">
-                                  <img
-                                    src="/svgicons/map-img.png"
-                                    alt="X Feed"
-                                    height={32}
-                                  />
+                                <div
+                                  className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-[#FF7525] pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
+                                  style={{ minWidth: "max-content" }}
+                                >
+                                  <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full">
+                                    <img
+                                      src="/svgicons/map-img.png"
+                                      alt="X Feed"
+                                      height={32}
+                                    />
+                                  </div>
+                                  <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
+                                    <span className="truncate block w-full">
+                                      {location.school}
+                                    </span>
+                                    <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
+                                      4.5
+                                    </span>
+                                  </h6>
                                 </div>
-                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
-                                  <span className="truncate block w-full">{location.school}</span>
-                                  <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
-                                    4.5
-                                  </span>
-                                </h6>
-                              </div>
-                            </Popover>
-                          </OverlayViewF>
-                        </Fragment>
-                      )
+                              </Popover>
+                            </OverlayViewF>
+                          </Fragment>
+                        )
                     )}
                   </GoogleMap>
                 </div>
@@ -1267,56 +1288,60 @@ export default function MapPage() {
                 {routeInfo && (
                   <div className="text-left p-2 bg-white/60 w-[290px] border-2 border-[#1C1D4D] border-solid absolute top-[370px] left-[31px] z-10">
                     <div className="text-2xl font-bold text-gray-700 flex items-center justify-center">
-                    <img
+                      <img
                         src="/svgicons/big-flag.svg"
                         alt="X Feed"
                         height={85}
                         className="mr-2"
                       />
-                    <div className="text-gray-600 mt-1 text-right">
-                       <h5 className="font-semibold !text-[22px] italic mb-1">Total Drive Time</h5>
-                       <h3 className="!text-[30px] font-bold italic mb-2">{routeInfo.totalTime}</h3>
-                       <h6 className="font-semibold !text-[22px] italic flex items-center justify-end"><img
-                        src="/svgicons/mile-car.svg"
-                        alt="X Feed"
-                        height={20}
-                        className="mr-2"
-                      />
-                      {routeInfo.totalDistance}</h6>
+                      <div className="text-gray-600 mt-1 text-right">
+                        <h5 className="font-semibold !text-[22px] italic mb-1">
+                          Total Drive Time
+                        </h5>
+                        <h3 className="!text-[30px] font-bold italic mb-2">
+                          {routeInfo.totalTime}
+                        </h3>
+                        <h6 className="font-semibold !text-[22px] italic flex items-center justify-end">
+                          <img
+                            src="/svgicons/mile-car.svg"
+                            alt="X Feed"
+                            height={20}
+                            className="mr-2"
+                          />
+                          {routeInfo.totalDistance}
+                        </h6>
+                      </div>
                     </div>
-                      
-                    </div>
-                    
                   </div>
                 )}
 
                 <div className="map-schools-container mx-8 !mt-[-50px]">
-                   <DndContext
-                     sensors={sensors}
-                     collisionDetection={closestCenter}
-                     onDragEnd={handleDragEnd}
-                   >
-                     <SortableContext
-                       items={locations.map((_, index) => index)}
-                       strategy={verticalListSortingStrategy}
-                     >
-                       <div className="space-y-2">
-                         {locations.map((location, index) => (
-                           <SortableItem
-                             key={index}
-                             location={location}
-                             index={index}
-                             routeInfo={routeInfo || undefined}
-                             totalLocations={locations.length}
-                             onRemove={handleRemoveLocation}
-                             userDetails={userDetails}
-                             hasFootballPackage={hasFootballPackage}
-                           />
-                         ))}
-                       </div>
-                     </SortableContext>
-                   </DndContext>
-                 </div>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={locations.map((_, index) => index)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-2">
+                        {locations.map((location, index) => (
+                          <SortableItem
+                            key={index}
+                            location={location}
+                            index={index}
+                            routeInfo={routeInfo || undefined}
+                            totalLocations={locations.length}
+                            onRemove={handleRemoveLocation}
+                            userDetails={userDetails}
+                            hasFootballPackage={hasFootballPackage}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                </div>
               </div>
             )}
 
@@ -1342,7 +1367,7 @@ export default function MapPage() {
           border-radius: 4px !important;
           border: 1px solid #ccc !important;
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
-          margin-top: 0 !important; 
+          margin-top: 0 !important;
           white-space: nowrap !important;
           z-index: 100 !important;
           font-size: 12px !important;
