@@ -121,7 +121,7 @@ function SortableItem({
                     </span>
                   )}
                 </h4>
-                <div className="mb-0">
+                <p className="mb-0">
                   {location.address} <br />
                   {(location.county || location.state) && (
                     <div>
@@ -130,7 +130,7 @@ function SortableItem({
                       {location.state && <span>{location.state}</span>}
                     </div>
                   )}
-                </div>
+                </p>
               </div>
             </div>
             <div className="flex gap-2 mx-3 mb-3">

@@ -939,7 +939,7 @@ button:hover {
     background: #fff;
     display: flex;
     gap: 12px;
-    margin-bottom: 122px !important;
+    margin-bottom: 122px;
     .school-icon {
       border: 1px solid #c8ff24;
       background: rgba(200, 255, 36, 0.1);
@@ -953,13 +953,13 @@ button:hover {
       font-style: italic;
       font-weight: 800;
       line-height: normal;
-      letter-spacing: -0.9px;
+      letter-spacing: -0.4px;
       span {
         font-size: 20px;
         font-style: italic;
         font-weight: 700;
         line-height: normal;
-        letter-spacing: -0.6px;
+        letter-spacing: -0.3px;
         padding: 2px 5px;
         margin-left: 10px;
         position: relative;
