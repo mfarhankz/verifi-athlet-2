@@ -31,11 +31,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { School } from "../types";
 import { supabase } from "@/lib/supabaseClient";
-import { useUser } from "@/contexts/CustomerContext";
+import { useUser, useCustomer } from "@/contexts/CustomerContext";
 import { formatPhoneNumber } from "@/utils/utils";
-import { getPackageIdsBySport } from "@/lib/queries";
-import HighSchoolPrintComponent from "@/components/HighSchoolPrintComponent";
-import { Button, Input, Select, Popover } from "antd";
+import { getPackageIdsBySport, fetchHighSchoolAthletes, fetchJourneys, saveJourney, deleteJourney, JourneyDB, fetchExistingPackagesForCustomer } from "@/lib/queries";
+import { convertSchoolId } from "@/utils/printUtils";
+import { SavedJourneys, SavedJourney } from "@/app/(dashboard)/_components/journeys/SavedJourneys";
+import { convertHighSchoolIdToSchoolId, fetchSchoolDataFromHighSchoolId, fetchSchoolDataFromSchoolId } from "../utils/schoolDataUtils";
+import SchoolCard from "../components/SchoolCard";
+import HighSchoolPrintComponent, { HighSchoolPrintComponentRef } from "@/components/HighSchoolPrintComponent";
+import { Button, Input, Select, Popover, Modal, message } from "antd";
 
 // Helper function to determine score color
 function getScoreColor(score: number | undefined | null): string {
@@ -85,452 +89,110 @@ function SortableItem({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: index });
+  const [athletes, setAthletes] = useState<any[]>([]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
 
+  // Fetch athletes for this school
+  useEffect(() => {
+    const fetchAthletes = async () => {
+      if (!hasFootballPackage || !userDetails?.customer_id) return;
+      
+      try {
+        // Use school_id directly if available, otherwise convert from high_school_id
+        let schoolId: string | undefined = location.school_id;
+        if (!schoolId && location.high_school_id) {
+          schoolId = (await convertHighSchoolIdToSchoolId(location.high_school_id)) || undefined;
+        } else if (!schoolId && location.raw_data?.high_school_id) {
+          schoolId = (await convertHighSchoolIdToSchoolId(location.raw_data.high_school_id)) || undefined;
+        }
+        
+        if (schoolId) {
+          const result = await fetchHighSchoolAthletes(
+            schoolId,
+            'fb',
+            userDetails.customer_id,
+            { page: 1, limit: 100 }
+          );
+          
+          if (result.data) {
+            // Sort by athletic projection first, then grad_year (same as Popover)
+            const projectionOrder = [
+              'FBS P4 - Top half',
+              'FBS P4',
+              'FBS G5 - Top half',
+              'FBS G5',
+              'FCS - Full Scholarship',
+              'FCS',
+              'D2 - Top half',
+              'D2',
+              'D3 - Top half',
+              'D3',
+              'D3 Walk-on'
+            ];
+            
+            const sortedAthletes = result.data.sort((a: any, b: any) => {
+              // First sort by athletic projection
+              const indexA = projectionOrder.indexOf(a.athleticProjection || '');
+              const indexB = projectionOrder.indexOf(b.athleticProjection || '');
+              
+              if (indexA !== -1 && indexB !== -1) {
+                if (indexA !== indexB) {
+                  return indexA - indexB;
+                }
+              } else if (indexA !== -1) {
+                return -1;
+              } else if (indexB !== -1) {
+                return 1;
+              } else if (a.athleticProjection && b.athleticProjection) {
+                const cmp = a.athleticProjection.localeCompare(b.athleticProjection);
+                if (cmp !== 0) return cmp;
+              }
+              
+              // Then sort by grad_year
+              const yearA = parseInt(a.gradYear) || 0;
+              const yearB = parseInt(b.gradYear) || 0;
+              return yearA - yearB;
+            });
+            
+            // Limit to 4 athletes
+            setAthletes(sortedAthletes.slice(0, 4));
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching athletes for SortableItem:', error);
+      }
+    };
+
+    fetchAthletes();
+  }, [location.school_id, location.high_school_id, location.raw_data?.high_school_id, hasFootballPackage, userDetails?.customer_id]);
+
   return (
-    <>
-      <div className="card-list flex justify-between relative" style={style}>
-        <div
-          ref={setNodeRef}
-          className="cursor-move flex flex-1 justify-between"
-          {...attributes}
-          {...listeners}
-        >
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <div className="school-icon">
-                <img src="/svgicons/school-icon.svg" alt="X Feed" height={89} />
-              </div>
-              <div className="flex flex-col text-left mt-1">
-                <h4 className="mb-1">
-                  {location.school}
-                  {location.private_public && (
-                    <span
-                      style={{
-                        backgroundColor:
-                          location.private_public.toLowerCase() === "public"
-                            ? "#c8ff24"
-                            : "#88FBFF",
-                      }}
-                    >
-                      {location.private_public}
-                    </span>
-                  )}
-                </h4>
-                <p className="mb-0">
-                  {location.address} <br />
-                  {(location.county || location.state) && (
-                    <div>
-                      {location.county && <span>{location.county}</span>}
-                      {location.county && location.state && <span>, </span>}
-                      {location.state && <span>{location.state}</span>}
-                    </div>
-                  )}
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 mx-3 mb-3">
-              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                <h6 className="mb-1">Liam James</h6>
-                <p className="mb-0 !leading-5">
-                  D3 <br />
-                  2025
-                </p>
-              </div>
-
-              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                <h6 className="mb-1">Moxen Galin</h6>
-                <p className="mb-0 !leading-5">
-                  D3 <br />
-                  2025
-                </p>
-              </div>
-
-              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                <h6 className="mb-1">Richard Mark</h6>
-                <p className="mb-0 !leading-5">
-                  D3 <br />
-                  2025
-                </p>
-              </div>
-
-              <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                <h6 className="mb-1">Alex James</h6>
-                <p className="mb-0 !leading-5">
-                  D3 <br />
-                  2025
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-2 p-2">
-            <div className="flex flex-col text-left w-[650px]">
-              <div className="flex gap-2 mb-2 justify-end">
-                {location.league_classification && (
-                  <div className="text-lg font-medium bg-[#126DB8] text-white px-2">
-                    {location.league_classification}
-                  </div>
-                )}
-                {location.record_2024 && hasFootballPackage && (
-                  <div className="text-lg font-medium border border-solid border-[#ccc] px-2">
-                    {location.record_2024}
-                  </div>
-                )}
-                <div className="text-lg bg-[#000] px-2">
-                  <img src="/x-logo.svg" alt="X Feed" height={24} />
-                  <span className="gradient-text ml-2">@virginiabeach</span>
-                </div>
-                <div
-                  className="border border-solid border-[#ccc] px-2 flex items-center justify-center cursor-pointer hover:bg-gray-100"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onRemove(index);
-                  }}
-                >
-                  <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
-                </div>
-              </div>
-              <div className="flex justify-between gap-2">
-                <div>
-                  <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
-                    Coach
-                  </span>
-                  <h6 className="mb-0 !text-lg leading-3">
-                    {(location.head_coach_first || location.head_coach_last) &&
-                      hasFootballPackage && (
-                        <>
-                          {location.head_coach_first} {location.head_coach_last}
-                        </>
-                      )}
-                  </h6>
-                  <p className="mb-0 leading-5">
-                    {location.head_coach_email} <br />
-                    {location.head_coach_cell && (
-                      <>
-                        Cell {formatPhoneNumber(location.head_coach_cell)}{" "}
-                        {(location.coach_best_contact === "cell" ||
-                          location.best_phone === "Cell") &&
-                          hasFootballPackage && (
-                            <span className="text-blue-600 font-medium">
-                              (best)
-                            </span>
-                          )}
-                        {(location.head_coach_work_phone ||
-                          location.head_coach_home_phone ||
-                          location.coach_twitter_handle) &&
-                          ", "}
-                      </>
-                    )}
-                    {location.head_coach_work_phone && (
-                      <>
-                        Work {formatPhoneNumber(location.head_coach_work_phone)}{" "}
-                        {(location.coach_best_contact === "work" ||
-                          location.best_phone === "Office") &&
-                          hasFootballPackage && (
-                            <span className="text-blue-600 font-medium">
-                              (best)
-                            </span>
-                          )}
-                        {(location.head_coach_home_phone ||
-                          location.coach_twitter_handle) &&
-                          ", "}
-                      </>
-                    )}
-                    {location.head_coach_home_phone && (
-                      <>
-                        Home {formatPhoneNumber(location.head_coach_home_phone)}{" "}
-                        {(location.coach_best_contact === "home" ||
-                          location.best_phone === "Home") &&
-                          hasFootballPackage && (
-                            <span className="text-blue-600 font-medium">
-                              (best)
-                            </span>
-                          )}
-                        {location.coach_twitter_handle && ", "}
-                      </>
-                    )}
-                    {location.coach_twitter_handle && (
-                      <>Twitter {location.coach_twitter_handle}</>
-                    )}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
-                    AD
-                  </span>
-                  <h6 className="mb-0 !text-lg leading-3">
-                    {location.ad_name_first} {location.ad_name_last}
-                  </h6>
-                  <p className="mb-0 leading-5">
-                    {location.ad_email && <>{location.ad_email}</>}
-                    <br />
-                    {location.school_phone && (
-                      <>School {location.school_phone}</>
-                    )}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {(location.score_college_player !== undefined ||
-                  location.score_d1_producing !== undefined ||
-                  location.score_team_quality !== undefined ||
-                  location.score_income !== undefined ||
-                  location.score_academics !== undefined) && (
-                  <ul className="co-title bg-[#eaf8ed]">
-                    <li>
-                      {location.score_college_player !== undefined && (
-                        <>
-                          <h6>{location.score_college_player}</h6>
-                          <p>College</p>
-                        </>
-                      )}
-                    </li>
-                    <li>
-                      {location.score_d1_producing !== undefined && (
-                        <>
-                          <h6>{location.score_d1_producing}</h6>
-                          <p>D1</p>
-                        </>
-                      )}
-                    </li>
-                    <li>
-                      {location.score_team_quality !== undefined && (
-                        <>
-                          <h6>{location.score_team_quality}</h6>
-                          <p>Team</p>
-                        </>
-                      )}
-                    </li>
-                    <li>
-                      {location.score_income !== undefined && (
-                        <>
-                          <h6>{location.score_income}</h6>
-                          <p>Income</p>
-                        </>
-                      )}
-                    </li>
-                    <li>
-                      {location.score_academics !== undefined && (
-                        <>
-                          <h6>{location.score_academics}</h6>
-                          <p>Acad</p>
-                        </>
-                      )}
-                    </li>
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="absolute right-0 left-0 bottom-[-92px] m-auto flex flex-col items-center justify-center">
-          <span className="font-semibold text-lg bg-[#1C1D4D] text-white w-8 h-8 flex items-center justify-center">
-            {index + 1}
-          </span>
-          {routeInfo && index < routeInfo.legs.length && (
-            <div className="bg-[#1C1D4D]  text-white pl-3 pr-10 py-1 !text-lg font-medium italic mt-10">
-              {index < totalLocations - 1 && (
-                <div className="relative">
-                  <span className="mile-flage"></span>
-                  <span className="mile-car"></span>
-                  Next Stop {routeInfo.legs[index].duration} (
-                  {routeInfo.legs[index].distance})
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-      {/* <div
+    <div
+      ref={setNodeRef}
       style={style}
+      className="cursor-move"
+      {...attributes}
+      {...listeners}
     >
-      <div className="flex items-start">
-        <div
-          ref={setNodeRef}
-          className="flex-grow flex items-start cursor-move"
-          {...attributes}
-          {...listeners}
-        >
-          <span className="mr-3 font-semibold text-lg mt-1">{index + 1}.</span>
-          <div className="flex-grow">
-            <div className="grid grid-cols-3 gap-4 mb-2">
-              <div>
-                <div className="flex items-center flex-wrap mb-1">
-                  <div className="font-semibold text-lg mr-2">{location.school}</div>
-                  {location.record_2024 && hasFootballPackage && (
-                    <div className="text-gray-700 bg-blue-100 px-2 py-0.5 rounded text-xs mr-1">
-                      {location.record_2024}
-                    </div>
-                  )}
-                  {location.league_classification && (
-                    <div className="text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-xs">
-                      {location.league_classification}
-                    </div>
-                  )}
-                  {location.private_public && (
-                    <div 
-                      className="text-gray-700 px-2 py-0.5 rounded text-xs mr-1"
-                      style={{
-                        backgroundColor: location.private_public.toLowerCase() === 'public' ? '#c8ff24' : '#88FBFF'
-                      }}
-                    >
-                      {location.private_public}
-                </div>
-                  )}
-                
-                </div>
-                
-                <div className="text-gray-600 text-sm mb-1">{location.address}</div>
-                
-                {(location.county || location.state) && (
-                  <div className="text-sm font-semibold">
-                    {location.county && <span>{location.county}</span>}
-                    {location.county && location.state && <span> | </span>}
-                    {location.state && <span>{location.state}</span>}
-                  </div>
-                )}
-              </div>
-              
-              <div className="text-sm">
-                {(location.head_coach_first || location.head_coach_last) && hasFootballPackage && (
-                  <div className="font-medium text-gray-800 mb-1">
-                    Coach: {location.head_coach_first} {location.head_coach_last}
-                  </div>
-                )}
-                {location.head_coach_email && hasFootballPackage && (
-                  <div className="text-gray-600">
-                    Email: {location.head_coach_email}
-                  </div>
-                )}
-                {location.head_coach_cell && hasFootballPackage && (
-                  <div className="text-gray-600">
-                    Cell: {formatPhoneNumber(location.head_coach_cell)} {(location.coach_best_contact === 'cell' || location.best_phone === 'Cell') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
-                  </div>
-                )}
-                {location.head_coach_work_phone && hasFootballPackage && (
-                  <div className="text-gray-600">
-                    Work: {formatPhoneNumber(location.head_coach_work_phone)} {(location.coach_best_contact === 'work' || location.best_phone === 'Office') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
-                  </div>
-                )}
-                {location.head_coach_home_phone && hasFootballPackage && (
-                  <div className="text-gray-600">
-                    Home: {formatPhoneNumber(location.head_coach_home_phone)} {(location.coach_best_contact === 'home' || location.best_phone === 'Home') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
-                  </div>
-                )}
-                {location.coach_twitter_handle && hasFootballPackage && (
-                  <div className="text-gray-600">
-                    Twitter: {location.coach_twitter_handle}
-                  </div>
-                )}
-                {location.coach_best_contact && location.coach_best_contact !== 'cell' && 
-                 location.coach_best_contact !== 'work' && location.coach_best_contact !== 'home' && 
-                 hasFootballPackage && (
-                  <div className="text-gray-600">
-                    Best Contact: {location.coach_best_contact}
-                  </div>
-                )}
-              </div>
-              
-              <div className="text-sm">
-                {(location.ad_name_first || location.ad_name_last) && (
-                  <div className="font-medium text-gray-800 mb-1">
-                    AD: {location.ad_name_first} {location.ad_name_last}
-                  </div>
-                )}
-                {location.ad_email && (
-                  <div className="text-gray-600">
-                    Email: {location.ad_email}
-                  </div>
-                )}
-                {location.school_phone && (
-                  <div className="text-gray-600">
-                    School: {location.school_phone}
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {location.visit_info && (
-              <div className="text-sm text-gray-700 border-t border-b py-1 mb-2">
-                <span className="font-medium">Visit Info:</span> {location.visit_info}
-              </div>
-            )}
-            
-            {(location.score_college_player !== undefined || 
-              location.score_d1_producing !== undefined || 
-              location.score_team_quality !== undefined || 
-              location.score_income !== undefined ||
-              location.score_academics !== undefined) && (
-              <div className="mt-2 grid grid-cols-5 gap-1">
-                {location.score_college_player !== undefined && (
-                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_college_player) }}>
-                    <div className="text-xs text-gray-700 font-medium">College</div>
-                    <div className="font-bold text-black">{location.score_college_player}</div>
-                  </div>
-                )}
-                
-                {location.score_d1_producing !== undefined && (
-                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_d1_producing) }}>
-                    <div className="text-xs text-gray-700 font-medium">D1</div>
-                    <div className="font-bold text-black">{location.score_d1_producing}</div>
-                  </div>
-                )}
-                
-                {location.score_team_quality !== undefined && (
-                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_team_quality) }}>
-                    <div className="text-xs text-gray-700 font-medium">Team</div>
-                    <div className="font-bold text-black">{location.score_team_quality}</div>
-                  </div>
-                )}
-                
-                {location.score_income !== undefined && (
-                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_income) }}>
-                    <div className="text-xs text-gray-700 font-medium">Income</div>
-                    <div className="font-bold text-black">{location.score_income}</div>
-                  </div>
-                )}
-                
-                {location.score_academics !== undefined && (
-                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_academics) }}>
-                    <div className="text-xs text-gray-700 font-medium">Acad</div>
-                    <div className="font-bold text-black">{location.score_academics}</div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onRemove(index);
-          }}
-          type="button"
-          className="ml-2 p-2 rounded-lg transition-colors duration-200 flex items-center justify-center"
-          title="Remove stop"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-        </button>
-      </div>
-      {routeInfo && index < routeInfo.legs.length && (
-        <div className="mt-2 text-sm text-gray-500 border-t pt-2">
-          {index < totalLocations - 1 && (
-            <div>Next stop: {routeInfo.legs[index].duration} ({routeInfo.legs[index].distance})</div>
-          )}
-        </div>
-      )}
-    </div> */}
-    </>
+      <SchoolCard
+        school={location}
+        hasFootballPackage={hasFootballPackage}
+        index={index}
+        showDeleteButton={true}
+        onDelete={() => onRemove(index)}
+        showAthletes={true}
+        athletes={athletes}
+        routeInfo={routeInfo}
+        totalLocations={totalLocations}
+      />
+    </div>
   );
 }
+
 
 export default function MapPage() {
   const [selectedAddresses, setSelectedAddresses] = useState<string[]>([]);
@@ -545,22 +207,66 @@ export default function MapPage() {
   const [popoverOpen, setPopoverOpen] = useState<{ [key: number]: boolean }>(
     {}
   );
+  const [schoolAthletes, setSchoolAthletes] = useState<{ [key: number]: any[] }>({});
   const mapContentRef = useRef<HTMLDivElement>(null);
   const pdfContentRef = useRef<HTMLDivElement>(null);
+  const printComponentRef = useRef<HighSchoolPrintComponentRef>(null);
   const router = useRouter();
   const userDetails = useUser();
+  const { activeCustomerId } = useCustomer();
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [minAthleticLevel, setMinAthleticLevel] = useState('D3');
+  const [minGradYear, setMinGradYear] = useState('2025');
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [addressInput, setAddressInput] = useState('');
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState<string>('');
+  const [addressLabel, setAddressLabel] = useState('');
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const addressInputRef = useRef<any>(null);
+  const [savedJourneys, setSavedJourneys] = useState<SavedJourney[]>([]);
+  const [journeyName, setJourneyName] = useState('');
+  const [isLoadingJourneys, setIsLoadingJourneys] = useState(false);
+  const savedJourneysContainerRef = useRef<HTMLDivElement>(null);
+  const [hasFootballPackage, setHasFootballPackage] = useState(false);
 
-  // Check if user has any football package to determine if coach info should be shown
-  const footballPackageIds = getPackageIdsBySport("fb");
-  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) =>
-    Number(pkg)
-  );
-  const hasFootballPackage = footballPackageIds.some((id) =>
-    userPackageNumbers.includes(id)
-  );
+  // Check if the active customer has a football package
+  useEffect(() => {
+    const checkFootballPackage = async () => {
+      if (!activeCustomerId) {
+        setHasFootballPackage(false);
+        return;
+      }
+
+      try {
+        // Fetch packages for the active customer
+        const customerPackages = await fetchExistingPackagesForCustomer(activeCustomerId);
+        const customerPackageIds = customerPackages.map((pkg: any) => Number(pkg.customer_package_id));
+        
+        // Get football package IDs
+        const footballPackageIds = getPackageIdsBySport("fb");
+        
+        // Check if any of the customer's packages are football packages
+        const hasFootball = footballPackageIds.some((id) =>
+          customerPackageIds.includes(id)
+        );
+        
+        setHasFootballPackage(hasFootball);
+      } catch (error) {
+        console.error("Error checking football package:", error);
+        setHasFootballPackage(false);
+      }
+    };
+
+    checkFootballPackage();
+  }, [activeCustomerId]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Require 8px of movement before drag starts
+      },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -576,6 +282,186 @@ export default function MapPage() {
     if (isLoaded && !loadError) {
       setIsMapLoaded(true);
     }
+  }, [isLoaded, loadError]);
+
+  // Load saved journeys
+  useEffect(() => {
+    const loadSavedJourneys = async () => {
+      if (!activeCustomerId) return;
+      
+      setIsLoadingJourneys(true);
+      try {
+        const dbJourneys = await fetchJourneys(activeCustomerId);
+        const convertedJourneys: SavedJourney[] = dbJourneys.map((journey: JourneyDB) => ({
+          id: journey.id,
+          name: journey.name,
+          journeyDetails: journey.journey_details,
+          createdAt: journey.created_at
+        }));
+        setSavedJourneys(convertedJourneys);
+      } catch (error) {
+        console.error('Error loading saved journeys:', error);
+      } finally {
+        setIsLoadingJourneys(false);
+      }
+    };
+
+    loadSavedJourneys();
+  }, [activeCustomerId]);
+
+  // Handle saving a journey
+  const handleSaveJourney = async () => {
+    if (!journeyName.trim()) {
+      message.warning('Please enter a journey name');
+      return;
+    }
+
+    if (!activeCustomerId || !userDetails?.id) {
+      message.error('Unable to save journey: missing customer or user information');
+      return;
+    }
+
+    if (locations.length === 0) {
+      message.warning('Please add at least one location to save a journey');
+      return;
+    }
+
+    try {
+      // Store all data needed to recreate the journey
+      const journeyDetails = {
+        locations: locations.map(loc => ({
+          ...loc,
+          position: loc.position ? {
+            lat: loc.position.lat,
+            lng: loc.position.lng
+          } : undefined
+        })),
+        routeInfo: routeInfo ? {
+          totalDistance: routeInfo.totalDistance,
+          totalTime: routeInfo.totalTime,
+          legs: routeInfo.legs
+        } : null,
+        storedSchoolData: storedSchoolData
+      };
+
+      const dbJourney = await saveJourney(
+        activeCustomerId,
+        userDetails.id,
+        journeyName.trim(),
+        journeyDetails
+      );
+
+      const newJourney: SavedJourney = {
+        id: dbJourney.id,
+        name: dbJourney.name,
+        journeyDetails: dbJourney.journey_details,
+        createdAt: dbJourney.created_at
+      };
+
+      setSavedJourneys(prev => [newJourney, ...prev]);
+      setJourneyName('');
+      message.success('Journey saved successfully');
+    } catch (error) {
+      console.error('Error saving journey:', error);
+      message.error('Failed to save journey');
+    }
+  };
+
+  // Handle deleting a journey
+  const handleDeleteJourney = async (journeyId: string | number) => {
+    if (typeof journeyId !== 'number') {
+      message.error('Invalid journey ID');
+      return;
+    }
+
+    try {
+      await deleteJourney(journeyId);
+      setSavedJourneys(prev => prev.filter(j => j.id !== journeyId));
+      message.success('Journey deleted successfully');
+    } catch (error) {
+      console.error('Error deleting journey:', error);
+      message.error('Failed to delete journey');
+    }
+  };
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (!isLoaded || !window.google?.maps?.places) return;
+
+    const initializeAutocomplete = () => {
+      if (autocompleteRef.current) return; // Already initialized
+
+      // Try to find the input element by ID or class
+      const inputId = 'address-autocomplete-input';
+      let inputElement: HTMLInputElement | null = null;
+
+      // First try to get from ref
+      if (addressInputRef.current) {
+        const refElement = addressInputRef.current.input || 
+                          addressInputRef.current.nativeElement || 
+                          addressInputRef.current;
+        if (refElement && refElement instanceof HTMLInputElement) {
+          inputElement = refElement;
+        } else if (refElement && typeof refElement === 'object' && 'focus' in refElement) {
+          // Try to find the actual input inside
+          const actualInput = (refElement as any).querySelector?.('input') || 
+                            document.querySelector(`input[value="${addressInput}"]`);
+          if (actualInput instanceof HTMLInputElement) {
+            inputElement = actualInput;
+          }
+        }
+      }
+
+      // If still not found, try to find by ID
+      if (!inputElement) {
+        inputElement = document.getElementById(inputId) as HTMLInputElement;
+      }
+
+      // If still not found, try to find by searching for the input near our component
+      if (!inputElement) {
+        const inputs = document.querySelectorAll('input[placeholder="Enter Address"]');
+        if (inputs.length > 0) {
+          inputElement = inputs[inputs.length - 1] as HTMLInputElement;
+        }
+      }
+
+      if (inputElement && inputElement instanceof HTMLInputElement) {
+
+        autocompleteRef.current = new window.google.maps.places.Autocomplete(
+          inputElement,
+          {
+            fields: ['formatted_address', 'geometry', 'place_id', 'name']
+          }
+        );
+
+        autocompleteRef.current.addListener('place_changed', () => {
+          const place = autocompleteRef.current?.getPlace();
+          if (place && place.formatted_address) {
+            // Use establishment name if available, otherwise use formatted address
+            const defaultLabel = place.name || place.formatted_address;
+            setAddressInput(place.formatted_address);
+            setSelectedAddress(place.formatted_address);
+            setAddressLabel(defaultLabel);
+            // Open the modal when an address is selected
+            setAddressModalVisible(true);
+          }
+        });
+      }
+    };
+
+    // Try immediately
+    initializeAutocomplete();
+
+    // Also try after a short delay in case the input isn't rendered yet
+    const timeoutId = setTimeout(initializeAutocomplete, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (autocompleteRef.current) {
+        window.google?.maps?.event?.clearInstanceListeners(autocompleteRef.current);
+        autocompleteRef.current = null;
+      }
+    };
   }, [isLoaded, loadError]);
 
   const geocodeAddress = async (
@@ -639,6 +525,7 @@ export default function MapPage() {
           ad_name_last: schoolInfo?.ad_name_last,
           ad_email: schoolInfo?.ad_email,
           record_2024: schoolInfo?.record_2024,
+          record_2025: schoolInfo?.record_2025,
           raw_data: schoolInfo?.raw_data,
         };
       }
@@ -732,6 +619,43 @@ export default function MapPage() {
     },
     [isLoaded, isMapLoaded]
   );
+
+  // Handle loading a journey
+  const handleLoadJourney = useCallback((journeyDetails: Record<string, any>) => {
+    try {
+      if (journeyDetails.locations && Array.isArray(journeyDetails.locations)) {
+        // Restore locations
+        const restoredLocations = journeyDetails.locations.map((loc: any) => ({
+          ...loc,
+          position: loc.position ? {
+            lat: loc.position.lat,
+            lng: loc.position.lng
+          } : undefined
+        }));
+        setLocations(restoredLocations);
+
+        // Restore stored school data if available
+        if (journeyDetails.storedSchoolData) {
+          setStoredSchoolData(journeyDetails.storedSchoolData);
+        }
+
+        // Restore route info if available
+        if (journeyDetails.routeInfo) {
+          setRouteInfo(journeyDetails.routeInfo);
+        }
+
+        // Recalculate route if we have locations with positions
+        if (restoredLocations.length > 1 && restoredLocations.every(loc => loc.position)) {
+          calculateRoute(restoredLocations);
+        }
+
+        message.success('Journey loaded successfully');
+      }
+    } catch (error) {
+      console.error('Error loading journey:', error);
+      message.error('Failed to load journey');
+    }
+  }, [calculateRoute]);
 
   const optimizeRoute = async () => {
     if (
@@ -886,6 +810,14 @@ export default function MapPage() {
     // Update selected addresses
     const newAddresses = newLocations.map((loc) => loc.address);
     setSelectedAddresses(newAddresses);
+    
+    // Update localStorage
+    localStorage.setItem("selectedAddresses", JSON.stringify(newAddresses));
+    if (storedSchoolData.length > 0) {
+      const updatedSchoolData = storedSchoolData.filter((_, i) => i !== index);
+      localStorage.setItem("schoolData", JSON.stringify(updatedSchoolData));
+      setStoredSchoolData(updatedSchoolData);
+    }
 
     if (newLocations.length >= 2) {
       calculateRoute(newLocations);
@@ -929,6 +861,39 @@ export default function MapPage() {
             // Find matching school info directly
             const schoolInfo = schoolData.find((s) => s.address === address);
 
+            // Always refresh school data using the shared utility to ensure consistency
+            let freshSchoolData: School | null = null;
+            if (schoolInfo?.school_id) {
+              // We have school_id, refresh data using the shared utility
+              try {
+                freshSchoolData = await fetchSchoolDataFromSchoolId(schoolInfo.school_id);
+              } catch (error) {
+                console.error("Error fetching fresh school data:", error);
+              }
+            } else if (schoolInfo?.high_school_id) {
+              // Convert high_school_id to school_id and fetch
+              try {
+                freshSchoolData = await fetchSchoolDataFromHighSchoolId(schoolInfo.high_school_id);
+              } catch (error) {
+                console.error("Error fetching fresh school data:", error);
+              }
+            } else if (schoolInfo?.raw_data?.high_school_id) {
+              // Last fallback: use raw_data.high_school_id
+              try {
+                freshSchoolData = await fetchSchoolDataFromHighSchoolId(schoolInfo.raw_data.high_school_id);
+              } catch (error) {
+                console.error("Error fetching fresh school data:", error);
+              }
+            }
+
+            // Use fresh data if available, otherwise fall back to stored data
+            // Merge fresh data with stored data to preserve position and other map-specific fields
+            const finalSchoolData = freshSchoolData ? {
+              ...freshSchoolData,
+              // Preserve position if it exists in stored data
+              position: schoolInfo?.position || freshSchoolData.position,
+            } : schoolInfo;
+
             // Get geocoded location with position data
             const geocodeResponse = await fetch(
               `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
@@ -942,37 +907,21 @@ export default function MapPage() {
               return null;
             }
 
-            // Combine the geocode position with all the school metadata
+            // Combine the geocode position with all the school metadata from fresh data
+            // Use freshSchoolData (from shared utility) which has all the latest fields
+            // Spread finalSchoolData first (has all the latest data), then override with map-specific fields
             return {
+              ...(finalSchoolData || schoolInfo || {}),
               address,
-              school: schoolInfo?.school || "Unknown School",
               position: geocodeData.results[0].geometry.location,
-              // Include additional fields from the school info
-              county: schoolInfo?.county,
-              state: schoolInfo?.state,
-              head_coach_first: schoolInfo?.head_coach_first,
-              head_coach_last: schoolInfo?.head_coach_last,
-              private_public: schoolInfo?.private_public,
-              league_classification: schoolInfo?.league_classification,
-              score_college_player: schoolInfo?.score_college_player,
-              score_d1_producing: schoolInfo?.score_d1_producing,
-              score_team_quality: schoolInfo?.score_team_quality,
-              score_income: schoolInfo?.score_income,
-              score_academics: schoolInfo?.score_academics,
-              head_coach_email: schoolInfo?.head_coach_email,
-              head_coach_cell: schoolInfo?.head_coach_cell,
-              head_coach_work_phone: schoolInfo?.head_coach_work_phone,
-              head_coach_home_phone: schoolInfo?.head_coach_home_phone,
-              coach_twitter_handle: schoolInfo?.coach_twitter_handle,
-              visit_info: schoolInfo?.visit_info,
-              best_phone: schoolInfo?.best_phone,
-              coach_best_contact: schoolInfo?.coach_best_contact,
-              school_phone: schoolInfo?.school_phone,
-              ad_name_first: schoolInfo?.ad_name_first,
-              ad_name_last: schoolInfo?.ad_name_last,
-              ad_email: schoolInfo?.ad_email,
-              record_2024: schoolInfo?.record_2024,
-              raw_data: schoolInfo?.raw_data,
+              // Ensure school name is set
+              school: finalSchoolData?.school || schoolInfo?.school || "Unknown School",
+              // Ensure county and state are preserved (from fresh data or stored data)
+              county: finalSchoolData?.county || schoolInfo?.county,
+              state: finalSchoolData?.state || schoolInfo?.state,
+              // Ensure IDs are preserved
+              school_id: finalSchoolData?.school_id || schoolInfo?.school_id,
+              high_school_id: finalSchoolData?.high_school_id || finalSchoolData?.raw_data?.high_school_id || schoolInfo?.high_school_id || schoolInfo?.raw_data?.high_school_id,
             };
           })
         );
@@ -1029,6 +978,7 @@ export default function MapPage() {
         ad_name_last: loc.ad_name_last,
         ad_email: loc.ad_email,
         record_2024: loc.record_2024,
+        record_2025: loc.record_2025,
         raw_data: storedSchoolData.find((s) => s.address === loc.address)
           ?.raw_data,
       }));
@@ -1038,15 +988,15 @@ export default function MapPage() {
   }, [locations, storedSchoolData]);
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-full overflow-hidden" style={{ height: 'calc(100vh - 64px)', margin: '-20px', padding: '0' }}>
       {/* Main content with scrolling */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="w-full">
           {" "}
           {/* Added pb-20 for bottom padding */}
           {/* Controls section - moved from fixed header to scrollable content */}
-          <div className="flex items-center justify-between bg-white p-4 mb-3">
-            <Button type="link" onClick={() => router.push("/road-planner")}>
+          <div className="flex items-center justify-between bg-white p-4 mb-3" style={{ position: 'relative', zIndex: 100 }}>
+            <Button type="link" onClick={() => router.push("/road-planner")} className="!text-[20px] !font-semibold !leading-1">
               <i className="icon-svg-left-arrow"></i>
               Map Route
             </Button>
@@ -1069,43 +1019,252 @@ export default function MapPage() {
                 Reverse Route
               </Button>
 
-              <Button type="text" onClick={() => true}>
-                <i className="icon-svg-print"></i>
-                Print PDF
+              <Button 
+                type="text" 
+                onClick={() => setPrintModalVisible(true)}
+                disabled={locations.length === 0 || !hasFootballPackage}
+                className="relative"
+              >
+                <div className="flex items-center">
+                  <i className="icon-svg-print"></i>
+                  <span>Print PDF</span>
+                </div>
+                {isPrinting && (
+                  <div className="absolute bottom-0 left-0 right-0 text-[8px] text-amber-600 italic leading-none text-center">
+                    Last print still in process...
+                  </div>
+                )}
               </Button>
-              {/* <HighSchoolPrintComponent
+              <HighSchoolPrintComponent
+                ref={printComponentRef}
                 locations={locations}
                 storedSchoolData={storedSchoolData}
                 pdfContentRef={pdfContentRef}
                 hasFootballPackage={hasFootballPackage}
-              /> */}
+                minAthleticLevel={minAthleticLevel}
+                minGradYear={minGradYear}
+                hideUI={true}
+              />
+              <Modal
+                title="Print PDF Settings"
+                open={printModalVisible}
+                onOk={async () => {
+                  if (printComponentRef.current) {
+                    setIsPrinting(true);
+                    setPrintModalVisible(false);
+                    try {
+                      await printComponentRef.current.handlePrint();
+                    } finally {
+                      setIsPrinting(false);
+                    }
+                  }
+                }}
+                onCancel={() => setPrintModalVisible(false)}
+                okText="Print"
+                cancelText="Cancel"
+                okButtonProps={{
+                  disabled: locations.length === 0
+                }}
+              >
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col">
+                    <label htmlFor="modalMinAthleticLevel" className="text-sm font-medium text-gray-700 mb-2">
+                      Min Athletic Level
+                    </label>
+                    <Select
+                      id="modalMinAthleticLevel"
+                      value={minAthleticLevel}
+                      onChange={(value) => setMinAthleticLevel(value)}
+                      className="w-full"
+                    >
+                      <Select.Option value="D3">D3</Select.Option>
+                      <Select.Option value="D2">D2</Select.Option>
+                      <Select.Option value="FCS">FCS</Select.Option>
+                      <Select.Option value="G5">G5</Select.Option>
+                      <Select.Option value="P4">P4</Select.Option>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex flex-col">
+                    <label htmlFor="modalMinGradYear" className="text-sm font-medium text-gray-700 mb-2">
+                      Min Grad Year
+                    </label>
+                    <Select
+                      id="modalMinGradYear"
+                      value={minGradYear}
+                      onChange={(value) => setMinGradYear(value)}
+                      className="w-full"
+                    >
+                      <Select.Option value="2025">2025</Select.Option>
+                      <Select.Option value="2026">2026</Select.Option>
+                      <Select.Option value="2027">2027</Select.Option>
+                      <Select.Option value="2028">2028</Select.Option>
+                    </Select>
+                  </div>
+                </div>
+              </Modal>
               <Input
+                ref={addressInputRef}
+                id="address-autocomplete-input"
                 placeholder="Enter Address"
                 className="custom-input"
                 style={{ width: "180px" }}
-                suffix={<i className="icon-svg-add-location" />}
+                value={addressInput}
+                onChange={(e) => {
+                  setAddressInput(e.target.value);
+                  // Clear selectedAddress when user types manually (not from autocomplete)
+                  if (!e.target.value) {
+                    setSelectedAddress('');
+                    setAddressLabel('');
+                  }
+                }}
+                onPressEnter={() => {
+                  if (selectedAddress || addressInput) {
+                    setAddressModalVisible(true);
+                    setAddressLabel(selectedAddress || addressInput);
+                  }
+                }}
+                suffix={
+                  <i 
+                    className="icon-svg-add-location cursor-pointer" 
+                    onClick={() => {
+                      if (selectedAddress || addressInput) {
+                        setAddressModalVisible(true);
+                        setAddressLabel(selectedAddress || addressInput);
+                      }
+                    }}
+                  />
+                }
               />
+              <Modal
+                title="Add Location"
+                open={addressModalVisible}
+                onOk={async () => {
+                  if (!selectedAddress && !addressInput) {
+                    return;
+                  }
+                  
+                  const addressToAdd = selectedAddress || addressInput;
+                  const label = addressLabel || addressToAdd;
+                  
+                  // Geocode the address
+                  try {
+                    const geocodeResponse = await fetch(
+                      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+                        addressToAdd
+                      )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+                    );
+                    const geocodeData = await geocodeResponse.json();
+                    
+                    if (geocodeData.results && geocodeData.results[0]) {
+                      const result = geocodeData.results[0];
+                      const position = {
+                        lat: result.geometry.location.lat,
+                        lng: result.geometry.location.lng,
+                      };
+                      
+                      // Create a new location object
+                      const newLocation: School = {
+                        school: label,
+                        address: addressToAdd,
+                        position: position,
+                        county: '',
+                        state: '',
+                        isCustomAddress: true, // Mark as manually added address
+                      };
+                      
+                      // Add to locations (at the bottom)
+                      const newLocations = [...locations, newLocation];
+                      setLocations(newLocations);
+                      
+                      // Update selected addresses
+                      const newAddresses = [...selectedAddresses, addressToAdd];
+                      setSelectedAddresses(newAddresses);
+                      
+                      // Update localStorage
+                      localStorage.setItem("selectedAddresses", JSON.stringify(newAddresses));
+                      
+                      // Recalculate route if we have 2+ locations
+                      if (newLocations.length >= 2) {
+                        calculateRoute(newLocations);
+                      }
+                      
+                      // Reset form
+                      setAddressInput('');
+                      setSelectedAddress('');
+                      setAddressLabel('');
+                      setAddressModalVisible(false);
+                    } else {
+                      alert('Could not find the address. Please try again.');
+                    }
+                  } catch (error) {
+                    console.error('Error geocoding address:', error);
+                    alert('Error adding location. Please try again.');
+                  }
+                }}
+                onCancel={() => {
+                  setAddressModalVisible(false);
+                  setAddressLabel('');
+                }}
+                okText="Add"
+                cancelText="Cancel"
+              >
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium text-gray-700 mb-2">
+                      Address
+                    </label>
+                    <div className="text-sm text-gray-600 p-2 bg-gray-50 rounded">
+                      {selectedAddress || addressInput}
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col">
+                    <label className="text-sm font-medium text-gray-700 mb-2">
+                      Label (optional)
+                    </label>
+                    <Input
+                      placeholder="Enter a label for this location"
+                      value={addressLabel}
+                      onChange={(e) => setAddressLabel(e.target.value)}
+                      onPressEnter={() => {
+                        // Trigger the OK handler
+                        const okButton = document.querySelector('.ant-modal-footer .ant-btn-primary') as HTMLButtonElement;
+                        if (okButton) okButton.click();
+                      }}
+                    />
+                    <div className="text-xs text-gray-500 mt-1">
+                      Leave blank to use the address as the label
+                    </div>
+                  </div>
+                </div>
+              </Modal>
 
-              <Select
-                placeholder="Saved Journeys"
-                className="custom-select mt-[-10px]"
-                style={{ width: "160px" }}
-                options={[
-                  { value: "Call", label: "Call" },
-                  { value: "Text", label: "Text" },
-                  { value: "Email", label: "Email" },
-                ]}
-              />
-
-              <Input
-                placeholder="Name Journey"
-                className="custom-input"
-                style={{ width: "140px" }}
-              />
-
-              <Button type="primary" onClick={() => true}>
-                Save
-              </Button>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }} ref={savedJourneysContainerRef}>
+                <SavedJourneys
+                  onLoadJourney={handleLoadJourney}
+                  onSaveJourney={(journey) => {
+                    // This is handled by handleSaveJourney
+                  }}
+                  onDeleteJourney={handleDeleteJourney}
+                  savedJourneys={savedJourneys}
+                />
+                <Input
+                  placeholder="Name Journey"
+                  className="custom-input"
+                  style={{ width: "140px" }}
+                  value={journeyName}
+                  onChange={(e) => setJourneyName(e.target.value)}
+                  onPressEnter={handleSaveJourney}
+                />
+                <Button 
+                  type="primary" 
+                  onClick={handleSaveJourney}
+                  disabled={!journeyName.trim() || locations.length === 0}
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
           {/* PDF content begins here - this is what we'll capture for the PDF */}
@@ -1113,8 +1272,8 @@ export default function MapPage() {
             {isLoading || !isLoaded || !isMapLoaded ? (
               <div className="text-center py-8">Loading map...</div>
             ) : (
-              <div className="space-y-6 relative">
-                <div className="bg-white p-4 overflow-hidden">
+              <div className="space-y-6 relative overflow-hidden">
+                <div className="bg-white p-4 overflow-hidden relative">
                   <GoogleMap
                     mapContainerStyle={{
                       ...mapContainerStyle,
@@ -1180,101 +1339,173 @@ export default function MapPage() {
                             >
                               <Popover
                                 content={
-                                  <div className="space-y-2 min-w-[350px]">
+                                  <div className="space-y-2 min-w-[400px]">
                                     <div className="mb-4">
                                       <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
-                                        {location.school} <span className="!text-[16px]"> <i className="icon-svg-location1"></i> 0.3 Miles</span>
+                                        {location.school} 
+                                        {/* <span className="!text-[16px]"> <i className="icon-svg-location1"></i> 0.3 Miles</span> */}
                                       </h4>
-                                      <p className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                      <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
                                         {location.address} <br />
                                         {(location.county ||
                                           location.state) && (
-                                          <div>
+                                          <span>
                                             {location.county && (
                                               <span>{location.county}</span>
                                             )}
                                             {location.county &&
-                                              location.state && <span>, </span>}
+                                              location.state && <span> | </span>}
                                             {location.state && (
                                               <span>{location.state}</span>
                                             )}
-                                          </div>
+                                          </span>
                                         )}
-                                        <a href="javascript:void(0)" className="text-[14px] text-blue-600">{location.ad_email}</a>
-                                        <br />
-                                        <a href="javascript:void(0)" className="text-[14px] text-blue-600">{location.school_phone}</a>                                        
-                                      </p>
+                                        {location.ad_email && (
+                                          <>
+                                            <br />
+                                            <a href={`mailto:${location.ad_email}`} className="text-[14px] text-blue-600">{location.ad_email}</a>
+                                          </>
+                                        )}
+                                        {location.school_phone && (
+                                          <>
+                                            <br />
+                                            <a href={`tel:${location.school_phone.replace(/\D/g, '')}`} className="text-[14px] text-blue-600">{formatPhoneNumber(location.school_phone)}</a>
+                                          </>
+                                        )}                                        
+                                      </div>
                                     </div>
 
-                                    <div className="text-xs flex items-center justify-between">
-                                      <div>
-                                        {location.head_coach_first &&
-                                          hasFootballPackage && (
-                                            <div className="text-xs flex items-center justify-start gap-2">
+                                    {hasFootballPackage && (
+                                      <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
+                                        {schoolAthletes[index] && schoolAthletes[index].length > 0 ? (
+                                          schoolAthletes[index].map((athlete: any, athleteIndex: number) => (
+                                            <div key={athleteIndex} className="text-xs flex items-center justify-start gap-2">
                                               <img
-                                                src="/svgicons/plyer1.png"
-                                                alt="X Feed"
+                                                src={athlete.image_url || "/blank-user.svg"}
+                                                alt={athlete.name || "Athlete"}
                                                 height={50}
+                                                width={50}
+                                                className="rounded-full object-cover"
                                               />
                                               <div>
-                                              <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">Liam James</h6>
-                                              <span className="!text-[14px] !leading-[16px] mb-0">
-                                                D2 <br />
-                                                2024
-                                              </span>
+                                                <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
+                                                  {athlete.name || '-'}
+                                                </h6>
+                                                <span className="!text-[14px] !leading-[16px] mb-0">
+                                                  {athlete.athleticProjection || '-'} <br />
+                                                  {athlete.gradYear || '-'}
+                                                </span>
+                                              </div>
                                             </div>
-                                            </div>
-                                          )}
-                                      </div>
-                                      <div>
-                                        {location.school_phone && (
-                                          <div className="text-xs flex items-center justify-start gap-2">
-                                            <img
-                                              src="/svgicons/plyer1.png"
-                                              alt="X Feed"
-                                              height={50}
-                                            />
-                                            <div>
-                                              <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">Liam James</h6>
-                                              <span className="!text-[14px] !leading-[16px] mb-0">
-                                                D2 <br />
-                                                2024
-                                              </span>
-                                            </div>
-                                          </div>
+                                          ))
+                                        ) : schoolAthletes[index] !== undefined ? (
+                                          <div className="text-gray-400 text-[12px]">No athletes found</div>
+                                        ) : (
+                                          <div className="text-gray-400 text-[12px]">Loading athletes...</div>
                                         )}
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
                                 }
                                 title={null}
                                 trigger="click"
                                 open={popoverOpen[index]}
-                                onOpenChange={(open) => {
+                                onOpenChange={async (open) => {
                                   setPopoverOpen({
                                     ...popoverOpen,
                                     [index]: open,
                                   });
+                                  
+                                  // Fetch athletes when popover opens
+                                  if (open && userDetails?.customer_id) {
+                                    try {
+                                      // Use school_id directly if available, otherwise convert from high_school_id
+                                      let schoolId: string | undefined = location.school_id;
+                                      if (!schoolId && location.high_school_id) {
+                                        schoolId = (await convertHighSchoolIdToSchoolId(location.high_school_id)) || undefined;
+                                      } else if (!schoolId && location.raw_data?.high_school_id) {
+                                        schoolId = (await convertHighSchoolIdToSchoolId(location.raw_data.high_school_id)) || undefined;
+                                      }
+                                      
+                                      if (schoolId) {
+                                        const result = await fetchHighSchoolAthletes(
+                                          schoolId,
+                                          'fb',
+                                          userDetails.customer_id,
+                                          { page: 1, limit: 100 }
+                                        );
+                                        
+                                        if (result.data) {
+                                          // Sort by athletic projection first, then grad_year
+                                          const projectionOrder = [
+                                            'FBS P4 - Top half',
+                                            'FBS P4',
+                                            'FBS G5 - Top half',
+                                            'FBS G5',
+                                            'FCS - Full Scholarship',
+                                            'FCS',
+                                            'D2 - Top half',
+                                            'D2',
+                                            'D3 - Top half',
+                                            'D3',
+                                            'D3 Walk-on'
+                                          ];
+                                          
+                                          const sortedAthletes = result.data.sort((a: any, b: any) => {
+                                            // First sort by athletic projection
+                                            const indexA = projectionOrder.indexOf(a.athleticProjection || '');
+                                            const indexB = projectionOrder.indexOf(b.athleticProjection || '');
+                                            
+                                            if (indexA !== -1 && indexB !== -1) {
+                                              if (indexA !== indexB) {
+                                                return indexA - indexB;
+                                              }
+                                            } else if (indexA !== -1) {
+                                              return -1;
+                                            } else if (indexB !== -1) {
+                                              return 1;
+                                            } else if (a.athleticProjection && b.athleticProjection) {
+                                              const cmp = a.athleticProjection.localeCompare(b.athleticProjection);
+                                              if (cmp !== 0) return cmp;
+                                            }
+                                            
+                                            // Then sort by grad_year
+                                            const yearA = parseInt(a.gradYear) || 0;
+                                            const yearB = parseInt(b.gradYear) || 0;
+                                            return yearA - yearB;
+                                          });
+                                          
+                                          // Limit to 2-3 athletes that fit
+                                          setSchoolAthletes({
+                                            ...schoolAthletes,
+                                            [index]: sortedAthletes.slice(0, 2)
+                                          });
+                                        }
+                                      }
+                                    } catch (error) {
+                                      console.error('Error fetching athletes:', error);
+                                    }
+                                  }
                                 }}
                               >
                                 <div
-                                  className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-[#FF7525] pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
+                                  className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
                                   style={{ minWidth: "max-content" }}
                                 >
-                                  <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full">
+                                  <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
                                     <img
-                                      src="/svgicons/map-img.png"
-                                      alt="X Feed"
-                                      height={32}
+                                      src="/blank-hs.svg"
+                                      alt="School"
+                                      className="w-full h-full object-contain p-1"
                                     />
                                   </div>
                                   <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
                                     <span className="truncate block w-full">
                                       {location.school}
                                     </span>
-                                    <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
+                                    {/* <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
                                       4.5
-                                    </span>
+                                    </span> */}
                                   </h6>
                                 </div>
                               </Popover>
@@ -1283,39 +1514,42 @@ export default function MapPage() {
                         )
                     )}
                   </GoogleMap>
-                </div>
-
-                {routeInfo && (
-                  <div className="text-left p-2 bg-white/60 w-[290px] border-2 border-[#1C1D4D] border-solid absolute top-[370px] left-[31px] z-10">
-                    <div className="text-2xl font-bold text-gray-700 flex items-center justify-center">
-                      <img
-                        src="/svgicons/big-flag.svg"
-                        alt="X Feed"
-                        height={85}
-                        className="mr-2"
-                      />
-                      <div className="text-gray-600 mt-1 text-right">
-                        <h5 className="font-semibold !text-[22px] italic mb-1">
-                          Total Drive Time
-                        </h5>
-                        <h3 className="!text-[30px] font-bold italic mb-2">
-                          {routeInfo.totalTime}
-                        </h3>
-                        <h6 className="font-semibold !text-[22px] italic flex items-center justify-end">
-                          <img
-                            src="/svgicons/mile-car.svg"
-                            alt="X Feed"
-                            height={20}
-                            className="mr-2"
-                          />
-                          {routeInfo.totalDistance}
-                        </h6>
+                  {routeInfo && (
+                    <div className="text-left p-1.5 bg-white/60 w-[180px] border-2 border-[#1C1D4D] border-solid absolute bottom-[20px] left-[20px] z-10">
+                      <div className="text-base font-bold text-gray-700 flex items-center justify-center">
+                        <img
+                          src="/svgicons/big-flag.svg"
+                          alt="X Feed"
+                          height={50}
+                          className="mr-1.5"
+                        />
+                        <div className="text-gray-600 mt-0.5 text-right">
+                          <h5 className="font-semibold !text-[14px] italic mb-0.5">
+                            Total Drive Time
+                          </h5>
+                          <h3 className="!text-[18px] font-bold italic mb-1">
+                            {routeInfo.totalTime}
+                          </h3>
+                          <h6 className="font-semibold !text-[14px] italic flex items-center justify-end">
+                            <img
+                              src="/svgicons/mile-car.svg"
+                              alt="X Feed"
+                              height={16}
+                              className="mr-1.5"
+                            />
+                            {routeInfo.totalDistance}
+                          </h6>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                <div className="map-schools-container mx-8 !mt-[-50px]">
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+                  <div 
+                    className="map-schools-container !mt-[-50px]"
+                    style={{ maxWidth: '1400px', width: '100%' }}
+                  >
                   <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
@@ -1325,7 +1559,7 @@ export default function MapPage() {
                       items={locations.map((_, index) => index)}
                       strategy={verticalListSortingStrategy}
                     >
-                      <div className="space-y-2">
+                      <div className="">
                         {locations.map((location, index) => (
                           <SortableItem
                             key={index}
@@ -1341,6 +1575,7 @@ export default function MapPage() {
                       </div>
                     </SortableContext>
                   </DndContext>
+                  </div>
                 </div>
               </div>
             )}
@@ -1357,9 +1592,57 @@ export default function MapPage() {
       </div>
 
       <style jsx global>{`
+        /* Prevent double scrollbars - only for this page */
+        /* Override dashboard layout Content overflow */
+        .ant-layout-content {
+          overflow: hidden !important;
+        }
+        body {
+          overflow: hidden !important;
+        }
+        #__next {
+          height: 100vh !important;
+          overflow: hidden !important;
+        }
+        .map-schools-container .card-list {
+          margin-bottom: 45px !important;
+        }
         .marker-number {
           font-weight: bold;
           font-size: 14px;
+        }
+        .mile-car-left {
+          width: 40px;
+          height: 25px;
+          display: inline-block;
+          background: url(/svgicons/mile-car.svg);
+          background-size: contain;
+          background-repeat: no-repeat;
+          background-position: center;
+          flex-shrink: 0;
+          margin-right: 8px;
+          align-self: center;
+        }
+        .mile-flage-small {
+          background: url(/svgicons/mile-flage.svg);
+          background-size: contain;
+          background-repeat: no-repeat;
+          background-position: center;
+          width: 35px;
+          height: 40px;
+          position: absolute;
+          top: -20px;
+          right: -35px;
+          display: inline-block;
+        }
+        .mile-line-bottom {
+          width: calc(100% + 60px);
+          height: 2px;
+          border-bottom: 2px dashed #d4d4d4;
+          position: absolute;
+          bottom: -8px;
+          left: -30px;
+          z-index: 1;
         }
         .school-label-text {
           background-color: white !important;
@@ -1446,6 +1729,30 @@ export default function MapPage() {
         }
         button[title="Remove stop"]:hover {
           background-color: #fecaca !important;
+        }
+        /* Google Places Autocomplete dropdown styles */
+        .pac-container {
+          z-index: 9999 !important;
+          border-radius: 4px !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+          margin-top: 4px !important;
+          overflow: visible !important;
+          width: 400px !important;
+          min-width: 400px !important;
+        }
+        .pac-item {
+          padding: 8px 12px !important;
+          cursor: pointer !important;
+          border-top: 1px solid #e6e6e6 !important;
+        }
+        .pac-item:first-child {
+          border-top: none !important;
+        }
+        .pac-item:hover {
+          background-color: #f5f5f5 !important;
+        }
+        .pac-item-selected {
+          background-color: #e6f7ff !important;
         }
       `}</style>
     </div>

@@ -2042,15 +2042,20 @@ export const fetchUsersForCustomer = async (
       return [];
     }
     // // Debug log removed("[DEBUG] fetchUsersForCustomer returned:", data);
-    // Map to a flat array of user info
-    return (
-      data?.filter((item: any) => item.user_detail)
-        .map((item: any) => ({
-          id: item.user_detail.id,
-          name_first: item.user_detail.name_first,
-          name_last: item.user_detail.name_last,
-        })) || []
+    // Map to a flat array of user info and deduplicate by user ID
+    const users: Array<{ id: string; name_first: string; name_last: string }> = data?.filter((item: any) => item.user_detail)
+      .map((item: any) => ({
+        id: item.user_detail.id,
+        name_first: item.user_detail.name_first,
+        name_last: item.user_detail.name_last,
+      })) || [];
+    
+    // Deduplicate users by ID
+    const uniqueUsers = Array.from(
+      new Map(users.map(user => [user.id, user])).values()
     );
+    
+    return uniqueUsers as Array<{ id: string; email: string; name_first: string; name_last: string }>;
   } catch (err) {
     console.error('Error in fetchUsersForCustomer:', err);
     return [];

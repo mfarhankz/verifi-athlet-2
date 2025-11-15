@@ -17,6 +17,7 @@ interface AlertModalProps {
   teamUsers: TeamUser[];
   loading: boolean;
   mode: "add" | "edit";
+  alertType?: "tp_alert" | "offer_alert"; // Defaults to "tp_alert" for backward compatibility
 }
 
 // Survey-related data type IDs that indicate survey data
@@ -106,36 +107,19 @@ const convertDisplayNamesToDataTypes = (filterString: string): string => {
 
   let convertedFilter = filterString;
   
-  // Convert baseball stat category prefixes (e.g., "Hitting - HR Min: 4" to "hr Min: 4")
-  // This handles the special baseball display format with category prefixes
-  // Remove the category prefix and convert stat name to lowercase, but keep comparison intact
-  convertedFilter = convertedFilter.replace(/(Hitting|Pitching|Fielding)\s*-\s*([^:]+):/gi, (match, category, statName) => {
-    // Convert stat name to lowercase but keep the rest intact
-    return `${statName.toLowerCase()}:`;
-  });
+  // Remove stat category prefixes (e.g., "Hitting - HR Min: 4" to "hr Min: 4")
+  // Categories come from sport_stat_config.stat_category and are capitalized when added to filters
+  // Matches any capitalized word(s) followed by " - " to handle any category dynamically
+  // Examples: "Pitchers - so_per9 min: 3", "Hitting - HR Min: 4", "Fielding - fld_pct Min: 0.9"
+  convertedFilter = convertedFilter.replace(/\b[A-Z][a-zA-Z]*(?:s)?\s*-\s*/g, '');
   
   // Normalize Grad Student boolean to is_transfer_graduate_student TRUE/FALSE
   convertedFilter = convertedFilter
     .replace(/Grad Student:\s*Yes/gi, 'is_transfer_graduate_student: TRUE')
     .replace(/Grad Student:\s*No/gi, 'is_transfer_graduate_student: FALSE');
 
-  // Do not remove GS; we persist it as gs
-
-  // Normalize GK Min variants to g_min_played Min: value
-  // e.g., "| GK Min Min: 100" or "| GK Min: 100" -> "| g_min_played Min: 100"
-  convertedFilter = convertedFilter
-    .replace(/(^|\|)\s*GK\s*Min\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} g_min_played Min: ${val.trim()}`)
-    .replace(/(^|\|)\s*GK\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} g_min_played Min: ${val.trim()}`);
-
-  // Normalize Min variants to min_played Min: value
-  // e.g., "| Min Min: 100" or "| Min: 100" -> "| min_played Min: 100"
-  convertedFilter = convertedFilter
-    .replace(/(^|\|)\s*Min\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} min_played Min: ${val.trim()}`)
-    .replace(/(^|\|)\s*Min:\s*([^|]+)(?=\||$)/gi, (m, sep, val) => `${sep} min_played Min: ${val.trim()}`);
-
   // Convert statistical comparison filters (e.g., "fld_pct: greater 0.1" to "fld_pct Min: .1")
   // Only match patterns that have "greater" or "less" after the colon, not "Min:" or "Max:"
-  // Use word boundaries to ensure we don't match "hr Min: 4" as "hr Min: greater 4"
   convertedFilter = convertedFilter.replace(/\b([a-zA-Z_]+):\s*(greater|less)\s+(\d*\.?\d+)\b/gi, (match, statName, comparison, value) => {
     // Skip if the statName already contains "Min" or "Max" (already converted)
     if (statName.includes('Min') || statName.includes('Max')) {
@@ -146,13 +130,6 @@ const convertDisplayNamesToDataTypes = (filterString: string): string => {
     const formattedValue = value.replace(/^0\./, '.');
     return `${statName} ${comparisonLabel}: ${formattedValue}`;
   });
-
-  // After comparison normalization, convert GP/GS tokens to lowercase column keys
-  convertedFilter = convertedFilter
-    .replace(/\bGP\s+(Min|Max):/g, (m, mm) => `gp ${mm}:`)
-    .replace(/\bGS\s+(Min|Max):/g, (m, mm) => `gs ${mm}:`)
-    .replace(/(^|\|)\s*GP:/g, (m, sep) => `${sep} gp:`)
-    .replace(/(^|\|)\s*GS:/g, (m, sep) => `${sep} gs:`);
   
   // Convert display names to data_type names
   Object.entries(displayToDataTypeMap).forEach(([displayName, dataTypeName]) => {
@@ -161,29 +138,48 @@ const convertDisplayNamesToDataTypes = (filterString: string): string => {
     convertedFilter = convertedFilter.replace(regex, dataTypeName);
   });
 
+  // Capitalize lowercase "min:" and "max:" to "Min:" and "Max:"
+  // This handles cases like "so_per9 min: 3" -> "so_per9 Min: 3"
+  convertedFilter = convertedFilter.replace(/\b(min|max):/gi, (match) => {
+    return match.charAt(0).toUpperCase() + match.slice(1).toLowerCase();
+  });
+
   // Fallback: default any remaining labels to snake_case column keys
-  // Example: "GK Saves:" -> "gk_saves:" if not caught by explicit map
-  convertedFilter = convertedFilter.replace(/(^|\|)\s*([A-Za-z][A-Za-z ]+):/g, (match, sep, label) => {
+  // This handles all stat names uniformly
+  convertedFilter = convertedFilter.replace(/(^|\|)\s*([A-Za-z_][A-Za-z_ ]+):/g, (match, sep, label) => {
     const trimmed = label.trim();
-    // Skip already-converted or known labels we intentionally map elsewhere
-    const lower = trimmed.toLowerCase();
-    if (lower.endsWith(' min') || lower === 'date entered' || lower === 'international' || lower === 'div' || lower === 'division') {
-      return match; // handled elsewhere or removed
+    // Handle stat names followed by "Min" or "Max" - preserve capitalization of Min/Max
+    const minMaxMatch = trimmed.match(/^(.+?)\s+(Min|Max)$/i);
+    if (minMaxMatch) {
+      const statName = minMaxMatch[1];
+      const comparisonLabel = minMaxMatch[2];
+      // If statName is already in snake_case format, keep it as is
+      const snakeStatName = /^[a-z_]+$/.test(statName) 
+        ? statName 
+        : statName
+            .replace(/\s+/g, '_')
+            .replace(/[^a-zA-Z_]/g, '')
+            .toLowerCase();
+      // Capitalize Min/Max
+      const capitalizedComparison = comparisonLabel.charAt(0).toUpperCase() + comparisonLabel.slice(1).toLowerCase();
+      return `${sep} ${snakeStatName} ${capitalizedComparison}:`;
     }
-    // If label already looks like a column (has underscore or lowercase letters only), keep
+    // Skip already-converted labels (already in snake_case)
     if (/^[a-z_]+$/.test(trimmed)) {
       return match;
     }
+    // Skip known non-stat labels
+    const lower = trimmed.toLowerCase();
+    if (lower === 'date entered' || lower === 'international' || lower === 'div' || lower === 'division') {
+      return match;
+    }
+    // Convert to snake_case
     const snake = trimmed
       .replace(/\s+/g, '_')
       .replace(/[^a-zA-Z_]/g, '')
       .toLowerCase();
     return `${sep} ${snake}:`;
   });
-
-  // Ensure canonical minutes format: when we have "min_played:" or "g_min_played:" without Min/Max, add Min:
-  convertedFilter = convertedFilter
-    .replace(/(^|\|)\s*(min_played|g_min_played):\s*([^|\s][^|]*)(?=\||$)/gi, (m, sep, col, val) => `${sep} ${col} Min: ${val.trim()}`);
 
   // Clean up separators and whitespace
   convertedFilter = convertedFilter
@@ -230,6 +226,7 @@ const AlertModal: React.FC<AlertModalProps> = ({
   teamUsers,
   loading,
   mode,
+  alertType = "tp_alert", // Default to tp_alert for backward compatibility
 }) => {
   const { activeCustomerId } = useCustomer();
   const [form] = Form.useForm();
@@ -242,6 +239,8 @@ const AlertModal: React.FC<AlertModalProps> = ({
       : []
   );
   const [saving, setSaving] = useState(false);
+  const [alertFrequency, setAlertFrequency] = useState<string>(initialValues.alert_frequency || "daily");
+  const isOfferAlert = alertType === "offer_alert";
 
   useEffect(() => {
     form.setFieldsValue({
@@ -252,7 +251,10 @@ const AlertModal: React.FC<AlertModalProps> = ({
         initialValues.recipient && initialValues.recipient !== "entire_staff"
           ? initialValues.recipient.split(",")
           : [],
+      alertFrequency: initialValues.alert_frequency || "daily",
+      weeklyDay: initialValues.weekly_day || undefined,
     });
+    setAlertFrequency(initialValues.alert_frequency || "daily");
     setRecipientType(
       initialValues.recipient === "entire_staff" ? "staff" : "individual"
     );
@@ -267,6 +269,12 @@ const AlertModal: React.FC<AlertModalProps> = ({
     // Validate that recipients are selected when "Select Individuals" is chosen
     if (values.recipientType === "individual" && (!values.selectedIds || values.selectedIds.length === 0)) {
       message.error("Please select at least one recipient");
+      return;
+    }
+
+    // Validate day of week for weekly alerts
+    if (isOfferAlert && values.alertFrequency === "weekly" && !values.weeklyDay) {
+      message.error("Please select a day of the week for weekly alerts");
       return;
     }
 
@@ -321,26 +329,77 @@ const AlertModal: React.FC<AlertModalProps> = ({
         // Convert display names to standard data_type names before saving
         filter = convertDisplayNamesToDataTypes(filter);
         
-        // Determine if this should be a survey alert (use original filter before transformation)
-        const originalFilter = initialValues.filter || "";
-        const isSurveyAlert = await determineSurveyAlert(activeCustomerId, originalFilter);
+        // Always remove m_status filters
+        filter = filter.replace(/Status: [^|]+(\s*\|\s*)?/gi, '');
+        filter = filter.replace(/m_status: [^|]+(\s*\|\s*)?/gi, '');
+        // Clean up any trailing or leading separators
+        filter = filter.replace(/\|\s*$/, '').replace(/^\s*\|\s*/, '').trim();
         
-        const alertData = {
+        // Determine if this should be a survey alert (use original filter before transformation)
+        // Only for tp_alert, not for offer_alert
+        const originalFilter = initialValues.filter || "";
+        const isSurveyAlert = isOfferAlert ? false : await determineSurveyAlert(activeCustomerId, originalFilter);
+        
+        const alertData: any = {
           customer_id: activeCustomerId,
           user_id,
           recipient,
           rule: values.ruleName,
           filter,
-          survey_alert: isSurveyAlert,
           created_at: new Date().toISOString(),
         };
         
-        const { error } = await supabase.from("tp_alert").insert(alertData);
+        // Add alert-specific fields
+        if (isOfferAlert) {
+          alertData.alert_frequency = values.alertFrequency || "daily";
+          if (values.alertFrequency === "weekly" && values.weeklyDay) {
+            alertData.weekly_day = values.weeklyDay;
+          } else {
+            alertData.weekly_day = null;
+          }
+        } else {
+          alertData.survey_alert = isSurveyAlert;
+        }
+        
+        const tableName = isOfferAlert ? "offer_alert" : "tp_alert";
+        const { error } = await supabase.from(tableName).insert(alertData);
         if (error) {
           message.error("Error saving alert: " + error.message);
           setSaving(false);
           return;
         }
+        
+        // Send notification email to administrators
+        try {
+          const emailResponse = await fetch('/api/alert-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              rule: values.ruleName,
+              filter: filter,
+              recipient: recipient,
+              customerId: activeCustomerId,
+              userId: user_id,
+              surveyAlert: isOfferAlert ? false : isSurveyAlert,
+              alertType: isOfferAlert ? 'offer_alert' : 'tp_alert',
+              alertFrequency: isOfferAlert ? (values.alertFrequency || 'daily') : undefined,
+              weeklyDay: isOfferAlert && values.alertFrequency === 'weekly' ? values.weeklyDay : undefined,
+              createdAt: alertData.created_at,
+            }),
+          });
+
+          if (!emailResponse.ok) {
+            const errorData = await emailResponse.json();
+            console.error('Failed to send alert notification email:', errorData);
+            // Don't show error to user, just log it
+          }
+        } catch (emailError) {
+          console.error('Error sending alert notification email:', emailError);
+          // Don't show error to user, just log it
+        }
+        
         onSave({ rule: values.ruleName, recipient });
       } catch (err) {
         message.error("Unexpected error saving alert");
@@ -350,11 +409,13 @@ const AlertModal: React.FC<AlertModalProps> = ({
       // Edit mode: end old alert, insert new
       try {
         if (!initialValues.id) return;
-        // 1. End the old alert
-        await supabase
-          .from("tp_alert")
-          .update({ ended_at: new Date().toISOString() })
-          .eq("id", initialValues.id);
+        // 1. End the old alert (only for tp_alert, offer_alert doesn't have ended_at)
+        if (!isOfferAlert) {
+          await supabase
+            .from("tp_alert")
+            .update({ ended_at: new Date().toISOString() })
+            .eq("id", initialValues.id);
+        }
         // 2. Insert the new alert
         if (!activeCustomerId) {
           message.error("No active customer ID found");
@@ -404,26 +465,77 @@ const AlertModal: React.FC<AlertModalProps> = ({
         // Convert display names to standard data_type names before saving
         editFilter = convertDisplayNamesToDataTypes(editFilter);
         
-        // Determine if this should be a survey alert (use original filter before transformation)
-        const originalEditFilter = initialValues.filter || "";
-        const isSurveyAlert = await determineSurveyAlert(activeCustomerId, originalEditFilter);
+        // Always remove m_status filters
+        editFilter = editFilter.replace(/Status: [^|]+(\s*\|\s*)?/gi, '');
+        editFilter = editFilter.replace(/m_status: [^|]+(\s*\|\s*)?/gi, '');
+        // Clean up any trailing or leading separators
+        editFilter = editFilter.replace(/\|\s*$/, '').replace(/^\s*\|\s*/, '').trim();
         
-        const newAlertData = {
+        // Determine if this should be a survey alert (use original filter before transformation)
+        // Only for tp_alert, not for offer_alert
+        const originalEditFilter = initialValues.filter || "";
+        const isSurveyAlert = isOfferAlert ? false : await determineSurveyAlert(activeCustomerId, originalEditFilter);
+        
+        const newAlertData: any = {
           customer_id: activeCustomerId,
           user_id,
           recipient,
           rule: values.ruleName,
           created_at: new Date().toISOString(),
           filter: editFilter, // Use the transformed filter
-          survey_alert: isSurveyAlert,
         };
         
-        const { error } = await supabase.from("tp_alert").insert(newAlertData);
+        // Add alert-specific fields
+        if (isOfferAlert) {
+          newAlertData.alert_frequency = values.alertFrequency || "daily";
+          if (values.alertFrequency === "weekly" && values.weeklyDay) {
+            newAlertData.weekly_day = values.weeklyDay;
+          } else {
+            newAlertData.weekly_day = null;
+          }
+        } else {
+          newAlertData.survey_alert = isSurveyAlert;
+        }
+        
+        const tableName = isOfferAlert ? "offer_alert" : "tp_alert";
+        const { error } = await supabase.from(tableName).insert(newAlertData);
         if (error) {
           message.error("Error updating alert: " + error.message);
           setSaving(false);
           return;
         }
+        
+        // Send notification email to administrators (treating edit as new alert creation)
+        try {
+          const emailResponse = await fetch('/api/alert-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              rule: values.ruleName,
+              filter: editFilter,
+              recipient: recipient,
+              customerId: activeCustomerId,
+              userId: user_id,
+              surveyAlert: isOfferAlert ? false : isSurveyAlert,
+              alertType: isOfferAlert ? 'offer_alert' : 'tp_alert',
+              alertFrequency: isOfferAlert ? (values.alertFrequency || 'daily') : undefined,
+              weeklyDay: isOfferAlert && values.alertFrequency === 'weekly' ? values.weeklyDay : undefined,
+              createdAt: newAlertData.created_at,
+            }),
+          });
+
+          if (!emailResponse.ok) {
+            const errorData = await emailResponse.json();
+            console.error('Failed to send alert notification email:', errorData);
+            // Don't show error to user, just log it
+          }
+        } catch (emailError) {
+          console.error('Error sending alert notification email:', emailError);
+          // Don't show error to user, just log it
+        }
+        
         onSave();
       } catch (err) {
         message.error("Failed to update alert");
@@ -433,10 +545,10 @@ const AlertModal: React.FC<AlertModalProps> = ({
   };
 
   return (
-    <Modal
+      <Modal
       open={open}
       onCancel={onCancel}
-      title={mode === "add" ? "Set Up Email Alert" : "Edit Alert"}
+      title={mode === "add" ? (isOfferAlert ? "Set Up Offer Alert" : "Set Up Email Alert") : "Edit Alert"}
       footer={null}
       centered
       confirmLoading={loading || saving}
@@ -454,12 +566,59 @@ const AlertModal: React.FC<AlertModalProps> = ({
             initialValues.recipient && initialValues.recipient !== "entire_staff"
               ? initialValues.recipient.split(",")
               : [],
+          alertFrequency: initialValues.alert_frequency || "daily",
         }}
         onFinish={handleFinish}
       >
         <Form.Item label="Rule Name" name="ruleName" required>
           <Input placeholder="Enter a name for this alert" />
         </Form.Item>
+        {isOfferAlert && (
+          <>
+            <Form.Item label="Alert Frequency" name="alertFrequency" required>
+              <Select
+                style={{ width: "100%" }}
+                value={alertFrequency}
+                onChange={(value) => {
+                  setAlertFrequency(value);
+                  form.setFieldValue("alertFrequency", value);
+                  form.setFieldValue("weeklyDay", undefined);
+                }}
+                options={[
+                  { value: "daily", label: "Daily" },
+                  { value: "weekly", label: "Weekly" },
+                ]}
+              />
+            </Form.Item>
+            {alertFrequency === "weekly" && (
+              <Form.Item 
+                label="Day of Week" 
+                name="weeklyDay" 
+                required
+                rules={[
+                  {
+                    required: true,
+                    message: "Please select a day of the week",
+                  }
+                ]}
+              >
+                <Select
+                  style={{ width: "100%" }}
+                  placeholder="Select day of week"
+                  options={[
+                    { value: "Sunday", label: "Sunday" },
+                    { value: "Monday", label: "Monday" },
+                    { value: "Tuesday", label: "Tuesday" },
+                    { value: "Wednesday", label: "Wednesday" },
+                    { value: "Thursday", label: "Thursday" },
+                    { value: "Friday", label: "Friday" },
+                    { value: "Saturday", label: "Saturday" },
+                  ]}
+                />
+              </Form.Item>
+            )}
+          </>
+        )}
         {(mode === "edit" || initialValues.filter) && (
           <Form.Item label="Filter">
             <div style={{ padding: '4px 11px', background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4, color: '#555' }}>

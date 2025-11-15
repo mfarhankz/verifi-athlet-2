@@ -19,6 +19,7 @@ interface Step0Data {
   highSchoolId?: string;
   highSchoolName?: string;
   email?: string;
+  campPartners?: string;
 }
 
 interface Step0Props {
@@ -33,6 +34,7 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
     highSchoolId: surveyData.highSchoolId || "",
     highSchoolName: surveyData.highSchoolName || "",
     email: surveyData.email || "",
+    campPartners: surveyData.campPartners || "",
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,6 +43,7 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
   const [searchValue, setSearchValue] = useState("");
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [loadingAthletes, setLoadingAthletes] = useState(false);
+  const [selectedAthleteData, setSelectedAthleteData] = useState<{ first_name: string; last_name: string } | null>(null);
 
   // Load high schools when component mounts
   useEffect(() => {
@@ -126,6 +129,7 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
         athleteId: '', // Clear athlete selection when school changes
         athleteName: '', // Clear athlete name when school changes
       }));
+      setSelectedAthleteData(null); // Clear selected athlete data when school changes
     }
   };
 
@@ -138,6 +142,10 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
         athleteId: selectedAthlete.id,
         athleteName: `${selectedAthlete.first_name} ${selectedAthlete.last_name}`,
       }));
+      setSelectedAthleteData({
+        first_name: selectedAthlete.first_name,
+        last_name: selectedAthlete.last_name,
+      });
     }
   };
 
@@ -171,13 +179,189 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
       alert('Please enter a valid email address.');
       return;
     }
+
+    if (!selectedAthleteData) {
+      alert('Please select an athlete.');
+      return;
+    }
     
     setIsSubmitting(true);
     try {
-      onComplete(formData);
+      // Create auth user and athlete_user_detail record
+      const response = await fetch('/api/create-athlete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email.trim(),
+          athleteId: formData.athleteId,
+          firstName: selectedAthleteData.first_name,
+          lastName: selectedAthleteData.last_name,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        // Log full error details for debugging
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: result.error,
+          details: result.details,
+          fullResponse: result
+        });
+        throw new Error(result.error || 'Failed to create user account');
+      }
+
+      console.log('User created successfully:', result.user);
+      
+      // Sign the user in immediately so they're authenticated for saving to athlete_fact
+      // The RLS policy requires authenticated users with matching athlete_user_detail
+      
+      // Use password sign-in (most reliable method)
+      // The API always returns temporaryPassword for password-based sign-in
+      let authenticated = false;
+      const email = result.email || formData.email.trim();
+      const password = result.temporaryPassword;
+      
+      if (email && password) {
+        console.log('Signing in user with temporary password...');
+        try {
+          // Wait a brief moment for the user to be fully created in the auth system
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: email,
+            password: password,
+          });
+
+          if (signInError) {
+            console.error('Error signing in user with password:', signInError);
+            // Check if it's a timing issue - user might not be fully created yet
+            if (signInError.message?.includes('Invalid login credentials') || 
+                signInError.message?.includes('Email not confirmed')) {
+              // Wait a bit longer and try again
+              console.log('Retrying sign-in after delay...');
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password,
+              });
+              
+              if (retryError) {
+                console.error('Retry sign-in also failed:', retryError);
+                // Continue anyway - user account is created, they just won't be authenticated yet
+              } else if (retryData.session) {
+                console.log('✅ User signed in successfully on retry:', retryData.user.id);
+                authenticated = true;
+              }
+            }
+          } else if (signInData.session) {
+            console.log('✅ User signed in successfully:', signInData.user.id);
+            authenticated = true;
+          }
+        } catch (authError) {
+          console.error('Error with password sign-in:', authError);
+          // Continue anyway - user account is created
+        }
+      } else {
+        console.warn('⚠️ No email or password provided for sign-in');
+      }
+      
+      // Verify we have a session before proceeding
+      if (!authenticated) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) {
+          console.log('✅ Session found after sign-in attempt');
+          authenticated = true;
+        } else {
+          console.warn('⚠️ No active session after sign-in attempt. User will need to sign in manually.');
+          // Show a warning but continue - the user can still try to complete the survey
+          // The saveToAthleteFact function will check authentication and show an error if needed
+        }
+      }
+      
+      // Wait a moment for session to be fully established
+      if (authenticated) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      
+      // Save email and camp partners preference to athlete_fact
+      // Check for active session before saving
+      if (formData.athleteId) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          
+          if (sessionData.session) {
+            const now = new Date().toISOString();
+            const factEntries: Array<{
+              athlete_id: string;
+              data_type_id: number;
+              value: string;
+              source: string;
+              date: string;
+              created_at: string;
+            }> = [];
+
+            // Save email (data_type_id 571)
+            if (formData.email.trim()) {
+              factEntries.push({
+                athlete_id: formData.athleteId,
+                data_type_id: 571,
+                value: formData.email.trim(),
+                source: 'college_selector',
+                date: now,
+                created_at: now
+              });
+            }
+
+            // Save camp partners preference (data_type_id 1137) if yes
+            if (formData.campPartners === 'yes') {
+              factEntries.push({
+                athlete_id: formData.athleteId,
+                data_type_id: 1137,
+                value: '1',
+                source: 'college_selector',
+                date: now,
+                created_at: now
+              });
+            }
+
+            if (factEntries.length > 0) {
+              const { error: factError } = await supabase
+                .from('athlete_fact')
+                .insert(factEntries);
+
+              if (factError) {
+                console.error('Error saving to athlete_fact:', factError);
+                // Don't block the flow if this fails, just log it
+              } else {
+                console.log('Successfully saved email and camp partners preference to athlete_fact');
+              }
+            }
+          } else {
+            console.warn('No active session - skipping athlete_fact save. User will need to sign in manually.');
+          }
+        } catch (factError) {
+          console.error('Error in saving to athlete_fact:', factError);
+          // Don't block the flow if this fails
+        }
+      }
+      
+      // Ensure athleteId is included in the data passed to next step
+      const stepData = {
+        ...formData,
+        athleteId: formData.athleteId, // Explicitly include athleteId
+      };
+      
+      // Proceed to next step
+      onComplete(stepData);
     } catch (error) {
       console.error("Error in handleSubmit:", error);
-      alert("Error proceeding to next step. Please try again.");
+      alert(error instanceof Error ? error.message : "Error creating account. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -264,6 +448,7 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
                   athleteName: '',
                 }));
                 setSearchValue('');
+                setSelectedAthleteData(null);
               }}
             />
             {formData.highSchoolName && (
@@ -319,6 +504,7 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
                   athleteId: '',
                   athleteName: '',
                 }));
+                setSelectedAthleteData(null);
               }}
             />
             {formData.highSchoolId && !loadingAthletes && athletes.length > 0 && (
@@ -344,6 +530,24 @@ export default function Step0({ surveyData, onComplete }: Step0Props) {
               value={formData.email}
               onChange={(e) => handleChange("email", e.target.value)}
               placeholder="Enter your email address"
+            />
+          </Flex>
+
+          {/* Question 4: Camp Partners */}
+          <Flex vertical className="mb-5 survey-textarea">
+            <Typography.Title level={4}>
+              Would you like to receive information about camps from our camp partners?
+            </Typography.Title>
+            <Select
+              className="w-full"
+              placeholder="Select yes or no"
+              value={formData.campPartners}
+              onChange={(value) => handleChange("campPartners", value)}
+              options={[
+                { value: 'yes', label: 'Yes' },
+                { value: 'no', label: 'No' }
+              ]}
+              allowClear
             />
           </Flex>
         </div>

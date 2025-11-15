@@ -447,6 +447,7 @@ export interface RecruitingBoardAthlete {
   athlete_tier: string | null;
   rank: number;
   source: string | null;
+  customer_position: string | null;
   dropped_reason: string | null;
   created_at: string;
   ended_at: string | null;
@@ -485,6 +486,7 @@ export interface RecruitingBoardData {
   direction: string;
   position: string; // Column name (recruiting board column)
   primary_position?: string; // Athlete's primary position
+  customer_position?: string; // Customer-defined position from recruiting_board_athlete table
   school_id?: string;
   conference?: string;
   status?: string;
@@ -550,6 +552,7 @@ export type OfferAlert = {
   filter: string;
   rule: string;
   alert_frequency: string;
+  weekly_day?: string | null; // Day of week for weekly alerts (proper case: "Monday", "Tuesday", etc., or null)
   recipient: string;
   user_id: string;
   customer_id: string;

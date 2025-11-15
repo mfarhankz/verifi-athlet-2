@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import MultipleContainers from "@/app/dndkit/presets/Sortable/MultipleContainers";
-import { Flex, Typography, Spin, Alert, message, Button, Space } from "antd";
+import { Flex, Typography, Spin, Alert, message, Button, Space, Modal } from "antd";
 import { DownOutlined } from "@ant-design/icons";
-import { fetchRecruitingBoardData, fetchRecruitingBoardPositions, createRecruitingBoardPosition, endRecruitingBoardPosition, updateRecruitingBoardRanks, endRecruitingBoardAthlete, fetchRecruitingBoards, getOrCreateMainBoard, updateRecruitingBoardPositionOrder } from "@/lib/queries";
+import { fetchRecruitingBoardData, fetchRecruitingBoardPositions, createRecruitingBoardPosition, endRecruitingBoardPosition, updateRecruitingBoardRanks, endRecruitingBoardAthlete, fetchRecruitingBoards, getOrCreateMainBoard, updateRecruitingBoardPositionOrder, clearRecruitingBoard } from "@/lib/queries";
 import { RecruitingBoardData, RecruitingBoardPosition, RecruitingBoardBoard } from "@/types/database";
-import { fetchUserDetails } from "@/utils/utils";
 import { useZoom } from "@/contexts/ZoomContext";
 import { useCustomer } from "@/contexts/CustomerContext";
 import ChooseBoardDropdown from "@/app/(dashboard)/_components/ChooseBoardDropdown";
@@ -21,7 +21,7 @@ export default function RecruitingBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [customerId, setCustomerId] = useState<string | null>(null);
-  const [renderChunkSize, setRenderChunkSize] = useState(50); // Start with 50 athletes
+  const [renderChunkSize] = useState(50); // Start with 50 athletes
   const [visibleData, setVisibleData] = useState<RecruitingBoardData[]>([]);
   
   // Source filter toggles
@@ -37,7 +37,7 @@ export default function RecruitingBoard() {
   const [filterState, setFilterState] = useState<FilterState>({});
   
   // Card layout state
-  const [savedLayouts, setSavedLayouts] = useState([
+  const [savedLayouts] = useState([
     { id: '1', name: 'Default Layout' }
   ]);
   const [isLayoutDropdownVisible, setIsLayoutDropdownVisible] = useState(false);
@@ -52,8 +52,27 @@ export default function RecruitingBoard() {
   const [selectedColumnName, setSelectedColumnName] = useState<string>('');
   const [selectedColumnAthletes, setSelectedColumnAthletes] = useState<RecruitingBoardData[]>([]);
 
+  // Clear board modal state
+  const [isClearBoardModalVisible, setIsClearBoardModalVisible] = useState(false);
+  const [isClearingBoard, setIsClearingBoard] = useState(false);
+
   const { zoom } = useZoom();
   const { activeCustomerId, customers, userDetails: contextUserDetails, isReady: contextReady } = useCustomer();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  // Store original router methods
+  const routerRef = useRef(router);
+  const originalRouterMethodsRef = useRef<{
+    push: typeof router.push;
+    replace: typeof router.replace;
+    back: typeof router.back;
+    forward: typeof router.forward;
+  } | null>(null);
+  
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   // Analyze data to determine which source types exist
   const sourceAnalysis = useMemo(() => {
@@ -293,7 +312,7 @@ export default function RecruitingBoard() {
           if (endDate && athleteDate > endDate) {
             return false;
           }
-        } catch (e) {
+        } catch {
           // If date parsing fails, exclude the athlete
           return false;
         }
@@ -493,18 +512,83 @@ export default function RecruitingBoard() {
 
 
 
-  const handleRankUpdate = async (updates: { recruitingBoardId: string; rank: number; position?: string }[]) => {
-    if (!customerId) return;
+  // Queue for processing rank updates sequentially
+  const rankUpdateQueueRef = useRef<{ recruitingBoardId: string; rank: number; position?: string }[][]>([]);
+  const isProcessingRankUpdatesRef = useRef(false);
+  const [hasPendingUpdates, setHasPendingUpdates] = useState(false);
+  // Use a ref to track pending updates for beforeunload handler (state updates might be delayed)
+  const hasPendingUpdatesRef = useRef(false);
+
+  const processRankUpdateQueue = useCallback(async () => {
+    if (isProcessingRankUpdatesRef.current || !customerId) return;
+    
+    if (rankUpdateQueueRef.current.length === 0) {
+      setHasPendingUpdates(false);
+      hasPendingUpdatesRef.current = false;
+      return;
+    }
+    
+    isProcessingRankUpdatesRef.current = true;
+    setHasPendingUpdates(true);
+    hasPendingUpdatesRef.current = true;
+    
+    console.log('🔄 [QUEUE] Starting to process rank update queue:', {
+      queueLength: rankUpdateQueueRef.current.length,
+      totalUpdates: rankUpdateQueueRef.current.reduce((sum, batch) => sum + batch.length, 0)
+    });
     
     try {
-      await updateRecruitingBoardRanks(customerId, updates, currentBoardId);
-      // Optionally reload data to reflect changes
-      // loadData();
+      // Process all queued updates
+      let processedCount = 0;
+      while (rankUpdateQueueRef.current.length > 0) {
+        const updates = rankUpdateQueueRef.current.shift();
+        if (updates && updates.length > 0) {
+          processedCount++;
+          console.log(`🔄 [QUEUE] Processing batch ${processedCount}/${rankUpdateQueueRef.current.length + processedCount}:`, {
+            updateCount: updates.length,
+            updates: updates.map(u => ({ id: u.recruitingBoardId, rank: u.rank, position: u.position }))
+          });
+          
+          await updateRecruitingBoardRanks(customerId, updates, currentBoardId);
+          
+          console.log(`✅ [QUEUE] Batch ${processedCount} completed successfully`);
+        }
+      }
+      
+      console.log('✅ [QUEUE] All rank updates processed successfully. Total batches:', processedCount);
+      setHasPendingUpdates(false);
+      hasPendingUpdatesRef.current = false;
     } catch (err) {
-      console.error('Error updating ranks:', err);
+      console.error('❌ [QUEUE] Error updating ranks:', err);
       message.error('Failed to update athlete ranks');
+      // Clear the queue on error to prevent stuck state
+      rankUpdateQueueRef.current = [];
+      setHasPendingUpdates(false);
+      hasPendingUpdatesRef.current = false;
+    } finally {
+      isProcessingRankUpdatesRef.current = false;
     }
-  };
+  }, [customerId, currentBoardId]);
+
+  const handleRankUpdate = useCallback(async (updates: { recruitingBoardId: string; rank: number; position?: string }[]) => {
+    if (!customerId) return;
+    
+    console.log('📥 [QUEUE] Adding updates to queue:', {
+      updateCount: updates.length,
+      currentQueueLength: rankUpdateQueueRef.current.length,
+      updates: updates.map(u => ({ id: u.recruitingBoardId, rank: u.rank, position: u.position }))
+    });
+    
+    // Add to queue
+    rankUpdateQueueRef.current.push(updates);
+    setHasPendingUpdates(true);
+    hasPendingUpdatesRef.current = true;
+    
+    console.log('📥 [QUEUE] Queue length after adding:', rankUpdateQueueRef.current.length);
+    
+    // Process queue
+    processRankUpdateQueue();
+  }, [customerId, processRankUpdateQueue]);
 
   const handlePositionDelete = useCallback(async (positionName: string) => {
     if (!customerId) return;
@@ -645,6 +729,37 @@ export default function RecruitingBoard() {
     }
   }, []);
 
+  const handleClearBoard = useCallback(async () => {
+    if (!currentBoardId || !customerId) {
+      message.error('No board selected');
+      return;
+    }
+
+    try {
+      setIsClearingBoard(true);
+      
+      // Optimistically clear all athletes from the UI
+      setData([]);
+      
+      // Clear all athletes from the board in the database
+      // Pass customerId to ensure we only clear athletes from the user's board
+      const clearedCount = await clearRecruitingBoard(currentBoardId, customerId);
+      
+      message.success(`Cleared ${clearedCount} athlete${clearedCount !== 1 ? 's' : ''} from recruiting board`);
+      setIsClearBoardModalVisible(false);
+      
+      // Reload data to ensure consistency
+      await loadData();
+    } catch (err) {
+      console.error('Error clearing board:', err);
+      message.error('Failed to clear recruiting board');
+      // Reload data on error to restore correct state
+      await loadData();
+    } finally {
+      setIsClearingBoard(false);
+    }
+  }, [currentBoardId, customerId, loadData]);
+
   // Load boards first
   useEffect(() => {
     if (contextReady && contextUserDetails?.customer_id) {
@@ -672,7 +787,7 @@ export default function RecruitingBoard() {
     } else if (filteredData.length <= 50) {
       setVisibleData(filteredData);
     }
-  }, [filteredData]); // Removed visibleData from dependencies to prevent infinite loop
+  }, [filteredData, visibleData.length]); // Removed visibleData from dependencies to prevent infinite loop
 
   // Reset visible data when filters change
   useEffect(() => {
@@ -681,7 +796,164 @@ export default function RecruitingBoard() {
     } else {
       setVisibleData(filteredData.slice(0, renderChunkSize));
     }
-  }, [sourceFilters]);
+  }, [sourceFilters, filteredData, renderChunkSize]);
+
+  // Warn user before navigating away if there are pending updates
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Use ref to get the most current value (state might be stale in event handler)
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        // Modern browsers require preventDefault and returnValue to show the dialog
+        e.preventDefault();
+        // Chrome requires returnValue to be set
+        e.returnValue = 'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.';
+        return e.returnValue;
+      }
+    };
+
+    // Handle browser refresh/close
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Handle browser back/forward buttons
+    const handlePopState = (e: PopStateEvent) => {
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        const confirmed = window.confirm(
+          'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.'
+        );
+        if (!confirmed) {
+          // Push the current state back to prevent navigation
+          window.history.pushState(null, '', window.location.href);
+          e.preventDefault();
+        }
+      }
+    };
+
+    // Push a state when component mounts to enable back button detection
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    // Intercept all link clicks
+    const handleLinkClick = (e: MouseEvent) => {
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        const target = e.target as HTMLElement;
+        const anchor = target.closest('a');
+        
+        if (anchor && anchor.href) {
+          // Check if it's an internal link (same origin)
+          try {
+            const url = new URL(anchor.href);
+            if (url.origin === window.location.origin) {
+              const confirmed = window.confirm(
+                'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.'
+              );
+              if (!confirmed) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }
+            }
+          } catch (err) {
+            // Invalid URL, allow default behavior
+          }
+        }
+      }
+    };
+
+    // Add click listener to document to catch all link clicks
+    document.addEventListener('click', handleLinkClick, true);
+
+    // Intercept Next.js router navigation
+    // Store original methods only once
+    if (!originalRouterMethodsRef.current) {
+      originalRouterMethodsRef.current = {
+        push: router.push.bind(router),
+        replace: router.replace.bind(router),
+        back: router.back.bind(router),
+        forward: router.forward.bind(router),
+      };
+    }
+
+    const originalMethods = originalRouterMethodsRef.current;
+
+    // Wrap router.push
+    router.push = (...args: Parameters<typeof router.push>) => {
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        const confirmed = window.confirm(
+          'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.'
+        );
+        if (!confirmed) {
+          return Promise.resolve(false);
+        }
+      }
+      return originalMethods.push(...args);
+    };
+
+    // Wrap router.replace
+    router.replace = (...args: Parameters<typeof router.replace>) => {
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        const confirmed = window.confirm(
+          'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.'
+        );
+        if (!confirmed) {
+          return Promise.resolve(false);
+        }
+      }
+      return originalMethods.replace(...args);
+    };
+
+    // Wrap router.back
+    router.back = () => {
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        const confirmed = window.confirm(
+          'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.'
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      return originalMethods.back();
+    };
+
+    // Wrap router.forward
+    router.forward = () => {
+      if (hasPendingUpdatesRef.current || isProcessingRankUpdatesRef.current) {
+        const confirmed = window.confirm(
+          'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.'
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      return originalMethods.forward();
+    };
+
+    // Show warning message when there are pending updates
+    if (hasPendingUpdates) {
+      message.warning({
+        content: 'Saving your updates... This will only take a moment. Please stay on the page to avoid losing any changes.',
+        duration: 0, // Don't auto-dismiss
+        key: 'pending-updates-warning'
+      });
+    } else {
+      message.destroy('pending-updates-warning');
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('click', handleLinkClick, true);
+      
+      // Restore original router methods
+      if (originalRouterMethodsRef.current && routerRef.current) {
+        router.push = originalRouterMethodsRef.current.push;
+        router.replace = originalRouterMethodsRef.current.replace;
+        router.back = originalRouterMethodsRef.current.back;
+        router.forward = originalRouterMethodsRef.current.forward;
+      }
+      
+      message.destroy('pending-updates-warning');
+    };
+  }, [hasPendingUpdates, router]);
 
   if (loading) {
     return (
@@ -878,6 +1150,13 @@ export default function RecruitingBoard() {
                 dataSource="recruiting_board"
               />
             </div>
+            <Button
+              danger
+              onClick={() => setIsClearBoardModalVisible(true)}
+              disabled={!currentBoardId || data.length === 0}
+            >
+              Clear Board
+            </Button>
           </Space>
 
           {/* Source Filter Toggles - only show if there are multiple source types */}
@@ -971,7 +1250,8 @@ export default function RecruitingBoard() {
           {visibleData.length > 0 ? (
             <div>
               <MultipleContainers 
-                data={visibleData} 
+                data={visibleData}
+                allData={data}
                 handle={true} 
                 refreshCallback={loadData}
                 positionConfig={positions}
@@ -1010,6 +1290,28 @@ export default function RecruitingBoard() {
         onRemoveAthlete={handleRemoveAthleteFromSubBoard}
         onEditAthlete={handleEditAthleteInSubBoard}
       />
+
+      {/* Clear Board Confirmation Modal */}
+      <Modal
+        title="Clear Board"
+        open={isClearBoardModalVisible}
+        onOk={handleClearBoard}
+        onCancel={() => setIsClearBoardModalVisible(false)}
+        confirmLoading={isClearingBoard}
+        okText="Yes, Clear Board"
+        cancelText="Cancel"
+        okButtonProps={{ danger: true }}
+      >
+        <p>
+          Are you sure you want to remove <strong>all athletes</strong> from your recruiting board?
+        </p>
+        <p>
+          This will remove all {data.length} athlete{data.length !== 1 ? 's' : ''} from the board <strong>&quot;{currentBoardName}&quot;</strong>.
+        </p>
+        <p style={{ color: '#ff4d4f', fontWeight: 500 }}>
+          This action cannot be undone.
+        </p>
+      </Modal>
     </div>
   );
 }

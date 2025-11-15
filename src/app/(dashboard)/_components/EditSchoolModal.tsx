@@ -138,8 +138,8 @@ export default function EditSchoolModal({
     
     try {
       setLoadingCoachSchoolOptions(true);
-      const schools = await searchSchools(query, 50);
-      setCoachSchoolNewSchoolOptions(schools || []);
+      const result = await searchSchools(query, 50);
+      setCoachSchoolNewSchoolOptions(result.data || []);
     } catch (error) {
       console.error('Error searching schools:', error);
       setCoachSchoolNewSchoolOptions([]);

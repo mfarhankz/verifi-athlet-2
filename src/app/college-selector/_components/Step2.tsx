@@ -24,7 +24,7 @@ export default function Step2({ surveyData, onComplete, onBack }: Step2Props) {
     1024: surveyData[1024] || "", // SAT score
     1025: surveyData[1025] || "", // ACT score
     10: surveyData[10] || "", // Desired college major
-    1133: surveyData[1133] || "", // Specific major
+    1133: surveyData[1133] || "", // Major Category
     36: surveyData[36] || "", // Major importance
   });
 
@@ -60,7 +60,7 @@ export default function Step2({ surveyData, onComplete, onBack }: Step2Props) {
       return;
     }
 
-    if (!formData[10]) {
+    if (!formData[1133]) {
       alert('Please select your desired college major.');
       return;
     }
@@ -225,8 +225,8 @@ export default function Step2({ surveyData, onComplete, onBack }: Step2Props) {
             </Typography.Title>
             <Select
               className="w-full"
-              value={formData[10]}
-              onChange={(value) => handleChange(10, value)}
+              value={formData[1133]}
+              onChange={(value) => handleChange(1133, value)}
               placeholder="Select your desired major"
               options={[
                 { value: "Business", label: "Business" },
@@ -242,8 +242,8 @@ export default function Step2({ surveyData, onComplete, onBack }: Step2Props) {
               Write in any specific major you want to study in the box below
             </Typography.Title>
             <Input
-              value={formData[1133]}
-              onChange={(e) => handleChange(1133, e.target.value)}
+              value={formData[10]}
+              onChange={(e) => handleChange(10, e.target.value)}
               placeholder="Enter specific major (e.g., Computer Science, Mechanical Engineering)"
             />
           </Flex>

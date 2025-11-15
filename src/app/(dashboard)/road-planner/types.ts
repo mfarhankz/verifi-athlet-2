@@ -26,6 +26,7 @@ export interface School {
   ad_name_last?: string;
   ad_email?: string;
   record_2024?: string;
+  record_2025?: string;
   position?: {
     lat: number;
     lng: number;
@@ -39,9 +40,13 @@ export interface School {
     high_school_id: string;
     [key: string]: string | number | boolean | null | undefined;
   };
+  high_school_id?: string;
+  school_id?: string;
   address_street1?: string;
   address_street2?: string;
   address_city?: string;
   address_state?: string;
   address_zip?: string;
-} 
+  isCustomAddress?: boolean; // Flag to indicate manually added address (not a school)
+}
+

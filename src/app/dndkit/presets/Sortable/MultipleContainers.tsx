@@ -112,7 +112,7 @@ function DroppableContainer({
         opacity: isDragging ? 0.5 : undefined,
       }}
       hover={isOverContainer}
-      handleProps={isUnassigned ? {} : {
+      handleProps={isUnassigned ? undefined : {
         ...attributes,
         ...listeners,
       }}
@@ -159,6 +159,7 @@ interface Props {
   itemCount?: number;
   items?: Items;
   data?: RecruitingBoardData[];
+  allData?: RecruitingBoardData[];
   positionConfig?: RecruitingBoardPosition[];
   handle?: boolean;
   renderItem?: any;
@@ -189,6 +190,7 @@ function MultipleContainers({
   columns,
   handle = false,
   data,
+  allData,
   positionConfig,
   containerStyle,
   coordinateGetter = multipleContainersCoordinateGetter,
@@ -299,6 +301,26 @@ function MultipleContainers({
   
   // Track which containers were affected by the last drag operation
   const [affectedContainers, setAffectedContainers] = useState<UniqueIdentifier[]>([]);
+  
+  // Ref to track if an update is in progress and queue pending updates
+  const isUpdatingRef = useRef(false);
+  const pendingUpdateRef = useRef<UniqueIdentifier[] | null>(null);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const itemsRef = useRef(items);
+  
+  // Keep itemsRef in sync with items state
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   /**
    * Custom collision detection strategy optimized for multiple containers
@@ -420,13 +442,120 @@ function MultipleContainers({
     }
   }, [data, positionConfig]);
 
+  // Function to generate rank updates for all athletes in affected containers
+  const generateRankUpdates = useCallback((affectedContainers: UniqueIdentifier[]) => {
+    if (!onRankUpdate || !data) return;
+
+    // Use allData if available (unfiltered), otherwise fall back to data
+    const fullData = allData || data;
+
+    // Use the latest items from ref to ensure we have the most current state
+    const currentItems = itemsRef.current;
+    const updates: { recruitingBoardId: string; rank: number; position?: string }[] = [];
+
+    affectedContainers.forEach(containerId => {
+      const containerItems = currentItems[containerId] || [];
+      
+      // Get all athletes in this position from fullData (including filtered ones)
+      const allAthletesInPosition = fullData.filter(athlete => 
+        (athlete.position || 'Unassigned') === containerId.toString()
+      );
+      
+      // Get visible athlete IDs in their new order
+      const visibleAthleteIds = containerItems.map(id => id.toString());
+      
+      // Create a map of visible athletes by their new index
+      const visibleAthleteIndexMap = new Map<string, number>();
+      visibleAthleteIds.forEach((id, index) => {
+        visibleAthleteIndexMap.set(id, index);
+      });
+      
+      // Sort all athletes: visible ones first (by their new order), then filtered ones (by current rank)
+      const sortedAthletes = [...allAthletesInPosition].sort((a, b) => {
+        const aIsVisible = visibleAthleteIndexMap.has(a.id);
+        const bIsVisible = visibleAthleteIndexMap.has(b.id);
+        
+        if (aIsVisible && bIsVisible) {
+          // Both visible: sort by new order
+          return (visibleAthleteIndexMap.get(a.id) || 0) - (visibleAthleteIndexMap.get(b.id) || 0);
+        } else if (aIsVisible) {
+          // a is visible, b is filtered: a comes first
+          return -1;
+        } else if (bIsVisible) {
+          // b is visible, a is filtered: b comes first
+          return 1;
+        } else {
+          // Both filtered: maintain current rank order
+          return (a.rank || 0) - (b.rank || 0);
+        }
+      });
+      
+      // Assign sequential ranks to all athletes in the position
+      sortedAthletes.forEach((athlete, index) => {
+        const newRank = index + 1; // Sequential ranks: 1, 2, 3, ...
+        const currentRank = athlete.rank || 0;
+        
+        // Only update if rank changed or if athlete is visible (was moved)
+        // We update all athletes to ensure sequential ranks and avoid conflicts
+        const update: { recruitingBoardId: string; rank: number; position?: string } = {
+          recruitingBoardId: athlete.id,
+          rank: newRank,
+          position: containerId.toString()
+        };
+        updates.push(update);
+      });
+    });
+
+    if (updates.length > 0) {
+      onRankUpdate(updates);
+    }
+  }, [onRankUpdate, data, allData]);
+
+  // Process updates with debouncing to batch rapid changes
+  const processRankUpdates = useCallback((containersToUpdate: UniqueIdentifier[]) => {
+    // Merge with any pending containers
+    if (pendingUpdateRef.current) {
+      // Merge unique containers
+      const merged = Array.from(new Set([...pendingUpdateRef.current, ...containersToUpdate]));
+      pendingUpdateRef.current = merged;
+    } else {
+      pendingUpdateRef.current = containersToUpdate;
+    }
+    
+    // Clear any existing timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    
+    // If already updating, just queue and return (will be processed after current update)
+    if (isUpdatingRef.current) {
+      return;
+    }
+
+    // Start processing
+    isUpdatingRef.current = true;
+    
+    // Use a small delay to batch rapid updates
+    updateTimeoutRef.current = setTimeout(() => {
+      const containersToProcess = pendingUpdateRef.current;
+      if (containersToProcess && containersToProcess.length > 0) {
+        pendingUpdateRef.current = null;
+        // Generate and send updates with the latest items state
+        generateRankUpdates(containersToProcess);
+      }
+      isUpdatingRef.current = false;
+      updateTimeoutRef.current = null;
+    }, 150); // 150ms debounce to batch rapid updates
+  }, [generateRankUpdates]);
+
   // Generate rank updates when items change and we have affected containers
   useEffect(() => {
     if (affectedContainers.length > 0 && onRankUpdate) {
-      generateRankUpdates(affectedContainers);
+      // Process updates with debouncing
+      processRankUpdates(affectedContainers);
       setAffectedContainers([]); // Clear the affected containers
     }
-  }, [items, affectedContainers, onRankUpdate]);
+  }, [items, affectedContainers, onRankUpdate, processRankUpdates]);
 
   const sensors = useSensors(
     useSensor(MouseSensor),
@@ -466,32 +595,6 @@ function MultipleContainers({
     setClonedItems(null);
   };
 
-  // Function to generate rank updates for all athletes in affected containers
-  const generateRankUpdates = (affectedContainers: UniqueIdentifier[]) => {
-    if (!onRankUpdate || !data) return;
-
-    const updates: { recruitingBoardId: string; rank: number; position?: string }[] = [];
-
-    affectedContainers.forEach(containerId => {
-      const containerItems = items[containerId] || [];
-      
-      containerItems.forEach((itemId, index) => {
-        const athleteData = data.find(athlete => athlete.id === itemId);
-        if (athleteData) {
-          const update: { recruitingBoardId: string; rank: number; position?: string } = {
-            recruitingBoardId: itemId.toString(), // itemId is now recruiting_board_id
-            rank: index + 1, // Array index 0 = rank 1, index 1 = rank 2, etc.
-            position: containerId.toString() // Update position to match container
-          };
-          updates.push(update);
-        }
-      });
-    });
-
-    if (updates.length > 0) {
-      onRankUpdate(updates);
-    }
-  };
 
   useEffect(() => {
     requestAnimationFrame(() => {

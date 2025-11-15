@@ -8,7 +8,7 @@
 export interface FilterField {
   key: string;
   label: string;
-  type: "text" | "select" | "multiselect" | "number" | "date-range" | "checkbox" | "radio" | "slider" | "height" | "weight" | "time" | "location" | "stats" | "min-max-range";
+  type: "text" | "select" | "multiselect" | "number" | "date-range" | "checkbox" | "radio" | "slider" | "height" | "weight" | "time" | "location" | "stats" | "min-max-range" | "camp" | "offer-count";
   options?: { value: string | number | boolean; label: string }[];
   placeholder?: string;
   defaultValue?: string | string[] | number | number[] | boolean | { startDate?: string; endDate?: string } | { comparison: string; value?: number; minValue?: number; maxValue?: number };

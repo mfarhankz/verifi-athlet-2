@@ -157,5 +157,7 @@ $focused-outline-color: #4c9ffe;
   display: flex;
   flex-direction: column;
   align-self: flex-start;
-  margin: auto;
+  align-items: flex-end;
+  margin-left: auto;
+  flex-shrink: 0;
 }

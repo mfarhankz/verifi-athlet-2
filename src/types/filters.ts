@@ -2,6 +2,7 @@ export interface FilterState {
   columns?: string[]; // Filter by recruiting board column names (position columns)
   years?: string[];
   divisions?: string[];
+  level?: string[]; // Filter for level (P4, G5, FCS, D2, NAIA, D3, Other) - used for football instead of division
   // Unified location filter structure
   location?: {
     type: 'hometown_state' | 'international' | 'county' | 'school_state' | 'radius' | 'recruiting_area';
@@ -99,6 +100,7 @@ export interface FilterState {
   best_offer?: string[]; // Best offer filter: P4, G5, FCS, D2/NAIA, D3, None
   committed?: string[]; // Committed filter: Committed, Uncommitted
   signed?: string[]; // Signed filter: Signed, Unsigned
+  offer_count?: { category: string; comparison?: 'min' | 'max' | 'between'; value?: number; minValue?: number; maxValue?: number }; // Offer count filter: category (All, P4, G5, D2, NAIA, D3, JUCO, Other) with comparison type and value(s)
   
   // Academics/Income filters for high school athletes
   gpa?: { comparison: 'min' | 'max' | 'between'; value?: number; minValue?: number; maxValue?: number }; // GPA filter
@@ -122,6 +124,8 @@ export interface FilterState {
   on3_stars?: string[]; // On3 Stars filter: None, 2, 3, 4, 5
   _247_stars?: string[]; // 247 Stars filter: None, 2, 3, 4, 5
   espn_stars?: string[]; // ESPN Stars filter: None, 2, 3, 4, 5
+  // Camp filter for high school athletes
+  camp?: Array<{ source: string; year?: number; display_name?: string }>; // Camp filter: array of selected camp events (consolidated format)
 }
 
 export interface SavedFilter {

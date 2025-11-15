@@ -33,7 +33,7 @@ export default function GenericFilters({
 }: GenericFiltersProps) {
   const { activeCustomerId, customers, activeSportAbbrev } = useCustomer();
   const userDetails = useUser();
-  const [config, setConfig] = useState(() => createGenericFilterConfig(dataSource));
+  const [config, setConfig] = useState(() => createGenericFilterConfig(dataSource, activeSportAbbrev || undefined));
   const [positions, setPositions] = useState<{ name: string; order: number; other_filter: boolean; include_filter: string | null }[]>([]);
   const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
   const [conferences, setConferences] = useState<string[]>([]);
@@ -70,10 +70,10 @@ export default function GenericFilters({
     return (isFootball && !hasNaiaPackage) || (!isFootball && hasNaiaPackage);
   };
 
-  // Update config when dataSource changes
+  // Update config when dataSource or sportAbbrev changes
   useEffect(() => {
-    setConfig(createGenericFilterConfig(dataSource));
-  }, [dataSource]);
+    setConfig(createGenericFilterConfig(dataSource, activeSportAbbrev || undefined));
+  }, [dataSource, activeSportAbbrev]);
 
   // Load positions data
   useEffect(() => {
@@ -307,6 +307,7 @@ export default function GenericFilters({
     const mappedFilters: FilterState = {
       position: filters.position,
       divisions: filters.divisions,
+      level: filters.level,
       years: filters.years,
       height: filters.height,
       location: filters.location,
@@ -343,6 +344,7 @@ export default function GenericFilters({
       best_offer: filters.best_offer,
       committed: filters.committed,
       signed: filters.signed,
+      offer_count: filters.offer_count,
       gpa: filters.gpa,
       gpa_type: filters.gpa_type,
       major: filters.major,
@@ -360,6 +362,8 @@ export default function GenericFilters({
       on3_stars: filters.on3_stars,
       _247_stars: filters._247_stars,
       espn_stars: filters.espn_stars,
+      // Camp filter
+      camp: filters.camp,
     };
 
     // Add stat filters (stat_${dataTypeId}) to the mapped filters
@@ -383,6 +387,7 @@ export default function GenericFilters({
       onApplyFilters={handleApplyFilters}
       onResetFilters={handleResetFilters}
       className="generic-filters"
+      dataSource={dataSource}
     />
   );
 }

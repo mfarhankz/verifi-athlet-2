@@ -15,6 +15,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { StarFilled, CopyOutlined } from "@ant-design/icons";
 import { supabase } from "@/lib/supabaseClient";
+import { getDefaultBoardForAdding, getPackageIdsByType } from "@/lib/queries";
+import { hasPackageAccess } from "@/utils/navigationUtils";
 import { fetchCustomerRatings, type CustomerRating } from "@/utils/utils";
 import {
   useCustomer,
@@ -198,24 +200,10 @@ export default function MobileAthleteProfileContent({
       let boardId = selectedBoardId;
       
       if (!boardId) {
-        // Get or create the Main board as fallback
-        const { data: boardData, error: boardError } = await supabase
-          .from('recruiting_board_board')
-          .select('id')
-          .eq('customer_id', activeCustomerId)
-          .eq('name', 'Main')
-          .is('recruiting_board_column_id', null)
-          .is('ended_at', null)
-          .single();
-
-        if (boardError && boardError.code !== 'PGRST116') {
-          alert(`Error finding recruiting board: ${boardError.message}`);
-          return;
-        }
-
-        boardId = boardData?.id;
+        // Get the default board (Main if exists, or single board if only one exists)
+        boardId = await getDefaultBoardForAdding(activeCustomerId);
         
-        // Create Main board if it doesn't exist
+        // Create Main board if no boards exist
         if (!boardId) {
           const { data: newBoard, error: createError } = await supabase
             .from('recruiting_board_board')
@@ -307,7 +295,8 @@ export default function MobileAthleteProfileContent({
         source: dataSource === 'transfer_portal' ? 'portal' : 
                 dataSource === 'juco' ? 'juco' : 
                 dataSource === 'hs_athletes' ? 'high_school' :
-                dataSource === 'all_athletes' ? 'pre-portal' : null
+                dataSource === 'all_athletes' ? 'pre-portal' : null,
+        customer_position: athlete.primary_position || athlete.position || null
       };
 
       const { error: insertError } = await supabase
@@ -317,6 +306,56 @@ export default function MobileAthleteProfileContent({
       if (insertError) {
         alert(`Error adding athlete to recruiting board: ${insertError.message || 'Unknown error'}`);
         return;
+      }
+
+      // If this is a pre-transfer athlete, add to player_tracking table (only for ultra, gold, or platinum packages)
+      if (dataSource === 'all_athletes' || recruitingBoardEntry.source === 'pre-portal') {
+        // Check if user has ultra, gold, or platinum packages
+        const userPackageNumbers = (userDetails?.packages || []).map(pkg => parseInt(pkg, 10));
+        const ultraPackageIds = getPackageIdsByType('ultra');
+        const goldPackageIds = getPackageIdsByType('gold');
+        const platinumPackageIds = getPackageIdsByType('platinum');
+        const allowedPackageIds = [...ultraPackageIds, ...goldPackageIds, ...platinumPackageIds];
+        
+        const hasAllowedPackage = hasPackageAccess(userPackageNumbers, allowedPackageIds);
+        
+        if (hasAllowedPackage) {
+          try {
+            // Fetch text_alert_default from user_detail table
+            const { data: userDetailData, error: userDetailError } = await supabase
+              .from('user_detail')
+              .select('text_alert_default')
+              .eq('id', userDetails.id)
+              .single();
+
+            if (userDetailError) {
+              console.error("Error fetching user detail for text_alert_default:", userDetailError);
+              // Continue even if we can't get text_alert_default
+            }
+
+            // text_alert should be a boolean based on text_alert_default (default to false if not found)
+            const textAlert = userDetailData?.text_alert_default ?? false;
+
+            // Insert into player_tracking table
+            const { error: trackingError } = await supabase
+              .from('player_tracking')
+              .insert({
+                athlete_id: athlete.id,
+                user_id: userDetails.id,
+                customer_id: activeCustomerId,
+                recipient: userDetails.id,
+                text_alert: textAlert
+              });
+
+            if (trackingError) {
+              console.error("Error adding athlete to player_tracking:", trackingError);
+              // Don't fail the whole operation if player_tracking insert fails
+            }
+          } catch (trackingErr) {
+            console.error("Error in player_tracking insert:", trackingErr);
+            // Don't fail the whole operation if player_tracking insert fails
+          }
+        }
       }
 
       // Show success message with board name

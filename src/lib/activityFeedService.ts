@@ -110,30 +110,14 @@ export async function getActivityFeedView(customerId: string): Promise<string> {
       return 'none';
     }
 
-    // Map package types to activity feed view suffixes in priority order
-    const packageType = packageDetails.package_type;
-    let viewSuffix = 'none'; // default - no access
-
-    switch (packageType) {
-      case 'elite':
-      case 'ultra':
-        // Platinum access
-        viewSuffix = 'platinum';
-        break;
-      case 'gold':
-      case 'naia':
-        // Gold access (including old gold and naia gold)
-        viewSuffix = 'gold';
-        break;
-      case 'silver':
-        // Silver Plus access (including naia silver plus)
-        viewSuffix = 'silver_plus';
-        break;
-      default:
-        // Any other package type gets no access
-        viewSuffix = 'none';
-        break;
+    // Only football packages can grant access
+    if (packageDetails.sport !== 'fb') {
+      return 'none';
     }
+
+    // Use hs_suffix and allow only specific tiers
+    const allowedSuffixes = new Set(['platinum', 'gold', 'silver_plus']);
+    const viewSuffix = allowedSuffixes.has(packageDetails.hs_suffix) ? packageDetails.hs_suffix : 'none';
 
     const viewName = viewSuffix === 'none' ? 'none' : `vw_activity_feed_fb_${viewSuffix}`;
     return viewName;
@@ -233,7 +217,18 @@ export async function fetchActivityFeedEvents(
     // Apply filters if provided
     if (filters) {
       if (filters.eventTypes && filters.eventTypes.length > 0) {
-        query = query.in('type', filters.eventTypes);
+        // Expand decommit variants to include all possible formats
+        const expandedEventTypes = filters.eventTypes.flatMap(eventType => {
+          const lowerType = eventType.toLowerCase();
+          // If "decommit" is selected, include all variants
+          if (lowerType === 'decommit' || lowerType === 'de-commit' || lowerType === 'de_commit') {
+            return ['decommit', 'de-commit', 'de_commit'];
+          }
+          return [eventType];
+        });
+        // Remove duplicates
+        const uniqueEventTypes = Array.from(new Set(expandedEventTypes));
+        query = query.in('type', uniqueEventTypes);
       }
       
       if (filters.eventDateFrom) {
@@ -859,7 +854,6 @@ export async function fetchActivityFeedEvents(
     const to = from + pageSize - 1;
     query = query.range(from, to);
     
-    // console.log('Executing query with filters:', { viewName, filters });
     const { data, error } = await query;
     const { count } = await countQuery;
     
@@ -976,8 +970,14 @@ function getTypeIcon(eventType: string): "checkmark" | "cross" | "solid-check" |
   }
   
   // Negative events - red cross
-  if (type === 'de-commit') {
+  if (type === 'de-commit' || type === 'decommit' || type === 'de_commit') {
     return 'cross';
+  }
+  
+  // Coach activity types - handled by page component with custom icons
+  if (type === 'coach note' || type === 'coach call' || type === 'coach message' || 
+      type === 'coach visit' || type === 'coach multiple visit') {
+    return null; // Page component will handle icon display
   }
   
   // Neutral events - no icon

@@ -9,7 +9,8 @@ import { Handle, Remove, RemoveFromBoard } from "./components";
 
 import styles from "./Item.module.scss";
 import UserShortInfo from "@/app/(dashboard)/_components/UserShortInfo";
-import { Drawer, Input, Modal } from "antd";
+import { Drawer, Input, Modal, Tooltip } from "antd";
+import { MailOutlined, MobileOutlined } from "@ant-design/icons";
 import PlayerEditModal from "@/app/(dashboard)/_components/PlayerEditModal";
 import { RemoveAthleteModal } from "../RemoveAthleteModal";
 
@@ -231,6 +232,7 @@ export const Item = React.memo(
                   athleteWeight={player?.wt}
                   ratingName={player?.ratingName}
                   ratingColor={player?.ratingColor}
+                  customerPosition={player?.customer_position}
                 />
               ) : (
                 <>
@@ -247,9 +249,44 @@ export const Item = React.memo(
                 {onRemove ? (
                   <Remove className={styles.Remove} onClick={onRemove} />
                 ) : null}
-                {componentType !== "tableView" && onRemoveFromBoard ? (
-                  <RemoveFromBoard onClick={handleRemoveFromBoard} />
-                ) : null}
+                {componentType !== "tableView" && onRemoveFromBoard && (
+                  <span style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
+                    {player?.player_tracking && (
+                      <Tooltip 
+                        title={player.player_tracking.text_alert ? "Text and Email Alert enabled" : "Email Alert enabled"}
+                      >
+                        <span 
+                          style={{ 
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '24px',
+                            height: '24px',
+                            cursor: 'default',
+                            flexShrink: 0
+                          }}
+                        >
+                          {player.player_tracking.text_alert ? (
+                            <MobileOutlined 
+                              style={{ 
+                                color: '#1890ff',
+                                fontSize: '16px'
+                              }} 
+                            />
+                          ) : (
+                            <MailOutlined 
+                              style={{ 
+                                color: '#1890ff',
+                                fontSize: '16px'
+                              }} 
+                            />
+                          )}
+                        </span>
+                      </Tooltip>
+                    )}
+                    <RemoveFromBoard onClick={handleRemoveFromBoard} />
+                  </span>
+                )}
                 {handle ? <Handle {...handleProps} {...listeners} /> : null}
               </span>
             </div>

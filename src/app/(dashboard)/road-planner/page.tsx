@@ -4,10 +4,12 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { School } from "./types";
-import { useUser } from "@/contexts/CustomerContext";
+import { useUser, useCustomer } from "@/contexts/CustomerContext";
 import { useZoom } from "@/contexts/ZoomContext";
-import { getPackageIdsBySport } from "@/lib/queries";
+import { getPackageIdsBySport, fetchExistingPackagesForCustomer } from "@/lib/queries";
 import { Button } from "antd";
+import { fetchSchoolDataFromSchoolId } from "./utils/schoolDataUtils";
+import SchoolCard from "./components/SchoolCard";
 
 // Define a constant for the SELECT statement
 const SELECT_FIELDS = `
@@ -84,16 +86,41 @@ export default function RoadPlannerPage() {
   const [loadingUserData, setLoadingUserData] = useState(true);
   const [coachSearchQuery, setCoachSearchQuery] = useState("");
   const userDetails = useUser();
+  const { activeCustomerId } = useCustomer();
   const { zoom } = useZoom();
+  const [hasFootballPackage, setHasFootballPackage] = useState(false);
 
-  // Check if user has any football package to determine if coach info should be shown
-  const footballPackageIds = getPackageIdsBySport("fb");
-  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) =>
-    Number(pkg)
-  );
-  const hasFootballPackage = footballPackageIds.some((id) =>
-    userPackageNumbers.includes(id)
-  );
+  // Check if the active customer has a football package
+  useEffect(() => {
+    const checkFootballPackage = async () => {
+      if (!activeCustomerId) {
+        setHasFootballPackage(false);
+        return;
+      }
+
+      try {
+        // Fetch packages for the active customer
+        const customerPackages = await fetchExistingPackagesForCustomer(activeCustomerId);
+        const customerPackageIds = customerPackages.map((pkg: any) => Number(pkg.customer_package_id));
+        
+        // Get football package IDs
+        const footballPackageIds = getPackageIdsBySport("fb");
+        
+        // Check if any of the customer's packages are football packages
+        const hasFootball = footballPackageIds.some((id) =>
+          customerPackageIds.includes(id)
+        );
+        
+        setHasFootballPackage(hasFootball);
+      } catch (error) {
+        console.error("Error checking football package:", error);
+        setHasFootballPackage(false);
+      }
+    };
+
+    checkFootballPackage();
+  }, [activeCustomerId]);
+
 
   // Derived state
   const filteredAddresses = highSchools;
@@ -106,8 +133,8 @@ export default function RoadPlannerPage() {
 
         // First, get the total count
         const countQuery = await supabase
-          .from("high_schools")
-          .select("high_school_id", { count: "exact", head: true });
+          .from("vw_high_school")
+          .select("school_id", { count: "exact", head: true });
 
         if (countQuery.error) {
           console.error("Error counting schools:", countQuery.error);
@@ -116,10 +143,10 @@ export default function RoadPlannerPage() {
 
         setTotalCount(countQuery.count);
 
-        // Limit to first 100 records initially
+        // Limit to first 100 records initially - fetch school_id and school_name
         const { data, error } = await supabase
-          .from("high_schools")
-          .select(SELECT_FIELDS)
+          .from("vw_high_school")
+          .select("school_id, school_name")
           .limit(100);
 
         if (error) {
@@ -133,55 +160,27 @@ export default function RoadPlannerPage() {
           return;
         }
 
-        const formattedData = data.map((school: Record<string, any>) => {
-          // Format the address string from individual fields
-          const addressParts = [
-            school.address_street1,
-            school.address_street2,
-            school.address_city,
-            school.address_state,
-            school.address_zip,
-          ].filter(Boolean); // Remove any undefined/null/empty values
-
-          const address = addressParts.join(", ");
-
+        // Fetch full data for each school using fetchSchoolDataFromSchoolId
+        const formattedDataPromises = data.map(async (school: Record<string, any>) => {
+          const fullSchoolData = await fetchSchoolDataFromSchoolId(school.school_id);
+          if (fullSchoolData) {
+            return fullSchoolData;
+          }
+          // Fallback if fetch fails - return minimal data
           return {
-            school: school.school,
-            address,
-            county: school.county,
-            state: school.state,
-            head_coach_first: school.head_coach_first,
-            head_coach_last: school.head_coach_last,
-            private_public: school.private_public,
-            league_classification: school.league_classification,
-            score_college_player: school.score_college_player,
-            score_d1_producing: school.score_d1_producing,
-            score_team_quality: school.score_team_quality,
-            score_income: school.score_income,
-            score_academics: school.score_academics,
-            head_coach_email: school.head_coach_email,
-            head_coach_cell: school.head_coach_cell,
-            head_coach_work_phone: school.head_coach_work_phone,
-            head_coach_home_phone: school.head_coach_home_phone,
-            coach_twitter_handle: school.coach_twitter_handle,
-            visit_info: school.visit_info,
-            best_phone: school.best_phone,
-            coach_best_contact: school.coach_best_contact,
-            school_phone: school.school_phone,
-            ad_name_first: school.ad_name_first,
-            ad_name_last: school.ad_name_last,
-            ad_email: school.ad_email,
-            record_2024: school["2024_record"],
+            school: school.school_name || "Unknown School",
+            address: "",
             raw_data: {
-              address_street1: school.address_street1,
-              address_street2: school.address_street2,
-              address_city: school.address_city,
-              address_state: school.address_state,
-              address_zip: school.address_zip,
-              high_school_id: school.high_school_id,
+              address_street1: "",
+              address_city: "",
+              address_state: "",
+              address_zip: "",
+              high_school_id: "",
             },
           };
         });
+
+        const formattedData = await Promise.all(formattedDataPromises);
 
         setHighSchools(formattedData);
         setAllHighSchools(formattedData);
@@ -281,101 +280,89 @@ export default function RoadPlannerPage() {
       try {
         setLoading(true);
 
-        // Build query with any active filters
-        let query = supabase.from("high_schools").select(SELECT_FIELDS);
+        // First, if county/state filters are selected, get the matching school_ids from school_fact
+        let filteredSchoolIds: string[] | null = null;
+        
+        if (selectedCountyStates.length > 0) {
+          // Get county names and state abbreviations from selected filters
+          const countyStatePairs = selectedCountyStates.map((cs) => {
+            const [county, state] = cs.split("|");
+            return { county, state };
+          });
+
+          // Get county IDs for the selected counties
+          const countyNames = [...new Set(countyStatePairs.map(p => p.county))];
+          const { data: countiesData } = await supabase
+            .from('county')
+            .select('id, name, state(id, abbrev)')
+            .in('name', countyNames);
+
+          if (countiesData && countiesData.length > 0) {
+            // Build a map of county name + state abbrev to county ID
+            const countyMap = new Map<string, number>();
+            countiesData.forEach((county: any) => {
+              if (county?.name && county?.state?.abbrev) {
+                const key = `${county.name}|${county.state.abbrev}`;
+                if (selectedCountyStates.includes(key)) {
+                  countyMap.set(key, county.id);
+                }
+              }
+            });
+
+            // Get school_ids that have matching county_ids
+            const countyIds = Array.from(countyMap.values());
+            if (countyIds.length > 0) {
+              const { data: countyFacts } = await supabase
+                .from('school_fact')
+                .select('school_id')
+                .eq('data_type_id', 966) // county_id
+                .in('value', countyIds.map(id => id.toString()))
+                .is('inactive', null);
+
+              if (countyFacts && countyFacts.length > 0) {
+                const schoolIdSet = new Set<string>();
+                (countyFacts as { school_id: string }[]).forEach((f) => {
+                  if (f.school_id) {
+                    schoolIdSet.add(f.school_id);
+                  }
+                });
+                filteredSchoolIds = Array.from(schoolIdSet);
+              }
+            }
+          }
+
+          // If no schools found with county filter, return empty
+          if (!filteredSchoolIds || filteredSchoolIds.length === 0) {
+            setHighSchools([]);
+            setMatchingCount(0);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Build query with any active filters - use vw_high_school
+        let query = supabase.from("vw_high_school").select("school_id, school_name");
 
         // Create a parallel query for getting the total count
         let countQuery = supabase
-          .from("high_schools")
-          .select("high_school_id", { count: "exact", head: true });
+          .from("vw_high_school")
+          .select("school_id", { count: "exact", head: true });
+
+        // Apply county/state filter at database level if we have filtered school IDs
+        if (filteredSchoolIds && filteredSchoolIds.length > 0) {
+          query = query.in('school_id', filteredSchoolIds);
+          countQuery = countQuery.in('school_id', filteredSchoolIds);
+        }
 
         // Add search query if present
         if (searchQuery.length >= 2) {
-          // First search by school name
-          const searchFilter =
-            `school.ilike.%${searchQuery}%,` +
-            `address_city.ilike.%${searchQuery}%,` +
-            `county.ilike.%${searchQuery}%,` +
-            `state.ilike.%${searchQuery}%,` +
-            `head_coach_first.ilike.%${searchQuery}%,` +
-            `head_coach_last.ilike.%${searchQuery}%`;
-
-          query = query.or(searchFilter);
-          countQuery = countQuery.or(searchFilter);
+          // Search by school name
+          query = query.ilike('school_name', `%${searchQuery}%`);
+          countQuery = countQuery.ilike('school_name', `%${searchQuery}%`);
         }
 
-        // Apply county/state filters
-        if (selectedCountyStates.length > 0) {
-          // Create a list of individual filters for each county/state pair
-          const countyStateFilters = selectedCountyStates.map((cs) => {
-            const [county, state] = cs.split("|");
-            return `and(county.eq."${county}",state.eq."${state}")`;
-          });
-
-          // Join with 'or' to match any of the selected county/state pairs
-          const countyStateFilter = countyStateFilters.join(",");
-          query = query.or(countyStateFilter);
-          countQuery = countQuery.or(countyStateFilter);
-        }
-
-        // Apply score filters
-        if (scoreFilters.college_player.enabled) {
-          query = query
-            .gte("score_college_player", scoreFilters.college_player.min)
-            .lte("score_college_player", scoreFilters.college_player.max);
-          countQuery = countQuery
-            .gte("score_college_player", scoreFilters.college_player.min)
-            .lte("score_college_player", scoreFilters.college_player.max);
-        }
-
-        if (scoreFilters.d1_producing.enabled) {
-          query = query
-            .gte("score_d1_producing", scoreFilters.d1_producing.min)
-            .lte("score_d1_producing", scoreFilters.d1_producing.max);
-          countQuery = countQuery
-            .gte("score_d1_producing", scoreFilters.d1_producing.min)
-            .lte("score_d1_producing", scoreFilters.d1_producing.max);
-        }
-
-        if (scoreFilters.team_quality.enabled) {
-          query = query
-            .gte("score_team_quality", scoreFilters.team_quality.min)
-            .lte("score_team_quality", scoreFilters.team_quality.max);
-          countQuery = countQuery
-            .gte("score_team_quality", scoreFilters.team_quality.min)
-            .lte("score_team_quality", scoreFilters.team_quality.max);
-        }
-
-        if (scoreFilters.income.enabled) {
-          query = query
-            .gte("score_income", scoreFilters.income.min)
-            .lte("score_income", scoreFilters.income.max);
-          countQuery = countQuery
-            .gte("score_income", scoreFilters.income.min)
-            .lte("score_income", scoreFilters.income.max);
-        }
-
-        if (scoreFilters.academics.enabled) {
-          query = query
-            .gte("score_academics", scoreFilters.academics.min)
-            .lte("score_academics", scoreFilters.academics.max);
-          countQuery = countQuery
-            .gte("score_academics", scoreFilters.academics.min)
-            .lte("score_academics", scoreFilters.academics.max);
-        }
-
-        // Apply recruiting coaches filter
-        if (selectedCoaches.length > 0 && userSchool) {
-          // Create a filter for each selected coach
-          const coachFilters = selectedCoaches.map((coach) => {
-            return `recruiting_coaches.ilike.%${userSchool} ${coach}%`;
-          });
-
-          // Join with 'or' to match any of the selected coaches
-          const coachFilter = coachFilters.join(",");
-          query = query.or(coachFilter);
-          countQuery = countQuery.or(coachFilter);
-        }
+        // Score filters and coach filters will be applied after fetching full data
+        // TODO: Implement proper filtering using school_fact data_type_id lookups
 
         // Get the total count of matches first
         const countResponse = await countQuery;
@@ -400,57 +387,68 @@ export default function RoadPlannerPage() {
           return;
         }
 
-        const formattedData = data.map((school: Record<string, any>) => {
-          const addressParts = [
-            school.address_street1,
-            school.address_street2,
-            school.address_city,
-            school.address_state,
-            school.address_zip,
-          ].filter(Boolean);
-
-          const address = addressParts.join(", ");
-
-          return {
-            school: school.school,
-            address,
-            county: school.county,
-            state: school.state,
-            head_coach_first: school.head_coach_first,
-            head_coach_last: school.head_coach_last,
-            private_public: school.private_public,
-            league_classification: school.league_classification,
-            score_college_player: school.score_college_player,
-            score_d1_producing: school.score_d1_producing,
-            score_team_quality: school.score_team_quality,
-            score_income: school.score_income,
-            score_academics: school.score_academics,
-            recruiting_coaches: school.recruiting_coaches,
-            head_coach_email: school.head_coach_email,
-            head_coach_cell: school.head_coach_cell,
-            head_coach_work_phone: school.head_coach_work_phone,
-            head_coach_home_phone: school.head_coach_home_phone,
-            coach_twitter_handle: school.coach_twitter_handle,
-            visit_info: school.visit_info,
-            best_phone: school.best_phone,
-            coach_best_contact: school.coach_best_contact,
-            school_phone: school.school_phone,
-            ad_name_first: school.ad_name_first,
-            ad_name_last: school.ad_name_last,
-            ad_email: school.ad_email,
-            record_2024: school["2024_record"],
-            raw_data: {
-              address_street1: school.address_street1,
-              address_street2: school.address_street2,
-              address_city: school.address_city,
-              address_state: school.address_state,
-              address_zip: school.address_zip,
-              high_school_id: school.high_school_id,
-            },
-          };
+        // Fetch full data for each school using fetchSchoolDataFromSchoolId
+        const formattedDataPromises = data.map(async (school: Record<string, any>) => {
+          return await fetchSchoolDataFromSchoolId(school.school_id);
         });
 
-        setHighSchools(formattedData);
+        const formattedData: (School | null)[] = await Promise.all(formattedDataPromises);
+        
+        // Filter out null values
+        let filteredData: School[] = formattedData.filter((school: School | null): school is School => school !== null);
+
+        // Apply client-side filters for score filters and coach filters
+        // County/state filter is already applied at database level
+
+        if (scoreFilters.college_player.enabled) {
+          filteredData = filteredData.filter((school: School) => {
+            const score = school.score_college_player;
+            return score !== undefined && 
+                   score >= scoreFilters.college_player.min && 
+                   score <= scoreFilters.college_player.max;
+          });
+        }
+
+        if (scoreFilters.d1_producing.enabled) {
+          filteredData = filteredData.filter((school: School) => {
+            const score = school.score_d1_producing;
+            return score !== undefined && 
+                   score >= scoreFilters.d1_producing.min && 
+                   score <= scoreFilters.d1_producing.max;
+          });
+        }
+
+        if (scoreFilters.team_quality.enabled) {
+          filteredData = filteredData.filter((school: School) => {
+            const score = school.score_team_quality;
+            return score !== undefined && 
+                   score >= scoreFilters.team_quality.min && 
+                   score <= scoreFilters.team_quality.max;
+          });
+        }
+
+        if (scoreFilters.income.enabled) {
+          filteredData = filteredData.filter((school: School) => {
+            const score = school.score_income;
+            return score !== undefined && 
+                   score >= scoreFilters.income.min && 
+                   score <= scoreFilters.income.max;
+          });
+        }
+
+        if (scoreFilters.academics.enabled) {
+          filteredData = filteredData.filter((school: School) => {
+            const score = school.score_academics;
+            return score !== undefined && 
+                   score >= scoreFilters.academics.min && 
+                   score <= scoreFilters.academics.max;
+          });
+        }
+
+        // Limit to 100 after filtering
+        filteredData = filteredData.slice(0, 100);
+
+        setHighSchools(filteredData);
         // Don't update allHighSchools here as we only want the initial load for that
       } catch (err: unknown) {
         console.error("Error fetching high schools:", err);
@@ -480,28 +478,52 @@ export default function RoadPlannerPage() {
     try {
       setLoadingCountyStates(true);
 
-      const { data, error } = await supabase
-        .from("high_schools")
-        .select("county, state")
-        .not("county", "is", null)
-        .not("state", "is", null);
+      // Fetch all unique county_id values from school_fact
+      // Counties have a state relationship, so we'll get state info from that
+      const { data: countyFacts, error: countyError } = await supabase
+        .from('school_fact')
+        .select('value')
+        .eq('data_type_id', 966) // county_id
+        .is('inactive', null)
+        .not('value', 'is', null);
 
-      if (error) {
-        console.error("Error fetching county/state data:", error);
+      if (countyError) {
+        console.error("Error fetching county facts:", countyError);
         return;
       }
 
+      // Get unique county IDs
+      const countyIds = [...new Set((countyFacts || []).map((f: any) => parseInt(f.value)).filter((id: any) => !isNaN(id)))];
+
+      if (countyIds.length === 0) {
+        setUniqueCountyStates([]);
+        return;
+      }
+
+      // Fetch county names with their state information
+      // The county table has a state relationship, so we get state abbrev from there
+      const { data: countiesData, error: countiesError } = await supabase
+        .from('county')
+        .select('id, name, state(id, abbrev)')
+        .in('id', countyIds);
+
+      if (countiesError) {
+        console.error("Error fetching counties:", countiesError);
+        return;
+      }
+
+      // Build unique county/state pairs from counties (counties already have state info)
       const countyStateSet = new Set<string>();
       const uniquePairs: { county: string; state: string }[] = [];
 
-      data.forEach((item: { county: string; state: string }) => {
-        if (item.county && item.state) {
-          const key = `${item.county}|${item.state}`;
+      (countiesData || []).forEach((county: any) => {
+        if (county?.name && county?.state?.abbrev) {
+          const key = `${county.name}|${county.state.abbrev}`;
           if (!countyStateSet.has(key)) {
             countyStateSet.add(key);
             uniquePairs.push({
-              county: item.county,
-              state: item.state,
+              county: county.name,
+              state: county.state.abbrev,
             });
           }
         }
@@ -580,11 +602,14 @@ export default function RoadPlannerPage() {
   // Function to extract coaches from the recruiting_coaches field for the user's school
   const extractCoachesFromUserSchool = async (schoolName: string) => {
     try {
-      // Query all high schools to find recruiting_coaches that contain the user's school
+      // Query vw_high_school to get school_ids, then check school_fact for recruiting_coaches
+      // Note: recruiting_coaches might be in a different data_type_id
+      // For now, we'll fetch from vw_high_school if it has the field, otherwise skip
       const { data, error } = await supabase
-        .from("high_schools")
-        .select("recruiting_coaches")
-        .not("recruiting_coaches", "is", null);
+        .from("vw_high_school")
+        .select("school_id, recruiting_coaches")
+        .not("recruiting_coaches", "is", null)
+        .limit(1000);
 
       if (error) {
         console.error("Error fetching recruiting coaches:", error);
@@ -631,17 +656,64 @@ export default function RoadPlannerPage() {
 
   const handleCheckboxChange = (address: string, school: School) => {
     setSelectedAddresses((prev) => {
+      let newAddresses: string[];
+      let newSelectedSchools: Map<string, School>;
+      
       if (prev.includes(address)) {
-        const newSelectedSchools = new Map(selectedSchoolsData);
+        newSelectedSchools = new Map(selectedSchoolsData);
         newSelectedSchools.delete(address);
         setSelectedSchoolsData(newSelectedSchools);
-        return prev.filter((a) => a !== address);
+        newAddresses = prev.filter((a) => a !== address);
       } else {
-        const newSelectedSchools = new Map(selectedSchoolsData);
+        newSelectedSchools = new Map(selectedSchoolsData);
         newSelectedSchools.set(address, school);
         setSelectedSchoolsData(newSelectedSchools);
-        return [...prev, address];
+        newAddresses = [...prev, address];
       }
+      
+      // Save to localStorage immediately
+      try {
+        localStorage.setItem("selectedAddresses", JSON.stringify(newAddresses));
+        const selectedSchoolData = Array.from(newSelectedSchools.values()).map(
+          (s) => ({
+            school: s.school,
+            address: s.address,
+            county: s.county,
+            state: s.state,
+            head_coach_first: s.head_coach_first,
+            head_coach_last: s.head_coach_last,
+            private_public: s.private_public,
+            league_classification: s.league_classification,
+            score_college_player: s.score_college_player,
+            score_d1_producing: s.score_d1_producing,
+            score_team_quality: s.score_team_quality,
+            score_income: s.score_income,
+            score_academics: s.score_academics,
+            head_coach_email: s.head_coach_email,
+            head_coach_cell: s.head_coach_cell,
+            head_coach_work_phone: s.head_coach_work_phone,
+            head_coach_home_phone: s.head_coach_home_phone,
+            coach_twitter_handle: s.coach_twitter_handle,
+            visit_info: s.visit_info,
+            best_phone: s.best_phone,
+            coach_best_contact: s.coach_best_contact,
+            school_phone: s.school_phone,
+            ad_name_first: s.ad_name_first,
+            ad_name_last: s.ad_name_last,
+            ad_email: s.ad_email,
+            record_2024: s.record_2024,
+            record_2025: s.record_2025,
+            school_id: s.school_id,
+            high_school_id: s.high_school_id,
+            raw_data: s.raw_data,
+          })
+        );
+        localStorage.setItem("schoolData", JSON.stringify(selectedSchoolData));
+      } catch (error) {
+        console.error("Error saving to localStorage:", error);
+      }
+      
+      return newAddresses;
     });
   };
 
@@ -690,6 +762,13 @@ export default function RoadPlannerPage() {
   const clearAllSelections = () => {
     setSelectedAddresses([]);
     setSelectedSchoolsData(new Map());
+    // Clear localStorage as well
+    try {
+      localStorage.removeItem("selectedAddresses");
+      localStorage.removeItem("schoolData");
+    } catch (error) {
+      console.error("Error clearing localStorage:", error);
+    }
   };
 
   const getScoreColor = (score: number | undefined | null): string => {
@@ -717,7 +796,7 @@ export default function RoadPlannerPage() {
       JSON.stringify(selectedAddresses)
     );
 
-    // Convert the map values to an array for localStorage
+    // Convert the map values to an array for localStorage - include all fields
     const selectedSchoolData = Array.from(selectedSchoolsData.values()).map(
       (school) => {
         return {
@@ -747,6 +826,9 @@ export default function RoadPlannerPage() {
           ad_name_last: school.ad_name_last,
           ad_email: school.ad_email,
           record_2024: school.record_2024,
+          record_2025: school.record_2025,
+          school_id: school.school_id,
+          high_school_id: school.high_school_id,
           raw_data: school.raw_data,
         };
       }
@@ -1457,214 +1539,21 @@ export default function RoadPlannerPage() {
                     </div>
                   ) : (
                     filteredAddresses.map((item, index) => (
-                      <div
-                        key={index}
-                        className="card-list flex justify-between !mb-5 cursor-pointer hover:shadow-lg transition-shadow"
-                        onClick={() => handleCheckboxChange(item.address, item)}
-                      >
-                        <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
-                            <div className="school-icon">
-                              <img
-                                src="/svgicons/school-icon.svg"
-                                alt="X Feed"
-                                height={89}
-                              />
-                            </div>
-                            <div className="flex flex-col text-left mt-1">
-                              <h4 className="mb-1">
-                                {item.school}
-                                {item.private_public && (
-                                  <span
-                                    style={{
-                                      backgroundColor:
-                                        item.private_public.toLowerCase() ===
-                                        "public"
-                                          ? "#c8ff24"
-                                          : "#88FBFF",
-                                    }}
-                                  >
-                                    {item.private_public}
-                                  </span>
-                                )}
-                                <input
-                                  type="checkbox"
-                                  checked={selectedAddresses.includes(
-                                    item.address
-                                  )}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    handleCheckboxChange(item.address, item);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="ml-3 relative top-[-5px] w-4 h-4"
-                                />
-                              </h4>
-                              <p className="mb-0">
-                                {item.address} <br />
-                                {(item.county || item.state) && (
-                                  <div>
-                                    {item.county && <span>{item.county}</span>}
-                                    {item.county && item.state && (
-                                      <span>, </span>
-                                    )}
-                                    {item.state && <span>{item.state}</span>}
-                                  </div>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 mx-3 mb-3">
-                            <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                              <h6 className="mb-1">Liam James</h6>
-                              <p className="mb-0 !leading-5">
-                                D3 <br />
-                                2025
-                              </p>
-                            </div>
-
-                            <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                              <h6 className="mb-1">Moxen Galin</h6>
-                              <p className="mb-0 !leading-5">
-                                D3 <br />
-                                2025
-                              </p>
-                            </div>
-
-                            <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                              <h6 className="mb-1">Richard Mark</h6>
-                              <p className="mb-0 !leading-5">
-                                D3 <br />
-                                2025
-                              </p>
-                            </div>
-
-                            <div className="flex flex-col text-left mt-1 border border-[#d2d2db] border-solid px-2 py-1">
-                              <h6 className="mb-1">Alex James</h6>
-                              <p className="mb-0 !leading-5">
-                                D3 <br />
-                                2025
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 p-2">
-                          <div className="flex flex-col text-left w-[650px]">
-                            <div className="flex gap-2 mb-2 justify-end">
-                              {item.county && (
-                                <div className="text-lg font-medium bg-[#d7d7d7] text-primary px-2">
-                                  {item.county} , {item.state}
-                                </div>
-                              )}
-
-                              {item.league_classification && (
-                                <div className="text-lg font-medium bg-[#126DB8] text-white px-2">
-                                  {item.league_classification}
-                                </div>
-                              )}
-                              {item.record_2024 && hasFootballPackage && (
-                                <div className="text-lg font-medium border border-solid border-[#ccc] px-2">
-                                  {item.record_2024}
-                                </div>
-                              )}
-                              <div className="text-lg bg-[#000] text-white px-2">
-                                @virginiabeach
-                              </div>
-                            </div>
-                            <div className="flex justify-between gap-2">
-                              <div>
-                                <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
-                                  Coach
-                                </span>
-                                <h6 className="mb-0 !text-lg leading-3">
-                                  {(item.head_coach_first ||
-                                    item.head_coach_last) &&
-                                    hasFootballPackage && (
-                                      <>
-                                        {item.head_coach_first}{" "}
-                                        {item.head_coach_last}
-                                      </>
-                                    )}
-                                </h6>
-                                <p className="mb-0 leading-5">
-                                  george.alex@virginiabeach.com <br />
-                                  School (757) 648 5300
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <span className="bg-[#FFD000] text-lg italic font-bold leading-5">
-                                  AD
-                                </span>
-                                <h6 className="mb-0 !text-lg leading-3">
-                                  {item.ad_name_first} {item.ad_name_last}
-                                </h6>
-                                <p className="mb-0 leading-5">
-                                  {item.ad_email && (
-                                    <>
-                                      {item.ad_email}
-                                      <br />
-                                    </>
-                                  )}
-
-                                  {item.school_phone && (
-                                    <>School {item.school_phone}</>
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              {(item.score_college_player !== undefined ||
-                                item.score_d1_producing !== undefined ||
-                                item.score_team_quality !== undefined ||
-                                item.score_income !== undefined ||
-                                item.score_academics !== undefined) && (
-                                <ul className="co-title bg-[#eaf8ed]">
-                                  <li>
-                                    {item.score_college_player !==
-                                      undefined && (
-                                      <>
-                                        <h6>{item.score_college_player}</h6>
-                                        <p>College</p>
-                                      </>
-                                    )}
-                                  </li>
-                                  <li>
-                                    {item.score_d1_producing !== undefined && (
-                                      <>
-                                        <h6>{item.score_d1_producing}</h6>
-                                        <p>D1</p>
-                                      </>
-                                    )}
-                                  </li>
-                                  <li>
-                                    {item.score_team_quality !== undefined && (
-                                      <>
-                                        <h6>{item.score_team_quality}</h6>
-                                        <p>Team</p>
-                                      </>
-                                    )}
-                                  </li>
-                                  <li>
-                                    {item.score_income !== undefined && (
-                                      <>
-                                        <h6>{item.score_income}</h6>
-                                        <p>Income</p>
-                                      </>
-                                    )}
-                                  </li>
-                                  <li>
-                                    {item.score_academics !== undefined && (
-                                      <>
-                                        <h6>{item.score_academics}</h6>
-                                        <p>Acad</p>
-                                      </>
-                                    )}
-                                  </li>
-                                </ul>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                      <div key={index} className="ml-9">
+                        <SchoolCard
+                          school={item}
+                          hasFootballPackage={hasFootballPackage}
+                          showCheckbox={true}
+                          isChecked={selectedAddresses.includes(item.address)}
+                          onCheckboxChange={(checked) => {
+                            if (checked) {
+                              handleCheckboxChange(item.address, item);
+                            } else {
+                              handleCheckboxChange(item.address, item);
+                            }
+                          }}
+                          onClick={() => handleCheckboxChange(item.address, item)}
+                        />
                       </div>
                     ))
                   )}
@@ -1713,24 +1602,49 @@ export default function RoadPlannerPage() {
                             </button> */}
 
                             <div
-                              className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-[#FF7525] pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
+                              className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
                               style={{ minWidth: "max-content" }}
                             >
-                              <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full">
+                              <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
                                 <img
-                                  src="/svgicons/map-img.png"
-                                  alt="X Feed"
-                                  height={32}
+                                  src="/blank-hs.svg"
+                                  alt="School"
+                                  className="w-full h-full object-contain p-1"
                                 />
                               </div>
                               <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
                                 <span className="block w-full">
                                   {school.school}
                                 </span>
-                                <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
+                                {/* <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
                                   4.5
-                                </span>
+                                </span> */}
                               </h6>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCheckboxChange(school.address, school);
+                                }}
+                                className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                title="Remove from road plan"
+                                aria-label="Remove school from road plan"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  className="w-5 h-5"
+                                  style={{ fill: 'white', stroke: 'white', strokeWidth: 0 }}
+                                >
+                                  <path
+                                    d="M6 18L18 6M6 6l12 12"
+                                    stroke="white"
+                                    strokeWidth="3.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    fill="none"
+                                  />
+                                </svg>
+                              </button>
                             </div>
                           </div>
                         )
@@ -1814,11 +1728,10 @@ export default function RoadPlannerPage() {
           </div>
           <div className="flex gap-2 p-2">
             
-            <div className="flex flex-col text-left w-[550px]">
+            <div className="flex flex-col text-left w-[650px]">
               <div className="flex gap-2 mb-2 justify-end">
                 <div className='text-lg font-medium bg-[#126DB8] text-white px-2'>Division 5A</div>
                 <div className='text-lg font-medium border border-solid border-[#ccc] px-2'>1W - 9L</div>
-                <div className='text-lg bg-[#000] text-white px-2'>@virginiabeach</div>
                 <div className='border border-solid border-[#ccc] px-2 flex items-center justify-center'>
                 <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
                 </div>
@@ -1829,9 +1742,6 @@ export default function RoadPlannerPage() {
                 Coach
                 </span>
                 <h6 className='mb-0 !text-lg leading-3'>George Alex</h6>
-                <p className='mb-0 leading-5'>george.alex@virginiabeach.com <br /> 
-                School (757) 648 5300
-                </p>
                </div>
                <div className='text-right'>
                <span className='bg-[#FFD000] text-lg italic font-bold leading-5'>
@@ -1844,7 +1754,7 @@ export default function RoadPlannerPage() {
                </div>
               </div>
               <div className='flex gap-2'>
-                <ul className='co-title'>
+                <ul className='co-title bg-[#eaf8ed]'>
                   <li>
                     <h6>06</h6>
                     <p>College</p>
@@ -1900,11 +1810,10 @@ export default function RoadPlannerPage() {
           </div>
           <div className="flex gap-2 p-2">
             
-            <div className="flex flex-col text-left w-[550px]">
+            <div className="flex flex-col text-left w-[650px]">
               <div className="flex gap-2 mb-2 justify-end">
                 <div className='text-lg font-medium bg-[#126DB8] text-white px-2'>Division 5A</div>
                 <div className='text-lg font-medium border border-solid border-[#ccc] px-2'>1W - 9L</div>
-                <div className='text-lg bg-[#000] text-white px-2'>@virginiabeach</div>
                 <div className='border border-solid border-[#ccc] px-2 flex items-center justify-center'>
                 <img src="/svgicons/delete-03.svg" alt="X Feed" height={20} />
                 </div>
@@ -1915,9 +1824,6 @@ export default function RoadPlannerPage() {
                 Coach
                 </span>
                 <h6 className='mb-0 !text-lg leading-3'>George Alex</h6>
-                <p className='mb-0 leading-5'>george.alex@virginiabeach.com <br /> 
-                School (757) 648 5300
-                </p>
                </div>
                <div className='text-right'>
                <span className='bg-[#FFD000] text-lg italic font-bold leading-5'>
@@ -1930,7 +1836,7 @@ export default function RoadPlannerPage() {
                </div>
               </div>
               <div className='flex gap-2'>
-                <ul className='co-title'>
+                <ul className='co-title bg-[#eaf8ed]'>
                   <li>
                     <h6>06</h6>
                     <p>College</p>

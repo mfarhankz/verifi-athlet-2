@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Button, Table, Typography, Space, Input, message, Tooltip } from "antd";
+import { Button, Table, Typography, Space, Input, message, Tooltip, Modal } from "antd";
 import { SearchOutlined, ExportOutlined, FilterOutlined } from "@ant-design/icons";
 import { ActivityFeedFilters } from "./_components/ActivityFeedFilters";
 import type { ActivityEvent, ActivityFeedFilterState } from "./types";
 import { fetchActivityFeedEvents } from "../../../lib/activityFeedService";
-import { fetchUserDetails } from "../../../utils/utils";
+import { fetchUserDetails, fetchUsersForCustomer } from "../../../utils/utils";
 import { mapActivityFeedFilters } from "../_components/filters/GenericFilterConfig";
 import { useRouter, useSearchParams } from "next/navigation";
+import HSAthleteProfileContent from "../_components/HSAthleteProfileContent";
+import AthleteProfileContent from "../_components/AthleteProfileContent";
+import AlertModal from "../_components/AlertModal";
+import CSVExport from "../_components/CSVExport";
+import { convertActivityFeedFilterToFilterString } from "../../../utils/activityFeedFilterConverter";
 
 const { Paragraph } = Typography;
 
@@ -25,25 +30,63 @@ export default function ActivityFeed() {
   const [currentFilters, setCurrentFilters] = useState<any>(null);
   const currentFiltersRef = useRef(currentFilters);
   const [customerId, setCustomerId] = useState<string | null>(null);
+  const [userDetails, setUserDetails] = useState<any>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  
+  // Modal state for player profile
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [isPlayerModalVisible, setIsPlayerModalVisible] = useState(false);
+  const [selectedDataSource, setSelectedDataSource] = useState<'transfer_portal' | 'hs_athletes' | null>(null);
+
+  // Alert modal state
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [teamUsers, setTeamUsers] = useState<Array<{ id: string; name_first: string; name_last: string }>>([]);
+  const [alertLoading, setAlertLoading] = useState(false);
 
   // Keep ref in sync with state
   useEffect(() => {
     currentFiltersRef.current = currentFilters;
   }, [currentFilters]);
 
+  // Handle URL player parameter
+  useEffect(() => {
+    const playerId = searchParams?.get('player');
+    const dataSource = searchParams?.get('dataSource') as 'transfer_portal' | 'hs_athletes' | null;
+    
+    if (playerId && playerId !== selectedPlayerId) {
+      setSelectedPlayerId(playerId);
+      setSelectedDataSource(dataSource || 'hs_athletes');
+      setIsPlayerModalVisible(true);
+    } else if (!playerId && isPlayerModalVisible) {
+      setIsPlayerModalVisible(false);
+      setSelectedPlayerId(null);
+      setSelectedDataSource(null);
+    }
+  }, [searchParams, selectedPlayerId, isPlayerModalVisible]);
+
+  // Handle modal close
+  const handleClosePlayerModal = () => {
+    const params = new URLSearchParams(searchParams?.toString() || '');
+    params.delete('player');
+    params.delete('dataSource');
+    params.delete('use_main_tp_page_id');
+    const newUrl = params.toString() ? `/activity-feed?${params.toString()}` : '/activity-feed';
+    router.push(newUrl);
+  };
+
   // Load initial data and customer information
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const userDetails = await fetchUserDetails();
+        const userDetailsData = await fetchUserDetails();
+        setUserDetails(userDetailsData);
         
-        if (userDetails?.customer_id) {
-          setCustomerId(userDetails.customer_id);
-          const result = await fetchActivityFeedEvents(userDetails.customer_id, searchText);
+        if (userDetailsData?.customer_id) {
+          setCustomerId(userDetailsData.customer_id);
+          const result = await fetchActivityFeedEvents(userDetailsData.customer_id, searchText);
           setEvents(result.data);
           setHasMore(result.hasMore);
           setTotalCount(result.totalCount);
@@ -80,6 +123,10 @@ export default function ActivityFeed() {
     const performSearch = async () => {
       try {
         setLoading(true);
+        // Clear events immediately when starting a new search/filter change
+        setEvents([]);
+        setCurrentPage(1);
+        setHasMore(true);
         
         // Map filters if they exist
         let filterParams = undefined;
@@ -216,6 +263,10 @@ export default function ActivityFeed() {
     // console.log('Applying filters:', filters);
     
     try {
+      // Clear events immediately and reset pagination when filters are applied
+      setEvents([]);
+      setCurrentPage(1);
+      setHasMore(true);
       setCurrentFilters(filters);
       setFilterDrawerVisible(false);
       message.success('Filters applied successfully');
@@ -247,56 +298,154 @@ export default function ActivityFeed() {
     }
   };
 
-  // Export current filtered events to CSV
-  const handleExport = () => {
-    try {
-      if (events.length === 0) {
-        message.warning('No data to export');
-        return;
-      }
-
-      // Convert events to CSV format
-      const headers = ['Athlete Name', 'Height', 'Weight', 'High School', 'Location', 'Grad Year', 'Recruiting College', 'Event Date', 'Event Type', 'Source', 'Tot Off', 'P4', 'G5', 'FCS', 'D2/NAIA', 'D3'];
-      const csvData = events.map(event => [
-        event.athlete.name,
-        event.athlete.height,
-        event.athlete.weight,
-        event.highSchool.name,
-        event.highSchool.location,
-        event.graduation,
-        event.college.name,
-        event.eventDate,
-        event.type,
-        event.source,
-        event.offerCounts.totalOffers,
-        event.offerCounts.p4,
-        event.offerCounts.g5,
-        event.offerCounts.fcs,
-        event.offerCounts.d2Naia,
-        event.offerCounts.d3
-      ]);
-
-      // Create CSV content
-      const csvContent = [headers, ...csvData]
-        .map(row => row.map(field => `"${field}"`).join(','))
-        .join('\n');
-
-      // Download CSV file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `activity_feed_${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      message.success('Data exported successfully');
-    } catch (error) {
-      console.error('Error exporting data:', error);
-      message.error('Failed to export data');
+  // Check if any filters are actually applied
+  const hasActiveFilters = (filters: ActivityFeedFilterState | null): boolean => {
+    if (!filters) return false;
+    
+    // Check event parameters
+    if (filters.eventParameters?.eventType && filters.eventParameters.eventType.length > 0) return true;
+    if (filters.eventParameters?.eventDate && filters.eventParameters.eventDate.length > 0) return true;
+    
+    // Check school info
+    if (filters.schoolInfo?.location && filters.schoolInfo.location.length > 0) return true;
+    if (filters.schoolInfo?.conference && filters.schoolInfo.conference.length > 0) return true;
+    if (filters.schoolInfo?.level && filters.schoolInfo.level.length > 0) return true;
+    if (filters.schoolInfo?.school && filters.schoolInfo.school.length > 0) return true;
+    
+    // Check athlete info
+    if (filters.athleteInfo?.graduationYear && filters.athleteInfo.graduationYear.length > 0) return true;
+    if (filters.athleteInfo?.graduationLocation && filters.athleteInfo.graduationLocation.length > 0) return true;
+    if (filters.athleteInfo?.position && filters.athleteInfo.position.length > 0) return true;
+    if (filters.athleteInfo?.athleticProjection && filters.athleteInfo.athleticProjection.length > 0) return true;
+    
+    // Check height
+    if (filters.athleteInfo?.height) {
+      const { comparison, value, minValue, maxValue } = filters.athleteInfo.height;
+      if (comparison && (value !== undefined || minValue !== undefined || maxValue !== undefined)) return true;
     }
+    
+    // Check weight
+    if (filters.athleteInfo?.weight) {
+      const { comparison, value, minValue, maxValue } = filters.athleteInfo.weight;
+      if (comparison && (value !== undefined || minValue !== undefined || maxValue !== undefined)) return true;
+    }
+    
+    // Check athlete location
+    if (filters.athleteInfo?.athleteLocation) {
+      const { type, values, radius, recruitingArea } = filters.athleteInfo.athleteLocation;
+      if (type && ((values && values.length > 0) || radius || recruitingArea)) return true;
+    }
+    
+    return false;
+  };
+
+  // Handle creating offer alert from current filter
+  const handleCreateOfferAlert = async () => {
+    if (!currentFilters || !hasActiveFilters(currentFilters)) {
+      message.warning("Please apply filters first before creating an alert");
+      return;
+    }
+
+    if (!customerId) {
+      message.error("No customer found");
+      return;
+    }
+
+    setAlertLoading(true);
+    try {
+      // Fetch team users
+      const users = await fetchUsersForCustomer(customerId);
+      setTeamUsers(users);
+      
+      // Open the alert modal
+      setIsAlertModalOpen(true);
+    } catch (error) {
+      console.error('Error preparing offer alert:', error);
+      message.error('Failed to prepare offer alert');
+    } finally {
+      setAlertLoading(false);
+    }
+  };
+
+  // Handle saving the offer alert
+  const handleAlertSave = () => {
+    setIsAlertModalOpen(false);
+    message.success("Offer alert created successfully");
+  };
+
+  // Helper function to parse height from formatted string (e.g., "6'2\"" -> "6'2\"")
+  const parseHeight = (heightStr: string): string => {
+    if (!heightStr || heightStr.trim() === '') return '';
+    return heightStr.trim();
+  };
+
+  // Helper function to parse weight from formatted string (e.g., "200lbs" -> "200")
+  const parseWeight = (weightStr: string): string => {
+    if (!weightStr || weightStr.trim() === '') return '';
+    const match = weightStr.trim().match(/^(\d+)/);
+    return match ? match[1] : '';
+  };
+
+  // Fetch data function for CSV export
+  const fetchExportData = async (page: number, pageSize: number) => {
+    if (!customerId) {
+      throw new Error('No customer found');
+    }
+
+    // Map filters if they exist
+    let filterParams = undefined;
+    if (currentFiltersRef.current) {
+      filterParams = mapActivityFeedFilters({
+        eventType: currentFiltersRef.current.eventParameters?.eventType,
+        eventDate: currentFiltersRef.current.eventParameters?.eventDate ? {
+          startDate: currentFiltersRef.current.eventParameters.eventDate[0],
+          endDate: currentFiltersRef.current.eventParameters.eventDate[1]
+        } : undefined,
+        grad_year: currentFiltersRef.current.athleteInfo?.graduationYear,
+        position: currentFiltersRef.current.athleteInfo?.position,
+        height: currentFiltersRef.current.athleteInfo?.height,
+        weight: currentFiltersRef.current.athleteInfo?.weight,
+        athletic_projection: currentFiltersRef.current.athleteInfo?.athleticProjection,
+        athleteLocation: currentFiltersRef.current.athleteInfo?.athleteLocation,
+        location: currentFiltersRef.current.schoolInfo?.location?.[0],
+        conference: currentFiltersRef.current.schoolInfo?.conference,
+        level: currentFiltersRef.current.schoolInfo?.level,
+        school: currentFiltersRef.current.schoolInfo?.school,
+      });
+    }
+
+    return await fetchActivityFeedEvents(
+      customerId,
+      searchText,
+      filterParams,
+      page,
+      pageSize
+    );
+  };
+
+  // Transform row function for CSV export
+  const transformExportRow = (event: ActivityEvent) => {
+    const height = parseHeight(event.athlete?.height || '');
+    const weight = parseWeight(event.athlete?.weight || '');
+    
+    return [
+      event.athlete?.name || '',
+      height,
+      weight,
+      event.highSchool?.name || '',
+      event.highSchool?.location || '',
+      event.graduation || '',
+      event.college?.name || '',
+      event.eventDate || '',
+      event.type || '',
+      event.source || '',
+      event.offerCounts?.totalOffers || 0,
+      event.offerCounts?.p4 || 0,
+      event.offerCounts?.g5 || 0,
+      event.offerCounts?.fcs || 0,
+      event.offerCounts?.d2Naia || 0,
+      event.offerCounts?.d3 || 0
+    ];
   };
 
   // Handle row click to open athlete profile
@@ -311,14 +460,13 @@ export default function ActivityFeed() {
       ? 'transfer_portal' 
       : 'hs_athletes';
 
-    // Navigate to the appropriate route with the athlete ID and dataSource
+    // Update URL params to open modal without navigating away
     const params = new URLSearchParams(searchParams?.toString() || '');
     params.set('player', record.athleteId);
     params.set('dataSource', dataSource);
     
-    // Route based on dataSource
-    const baseRoute = dataSource === 'transfer_portal' ? '/transfers' : '/hs-athlete';
-    router.push(`${baseRoute}?${params.toString()}`);
+    // Stay on activity-feed route and just update query params
+    router.push(`/activity-feed?${params.toString()}`);
   };
 
   // Table columns
@@ -427,26 +575,83 @@ export default function ActivityFeed() {
       title: "Activity",
       dataIndex: "type",
       key: "type",
-      render: (type: string, record: ActivityEvent) => (
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span>{type.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ')}</span>
-          {record.typeIcon === "checkmark" && (
-            <i className="icon-check-2" style={{ color: "#52c41a", fontSize: "16px" }}></i>
-          )}
-          {record.typeIcon === "solid-check" && (
-            <i className="icon-check" style={{ color: "#52c41a", fontSize: "16px", fontWeight: "bold" }}></i>
-          )}
-          {record.typeIcon === "cross" && (
-            <i className="icon-ban" style={{ color: "#ff4d4f", fontSize: "16px" }}></i>
-          )}
-          {record.typeIcon === "visit" && (
-            <i className="icon-location" style={{ color: "#8c8c8c", fontSize: "16px" }}></i>
-          )}
-          {record.typeIcon === "camp" && (
-            <i className="icon-tent" style={{ color: "#8c8c8c", fontSize: "16px" }}></i>
-          )}
-        </div>
-      ),
+      render: (type: string, record: ActivityEvent) => {
+        // Format type for display
+        const formatType = (type: string) => {
+          const typeStr = type.toLowerCase();
+          const typeMap: Record<string, string> = {
+            'offer': 'Offer',
+            'commit': 'Commit',
+            'decommit': 'De-Commit',
+            'de-commit': 'De-Commit',
+            'de_commit': 'De-Commit',
+            'visit': 'Visit',
+            'official_visit': 'Official Visit',
+            'unofficial_visit': 'Unofficial Visit',
+            'camp': 'Camp',
+            'coach note': 'Coach Note',
+            'coach call': 'Coach Call',
+            'coach message': 'Coach Message',
+            'coach multiple visit': 'Coach Multiple Visit',
+            'coach visit': 'Coach Visit',
+          };
+          
+          return typeMap[typeStr] || type.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+        };
+
+        // Get icon for the activity type
+        const getTypeIcon = (type: string) => {
+          const typeStr = type.toLowerCase();
+          const iconMap: Record<string, { icon: string; color: string }> = {
+            'offer': { icon: 'icon-check-2', color: '#52c41a' },
+            'commit': { icon: 'icon-check', color: '#52c41a' },
+            'decommit': { icon: 'icon-ban', color: '#ff4d4f' },
+            'de-commit': { icon: 'icon-ban', color: '#ff4d4f' },
+            'de_commit': { icon: 'icon-ban', color: '#ff4d4f' },
+            'official_visit': { icon: 'icon-check-2', color: '#52c41a' },
+            'unofficial_visit': { icon: 'icon-location', color: '#8c8c8c' },
+            'visit': { icon: 'icon-location', color: '#8c8c8c' },
+            'camp': { icon: 'icon-tent', color: '#8c8c8c' },
+            'coach note': { icon: 'icon-file', color: '#1890ff' },
+            'coach call': { icon: 'icon-call', color: '#1890ff' },
+            'coach message': { icon: 'icon-message', color: '#1890ff' },
+            'coach multiple visit': { icon: 'icon-location', color: '#8c8c8c' },
+            'coach visit': { icon: 'icon-location', color: '#8c8c8c' },
+          };
+          
+          return iconMap[typeStr] || null;
+        };
+
+        const formattedType = formatType(type);
+        const typeIcon = getTypeIcon(type);
+        const recordIcon = record.typeIcon;
+
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span>{formattedType}</span>
+            {/* Use typeIcon from record if available, otherwise use computed icon */}
+            {recordIcon === "checkmark" && (
+              <i className="icon-check-2" style={{ color: "#52c41a", fontSize: "16px" }}></i>
+            )}
+            {recordIcon === "solid-check" && (
+              <i className="icon-check" style={{ color: "#52c41a", fontSize: "16px", fontWeight: "bold" }}></i>
+            )}
+            {recordIcon === "cross" && (
+              <i className="icon-ban" style={{ color: "#ff4d4f", fontSize: "16px" }}></i>
+            )}
+            {recordIcon === "visit" && (
+              <i className="icon-location" style={{ color: "#8c8c8c", fontSize: "16px" }}></i>
+            )}
+            {recordIcon === "camp" && (
+              <i className="icon-tent" style={{ color: "#8c8c8c", fontSize: "16px" }}></i>
+            )}
+            {/* Fallback to computed icon if record.typeIcon is not set */}
+            {!recordIcon && typeIcon && (
+              <i className={typeIcon.icon} style={{ color: typeIcon.color, fontSize: "16px" }}></i>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "Source",
@@ -672,18 +877,39 @@ export default function ActivityFeed() {
             onChange={(e) => setSearchText(e.target.value)}
           />
           <div style={{ marginLeft: "auto", display: "flex", gap: "12px" }}>
-            <Tooltip title="Coming Soon">
-              <Button 
-                icon={<ExportOutlined />}
-                disabled
-                style={{ 
-                  opacity: 0.5,
-                  cursor: 'not-allowed'
+            {currentFilters && hasActiveFilters(currentFilters) && (
+              <Button
+                type="primary"
+                size="large"
+                className="alert-gradient-btn"
+                onClick={handleCreateOfferAlert}
+                loading={alertLoading}
+                style={{
+                  marginRight: 5,
+                  fontWeight: 500,
+                  background: "linear-gradient(90deg, #6affab 0%, #c8ff24 111.68%)",
+                  border: "none",
+                  fontFamily: '"Inter Tight", serif',
+                  boxShadow: "0 2px 8px rgba(202, 255, 36, 0.15)",
+                  display: "flex",
+                  alignItems: "center",
                 }}
               >
-                Export
+                <img src="/bell.svg"></img> Set Up Offer Alert
               </Button>
-            </Tooltip>
+            )}
+            <CSVExport<ActivityEvent>
+              fetchData={fetchExportData}
+              transformRow={transformExportRow}
+              headers={['Name', 'Height', 'Weight', 'High School', 'Location', 'Grad Year', 'Recruiting College', 'Date', 'Type', 'Source', 'Tot Off', 'P4', 'G5', 'FCS', 'D2/NAIA', 'D3']}
+              filename="activity_feed"
+              maxRows={500}
+              disabled={!customerId}
+              userId={userDetails?.id}
+              customerId={customerId || undefined}
+              tableName="activity-feed"
+              filterDetails={currentFiltersRef.current}
+            />
             <ActivityFeedFilters
               visible={filterDrawerVisible}
               onClose={() => setFilterDrawerVisible(false)}
@@ -727,6 +953,70 @@ export default function ActivityFeed() {
           </div>
         )}
       </div>
+
+      {/* Player Profile Modal */}
+      <Modal
+        title={null}
+        open={isPlayerModalVisible}
+        onCancel={handleClosePlayerModal}
+        footer={null}
+        width="95vw"
+        style={{ top: 20 }}
+        className="new-modal-ui"
+        styles={{ 
+          body: {
+            height: 'calc(100vh - 100px)',
+            overflow: 'hidden'
+          }
+        }}
+        destroyOnHidden={true}
+        closable={true}
+        maskClosable={true}
+      >
+        {selectedPlayerId ? (
+          <div style={{ height: '100%', overflow: 'auto' }}>
+            {selectedDataSource === 'hs_athletes' ? (
+              <HSAthleteProfileContent
+                athleteId={selectedPlayerId}
+                onAddToBoard={() => {}}
+                isInModal={true}
+                dataSource={'hs_athletes'}
+                onClose={handleClosePlayerModal}
+              />
+            ) : (
+              <AthleteProfileContent
+                athleteId={selectedPlayerId}
+                onAddToBoard={() => {}}
+                isInModal={true}
+                dataSource={selectedDataSource || 'transfer_portal'}
+              />
+            )}
+          </div>
+        ) : (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '50vh' 
+          }}>
+            <div>Player not found</div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Offer Alert Modal */}
+      <AlertModal
+        open={isAlertModalOpen}
+        onCancel={() => setIsAlertModalOpen(false)}
+        onSave={handleAlertSave}
+        initialValues={{
+          filter: currentFilters ? convertActivityFeedFilterToFilterString(currentFilters) : "",
+        }}
+        teamUsers={teamUsers}
+        loading={alertLoading}
+        mode="add"
+        alertType="offer_alert"
+      />
 
     </div>
   );

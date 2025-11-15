@@ -7,14 +7,42 @@ import threading
 EXTRA_FULL_ACCESS_PKGS = [3, 4, 5]
 HIDE_PREDICATE = "AND TRIM(afw.hs_coach_hide) IS DISTINCT FROM '1'"
 
-# Set to False after first run to skip source table indexing
+# ============================================================================
+# BUILD CONFIGURATION
+# ============================================================================
+# Control which components get built by setting True/False for each item
+# Set START_FROM_MV to skip earlier MVs (useful for resuming after a failure)
+
+# Source table indexes (only needed on first run)
 CREATE_SOURCE_INDEXES = False
 
-# Set to True to only refresh activity feed MV and views (skip full build)
-REFRESH_ACTIVITY_FEED_ONLY = True
+# Materialized Views to build (in dependency order)
+BUILD_MVS = {
+    "latest_athlete_facts": True,
+    "mv_school_fact_wide": True,  # Must come before athlete_stat_wide
+    "mv_athlete_fact_wide": True,
+    "mv_athlete_stat_wide": True,  # Depends on mv_school_fact_wide
+    "mv_athlete_honor_best": True,
+    "mv_athlete_commit": True,
+    "mv_athlete_sign": True,
+    "mv_tp_athletes_wide": True,
+    "mv_college_athletes_wide": True,
+    "mv_hs_athletes_wide": True,
+    "mv_juco_athletes_wide": True,
+    "mv_activity_feed": True,
+}
 
-# Set to True to only create public views (skip MV creation)
-CREATE_VIEWS_ONLY = False
+# Starting point for MV operations (skip MVs before this one)
+# Set to None to start from the beginning, or specify an MV name to start from
+START_FROM_MV = None  # e.g., "mv_activity_feed" to only rebuild that one
+
+# Views to build
+BUILD_VIEWS = {
+    "public_views": True,      # Sport-specific public views (vw_tp_athletes_wide_*, etc.)
+    "admin_views": True,       # Admin views (vw_admin_*)
+    "high_school_view": True,  # vw_high_school
+    "pub_fb_hs_athlete": True, # vw_pub_fb_hs_athlete
+}
 
 # Athlete fact mapping
 athlete_fact_mapping = {
@@ -71,7 +99,7 @@ standard_redacted_columns = [
     "is_aid_cancelled", "comments", "details_link", "email", "year", "primary_position", "height_feet",
     "height_inch", "weight", "high_school", "previous_schools", "major", "twitter", "club", "hand",
     "image_url", "address_state", "elig_remaining", "gpa", "highlight", "summer_league", "survey_completed",
-    "gp", "best_honor", "faith_based_school", "school_type", "athletic_association", "sub_division",
+    "gp", "height", "gs", "best_honor", "faith_based_school", "school_type", "athletic_association", "sub_division",
     "commit_school_id", "commit_school_name", "commit_date", "sign_school_id", "sign_school_name",
     'utr_link', 'long_jump', 'college_career_score', 'hs_career_score', 'football_career_score',
     'predicted_transfer_destination', 'transfer_odds', 'up_predictions', 'down_predictions', 'flat_predictions',
@@ -153,7 +181,7 @@ view_configs = [
         "redacted_columns": [
             "gs", "ga", "gaa", "saves", "shutouts", "g_wins", "g_losses", "sv_pct", "d_saves", "goals", "goal_app",
             "assists", "points", "sh_att", "fouls", "red_cards", "yellow_cards", "pk", "pk_att", "corners", "gwg",
-            "g_min_played", "sh_pct", "sog_pct", "g_ties", "cbo", "sog"
+            "g_min_played", "sh_pct", "sog_pct", "g_ties", "cbo", "sog", "verified_rating"
         ]
     },
     {
@@ -168,7 +196,7 @@ view_configs = [
         "redacted_columns": [
             "gs", "ga", "gaa", "saves", "shutouts", "g_wins", "g_losses", "sv_pct", "d_saves", "goals", "goal_app",
             "assists", "points", "sh_att", "fouls", "red_cards", "yellow_cards", "pk", "pk_att", "corners", "gwg",
-            "g_min_played", "min_played", "sh_pct", "sog_pct", "g_ties", "cbo", "sog"
+            "g_min_played", "min_played", "sh_pct", "sog_pct", "g_ties", "cbo", "sog", "verified_rating"
         ]
     },
     {
@@ -213,7 +241,7 @@ view_configs = [
         "full_access_package_ids": [23, 24, 84, 26],
         "redacted_columns": [
             "gs", "goals", "assists", "points", "sh_att", "sog", "gb", "ct", "fo_won", "fos_taken", "g_min_played",
-            "ga", "saves", "sv_pct", "to", "re", "ms", "s_pct", "kps"
+            "ga", "saves", "sv_pct", "to", "re", "ms", "s_pct", "kps", "dps", "verified_rating"
         ]
     },
     {
@@ -452,7 +480,8 @@ athlete_stat_mapping = {
     750: 'long_punt', 751: 'punts_50', 752: 'fgm_20_29', 753: 'fga_20_29',
     754: 'fgm_30_39', 755: 'fga_30_39', 756: 'punt_tbs', 757: 'fgm_40_49',
     758: 'fgm_50_59', 759: 'fga_50_59', 760: 'kick_ret_tds', 766: 'fgm_1_19',
-    767: 'fga_1_19', 768: 'punt_ret_tds', 769: 'fga_60', 770: 'fgm_60', 771: 'fc_yds'
+    767: 'fga_1_19', 768: 'punt_ret_tds', 769: 'fga_60', 770: 'fgm_60', 771: 'fc_yds',
+    1136: 'verified_rating'
 }
 
 # Core materialized views to build
@@ -775,6 +804,7 @@ def create_materialized_views():
         "(CAST(asw.stl AS NUMERIC) / NULLIF(CAST(asw.gp AS NUMERIC),0)) AS stl_pg",
         "(CAST(asw.blk AS NUMERIC) / NULLIF(CAST(asw.gp AS NUMERIC),0)) AS blk_pg",
         "(CAST(asw.kills AS NUMERIC) / NULLIF(CAST(asw.sets AS NUMERIC),0)) AS kps",
+        "(CAST(asw.digs AS NUMERIC) / NULLIF(CAST(asw.sets AS NUMERIC),0)) AS dps",
     ]
     asw_block = ",\n        ".join(asw_lines)
 
@@ -891,7 +921,8 @@ def create_materialized_views():
     LEFT JOIN intermediate.mv_athlete_fact_wide afw ON afw.athlete_id = m.athlete_id
     LEFT JOIN intermediate.mv_athlete_stat_wide asw ON asw.athlete_id = m.athlete_id
     LEFT JOIN intermediate.mv_athlete_honor_best ahb ON ahb.athlete_id = m.athlete_id
-    LEFT JOIN intermediate.mv_athlete_commit com ON com.athlete_id = m.athlete_id
+    LEFT JOIN intermediate.mv_athlete_commit com ON com.athlete_id = m.athlete_id 
+        AND (m.initiated_date IS NULL OR com.created_at >= m.initiated_date)
     LEFT JOIN intermediate.mv_athlete_sign sig ON sig.athlete_id = m.athlete_id
     LEFT JOIN intermediate.mv_school_fact_wide scw ON scw.school_id = m.school_id
     LEFT JOIN converted c ON c.athlete_id = asw.athlete_id
@@ -910,116 +941,153 @@ def create_materialized_views():
                 ELSE 0 
             END AS ip_decimal 
         FROM intermediate.mv_athlete_stat_wide
+    ),
+    camp_data AS (
+        SELECT 
+            ca.athlete_id,
+            STRING_AGG(
+                '***' || EXTRACT(YEAR FROM ce.start_date)::TEXT || '*** *&*' || COALESCE(ce.source, '') || '*&* **&' || COALESCE(CASE WHEN NULLIF(ce.org, '') IS NOT NULL THEN ce.name ELSE s.name END, '') || '**&',
+                ' | ' ORDER BY ce.start_date DESC
+            ) FILTER (WHERE ca.athlete_id IS NOT NULL AND ce.start_date IS NOT NULL) AS camp_attendance_text
+        FROM camp_attendance ca
+        LEFT JOIN camp_event ce ON ce.id = ca.event_id
+        LEFT JOIN state s ON s.id = ce.state_id
+        WHERE ca.athlete_id IS NOT NULL
+        GROUP BY ca.athlete_id
+    ),
+    base AS (
+        SELECT 
+            m.id AS main_tp_page_id,
+            a.id AS athlete_id,
+            COALESCE(m.school_id, aths.school_id) AS school_id,
+            a.sport_id,
+            m.initiated_date,
+            m.last_updated,
+            m.knack_id AS m_knack_id,
+            m.first_name AS m_first_name,
+            m.last_name AS m_last_name,
+            m.year AS m_year,
+            m.division AS m_division,
+            m.sport AS m_sport,
+            m.conference AS m_conference,
+            m.status AS m_status,
+            m.link AS m_link,
+            m.created_at AS m_created_at,
+            m.designated_student_athlete AS m_designated_student_athlete,
+            a.first_name AS athlete_first_name,
+            a.last_name AS athlete_last_name,
+            a.knack_id AS athlete_knack_id,
+            a.created_at AS athlete_created_at,
+            d.id AS details_id,
+            d.ok_to_contact,
+            d.is_transfer_graduate_student,
+            d.is_recruited,
+            d.commit AS details_commit,
+            d.db_update,
+            d.expected_grad_date,
+            d.is_four_year_transfer,
+            d.athlete_survey_sent,
+            d.is_aid_cancelled,
+            d.comments,
+            d.link AS details_link,
+            d.email,
+
+            {afw_block},
+            {asw_block},
+
+            ahb.best_honor,
+            CASE 
+                WHEN lower(afw.athletic_projection) IN ('fbs p4 - top half','fbs p4 - top-half') THEN 1 
+                WHEN lower(afw.athletic_projection) = 'fbs p4' THEN 2 
+                WHEN lower(afw.athletic_projection) IN ('fbs g5 - top half','fbs g5 - top-half') THEN 3 
+                WHEN lower(afw.athletic_projection) = 'fbs g5' THEN 4 
+                WHEN lower(afw.athletic_projection) = 'fcs - full scholarship' THEN 5 
+                WHEN lower(afw.athletic_projection) = 'fcs' THEN 6 
+                WHEN lower(afw.athletic_projection) IN ('d2 - top half','d2 - top-half') THEN 7 
+                WHEN lower(afw.athletic_projection) = 'd2' THEN 8 
+                WHEN lower(afw.athletic_projection) IN ('d3 - top half','d3 - top-half') THEN 9 
+                WHEN lower(afw.athletic_projection) = 'd3' THEN 10 
+                WHEN lower(afw.athletic_projection) = 'd3 walk-on' THEN 11 
+                ELSE NULL 
+            END::int AS athletic_projection_number,
+
+            scw.school_type,
+            scw.athletic_association,
+            scw.division,
+            scw.sub_division,
+            scw.fbs_conf_group,
+            scw.conference,
+            scw.bsb_conference,
+            scw.sb_conference,
+            scw.wbb_conference,
+            scw.mbb_conference,
+            scw.msoc_conference,
+            scw.wsoc_conference,
+            scw.wvol_conference,
+            scw.mlax_conference,
+            scw.wlax_conference,
+            scw.mten_conference,
+            scw.wten_conference,
+            scw.mglf_conference,
+            scw.wglf_conference,
+            scw.mtaf_conference,
+            scw.wtaf_conference,
+            scw.mswm_conference,
+            scw.wswm_conference,
+            scw.mwre_conference,
+            scw.school_name,
+            scw.juco_region,
+            scw.juco_division,
+            scw.school_state,
+            scw.hs_county,
+            scw.address_latitude,
+            scw.address_longitude,
+            com.school_id AS commit_school_id,
+            com.commit_school_name AS commit_school_name,
+            com.created_at AS commit_date,
+            sig.school_id AS sign_school_id,
+            sig.sign_school_name AS sign_school_name,
+            COALESCE(
+                afw.is_receiving_athletic_aid, 
+                CASE 
+                  WHEN d.is_receiving_athletic_aid = TRUE THEN 'Yes' 
+                  WHEN d.is_receiving_athletic_aid = FALSE THEN 'None' 
+                  ELSE NULL 
+                END
+            ) AS is_receiving_athletic_aid,
+
+            -- >>> ADDED: normalized roster year and windowed max per (sport_id, school_id)
+            CASE WHEN afw.roster_year ~ '^\d+$' THEN afw.roster_year::int END AS roster_year_int,
+            MAX(CASE WHEN afw.roster_year ~ '^\d+$' THEN afw.roster_year::int END)
+              OVER (PARTITION BY a.sport_id, COALESCE(m.school_id, aths.school_id)) AS max_roster_year,
+
+            -- >>> ADDED: camp attendance text field
+            COALESCE(cd.camp_attendance_text, '') AS camp_attendance_text
+
+        FROM athlete a
+        LEFT JOIN LATERAL (
+            SELECT * FROM main_tp_page m 
+            WHERE m.athlete_id = a.id 
+            ORDER BY m.initiated_date DESC NULLS LAST, m.id DESC 
+            LIMIT 1
+        ) m ON true
+        LEFT JOIN details_tp_page d ON d.main_tp_page_id = m.id
+        LEFT JOIN athlete_school aths ON aths.athlete_id = a.id AND aths.end_date IS NULL
+        LEFT JOIN intermediate.mv_athlete_fact_wide afw ON afw.athlete_id = a.id
+        LEFT JOIN intermediate.mv_athlete_stat_wide asw ON asw.athlete_id = a.id
+        LEFT JOIN intermediate.mv_athlete_honor_best ahb ON ahb.athlete_id = a.id
+        LEFT JOIN intermediate.mv_athlete_commit com ON com.athlete_id = a.id 
+            AND (m.initiated_date IS NULL OR com.created_at >= m.initiated_date)
+        LEFT JOIN intermediate.mv_athlete_sign sig ON sig.athlete_id = a.id
+        LEFT JOIN intermediate.mv_school_fact_wide scw ON scw.school_id = COALESCE(m.school_id, aths.school_id)
+        LEFT JOIN converted c ON c.athlete_id = asw.athlete_id
+        LEFT JOIN camp_data cd ON cd.athlete_id = a.id
+        WHERE scw.school_type IN ('University/College','Dropped')
     )
-    SELECT 
-        m.id AS main_tp_page_id,
-        a.id AS athlete_id,
-        COALESCE(m.school_id, aths.school_id) AS school_id,
-        a.sport_id,
-        m.initiated_date,
-        m.last_updated,
-        m.knack_id AS m_knack_id,
-        m.first_name AS m_first_name,
-        m.last_name AS m_last_name,
-        m.year AS m_year,
-        m.division AS m_division,
-        m.sport AS m_sport,
-        m.conference AS m_conference,
-        m.status AS m_status,
-        m.link AS m_link,
-        m.created_at AS m_created_at,
-        m.designated_student_athlete AS m_designated_student_athlete,
-        a.first_name AS athlete_first_name,
-        a.last_name AS athlete_last_name,
-        a.knack_id AS athlete_knack_id,
-        a.created_at AS athlete_created_at,
-        d.id AS details_id,
-        d.ok_to_contact,
-        d.is_transfer_graduate_student,
-        d.is_recruited,
-        d.commit AS details_commit,
-        d.db_update,
-        d.expected_grad_date,
-        d.is_four_year_transfer,
-        d.athlete_survey_sent,
-        d.is_aid_cancelled,
-        d.comments,
-        d.link AS details_link,
-        d.email,
-        {afw_block},
-        {asw_block},
-        ahb.best_honor,
-        CASE 
-            WHEN lower(afw.athletic_projection) IN ('fbs p4 - top half','fbs p4 - top-half') THEN 1 
-            WHEN lower(afw.athletic_projection) = 'fbs p4' THEN 2 
-            WHEN lower(afw.athletic_projection) IN ('fbs g5 - top half','fbs g5 - top-half') THEN 3 
-            WHEN lower(afw.athletic_projection) = 'fbs g5' THEN 4 
-            WHEN lower(afw.athletic_projection) = 'fcs - full scholarship' THEN 5 
-            WHEN lower(afw.athletic_projection) = 'fcs' THEN 6 
-            WHEN lower(afw.athletic_projection) IN ('d2 - top half','d2 - top-half') THEN 7 
-            WHEN lower(afw.athletic_projection) = 'd2' THEN 8 
-            WHEN lower(afw.athletic_projection) IN ('d3 - top half','d3 - top-half') THEN 9 
-            WHEN lower(afw.athletic_projection) = 'd3' THEN 10 
-            WHEN lower(afw.athletic_projection) = 'd3 walk-on' THEN 11 
-            ELSE NULL 
-        END::int AS athletic_projection_number,
-        scw.school_type,
-        scw.athletic_association,
-        scw.division,
-        scw.sub_division,
-        scw.fbs_conf_group,
-        scw.conference,
-        scw.bsb_conference,
-        scw.sb_conference,
-        scw.wbb_conference,
-        scw.mbb_conference,
-        scw.msoc_conference,
-        scw.wsoc_conference,
-        scw.wvol_conference,
-        scw.mlax_conference,
-        scw.wlax_conference,
-        scw.mten_conference,
-        scw.wten_conference,
-        scw.mglf_conference,
-        scw.wglf_conference,
-        scw.mtaf_conference,
-        scw.wtaf_conference,
-        scw.mswm_conference,
-        scw.wswm_conference,
-        scw.mwre_conference,
-        scw.school_name,
-        scw.juco_region,
-        scw.juco_division,
-        scw.school_state,
-        scw.hs_county,
-        scw.address_latitude,
-        scw.address_longitude,
-        com.school_id AS commit_school_id,
-        com.commit_school_name AS commit_school_name,
-        com.created_at AS commit_date,
-        sig.school_id AS sign_school_id,
-        sig.sign_school_name AS sign_school_name,
-        COALESCE(afw.is_receiving_athletic_aid, 
-                 CASE WHEN d.is_receiving_athletic_aid = TRUE THEN 'Yes' 
-                      WHEN d.is_receiving_athletic_aid = FALSE THEN 'None' 
-                      ELSE NULL END) AS is_receiving_athletic_aid
-    FROM athlete a
-    LEFT JOIN LATERAL (
-        SELECT * FROM main_tp_page m 
-        WHERE m.athlete_id = a.id 
-        ORDER BY m.initiated_date DESC NULLS LAST, m.id DESC 
-        LIMIT 1
-    ) m ON true
-    LEFT JOIN details_tp_page d ON d.main_tp_page_id = m.id
-    LEFT JOIN athlete_school aths ON aths.athlete_id = a.id AND aths.end_date IS NULL
-    LEFT JOIN intermediate.mv_athlete_fact_wide afw ON afw.athlete_id = a.id
-    LEFT JOIN intermediate.mv_athlete_stat_wide asw ON asw.athlete_id = a.id
-    LEFT JOIN intermediate.mv_athlete_honor_best ahb ON ahb.athlete_id = a.id
-    LEFT JOIN intermediate.mv_athlete_commit com ON com.athlete_id = a.id
-    LEFT JOIN intermediate.mv_athlete_sign sig ON sig.athlete_id = a.id
-    LEFT JOIN intermediate.mv_school_fact_wide scw ON scw.school_id = COALESCE(m.school_id, aths.school_id)
-    LEFT JOIN converted c ON c.athlete_id = asw.athlete_id
-    WHERE scw.school_type IN ('University/College','Dropped')
+    SELECT *
+    FROM base
+    WHERE (roster_year_int IS NOT NULL AND roster_year_int = max_roster_year)
+       OR roster_year_int IS NULL
     WITH DATA;
     """
 
@@ -1035,6 +1103,19 @@ def create_materialized_views():
                 ELSE 0 
             END AS ip_decimal 
         FROM intermediate.mv_athlete_stat_wide
+    ),
+    camp_data AS (
+        SELECT 
+            ca.athlete_id,
+            STRING_AGG(
+                '***' || EXTRACT(YEAR FROM ce.start_date)::TEXT || '*** *&*' || COALESCE(ce.source, '') || '*&* **&' || COALESCE(CASE WHEN NULLIF(ce.org, '') IS NOT NULL THEN ce.name ELSE s.name END, '') || '**&',
+                ' | ' ORDER BY ce.start_date DESC
+            ) FILTER (WHERE ca.athlete_id IS NOT NULL AND ce.start_date IS NOT NULL) AS camp_attendance_text
+        FROM camp_attendance ca
+        LEFT JOIN camp_event ce ON ce.id = ca.event_id
+        LEFT JOIN state s ON s.id = ce.state_id
+        WHERE ca.athlete_id IS NOT NULL
+        GROUP BY ca.athlete_id
     )
     SELECT 
         m.id AS main_tp_page_id,
@@ -1127,7 +1208,20 @@ def create_materialized_views():
         COALESCE(afw.is_receiving_athletic_aid, 
                  CASE WHEN d.is_receiving_athletic_aid = TRUE THEN 'Yes' 
                       WHEN d.is_receiving_athletic_aid = FALSE THEN 'None' 
-                      ELSE NULL END) AS is_receiving_athletic_aid
+                      ELSE NULL END) AS is_receiving_athletic_aid,
+        -- >>> ADDED: camp attendance text field
+        COALESCE(cd.camp_attendance_text, '') AS camp_attendance_text,
+        -- >>> ADDED: offer count columns
+        COALESCE(agg.counts_by_group, jsonb_build_object()) AS offer_counts_by_group,
+        COALESCE(agg.offer_count_all, 0) AS offer_count_all,
+        COALESCE(agg.offer_count_p4, 0) AS offer_count_p4,
+        COALESCE(agg.offer_count_g5, 0) AS offer_count_g5,
+        COALESCE(agg.offer_count_fcs, 0) AS offer_count_fcs,
+        COALESCE(agg.offer_count_d2, 0) AS offer_count_d2,
+        COALESCE(agg.offer_count_d3, 0) AS offer_count_d3,
+        COALESCE(agg.offer_count_naia, 0) AS offer_count_naia,
+        COALESCE(agg.offer_count_juco, 0) AS offer_count_juco,
+        COALESCE(agg.offer_count_other, 0) AS offer_count_other
     FROM athlete a
     LEFT JOIN LATERAL (
         SELECT * FROM main_tp_page m 
@@ -1144,7 +1238,41 @@ def create_materialized_views():
     LEFT JOIN intermediate.mv_athlete_sign sig ON sig.athlete_id = a.id
     LEFT JOIN intermediate.mv_school_fact_wide scw ON scw.school_id = COALESCE(m.school_id, aths.school_id)
     LEFT JOIN converted c ON c.athlete_id = asw.athlete_id
-    WHERE scw.school_type ILIKE 'high school'
+    LEFT JOIN camp_data cd ON cd.athlete_id = a.id
+    LEFT JOIN LATERAL (
+        WITH all_offers AS (
+            SELECT o2.id, sf.value AS category
+            FROM offer o2
+            LEFT JOIN school_fact sf ON sf.school_id = o2.school_id AND sf.data_type_id = 252
+            WHERE o2.type = 'offer' AND o2.athlete_id = a.id
+        ),
+        offer_counts AS (
+            SELECT category, COUNT(*) AS cnt
+            FROM all_offers
+            GROUP BY category
+        ),
+        total_count AS (
+            SELECT COUNT(*) AS total FROM all_offers
+        )
+        SELECT 
+            COALESCE(
+                (SELECT jsonb_object_agg(category, cnt ORDER BY category) FROM offer_counts WHERE category IS NOT NULL),
+                jsonb_build_object()
+            ) AS counts_by_group,
+            -- Individual count columns
+            COALESCE((SELECT total FROM total_count), 0) AS offer_count_all,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'P4'), 0) AS offer_count_p4,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'G5'), 0) AS offer_count_g5,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'FCS'), 0) AS offer_count_fcs,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'D2'), 0) AS offer_count_d2,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'D3'), 0) AS offer_count_d3,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'NAIA'), 0) AS offer_count_naia,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'JUCO'), 0) AS offer_count_juco,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category NOT IN ('P4', 'G5', 'FCS', 'D2', 'D3', 'NAIA', 'JUCO') OR category IS NULL), 0) AS offer_count_other
+        FROM (SELECT 1) AS dummy
+    ) agg ON TRUE
+    WHERE scw.school_type ILIKE ANY(ARRAY['high school', 'junior college'])
+      {HIDE_PREDICATE}
     WITH DATA;
     """
 
@@ -1393,7 +1521,7 @@ def create_materialized_views():
         sfw.juco_region AS sfw_juco_region,
         sfw.juco_division AS sfw_juco_division,
         sfw.juco_has_football AS sfw_juco_has_football,
-        sfw.address_state AS sfw_address_state,
+        sfw.school_state AS sfw_address_state,
         sfw.academics AS sfw_academics,
         sfw.address_latitude AS sfw_address_latitude,
         sfw.address_longitude AS sfw_address_longitude,
@@ -1409,24 +1537,53 @@ def create_materialized_views():
         sfw.hc_email AS sfw_hc_email,
         sfw.hc_number AS sfw_hc_number,
         sfw.hs_county AS sfw_hs_county,
-        agg.counts_by_group AS offer_counts_by_group
+        agg.counts_by_group AS offer_counts_by_group,
+        -- Individual offer count columns
+        agg.offer_count_all AS offer_count_all,
+        agg.offer_count_p4 AS offer_count_p4,
+        agg.offer_count_g5 AS offer_count_g5,
+        agg.offer_count_fcs AS offer_count_fcs,
+        agg.offer_count_d2 AS offer_count_d2,
+        agg.offer_count_d3 AS offer_count_d3,
+        agg.offer_count_naia AS offer_count_naia,
+        agg.offer_count_juco AS offer_count_juco,
+        agg.offer_count_other AS offer_count_other
     FROM offer o
     LEFT JOIN intermediate.mv_athlete_fact_wide afw ON afw.athlete_id = o.athlete_id
     LEFT JOIN intermediate.mv_school_fact_wide sfw ON sfw.school_id = o.school_id
     LEFT JOIN athlete_with_school a ON a.id = o.athlete_id
     LEFT JOIN intermediate.mv_school_fact_wide sfw_ath ON sfw_ath.school_id = a.school_id
     LEFT JOIN LATERAL (
-        SELECT COALESCE(
-            jsonb_object_agg(category, cnt ORDER BY category),
-            '{}'::jsonb
-        ) AS counts_by_group
-        FROM (
-            SELECT sf.value AS category, COUNT(*) AS cnt
+        WITH all_offers AS (
+            SELECT o2.id, sf.value AS category
             FROM offer o2
-            JOIN school_fact sf ON sf.school_id = o2.school_id AND sf.data_type_id = 252
+            LEFT JOIN school_fact sf ON sf.school_id = o2.school_id AND sf.data_type_id = 252
             WHERE o2.type = 'offer' AND o2.athlete_id = o.athlete_id
-            GROUP BY sf.value
-        ) t
+        ),
+        offer_counts AS (
+            SELECT category, COUNT(*) AS cnt
+            FROM all_offers
+            GROUP BY category
+        ),
+        total_count AS (
+            SELECT COUNT(*) AS total FROM all_offers
+        )
+        SELECT 
+            COALESCE(
+                (SELECT jsonb_object_agg(category, cnt ORDER BY category) FROM offer_counts WHERE category IS NOT NULL),
+                jsonb_build_object()
+            ) AS counts_by_group,
+            -- Individual count columns
+            COALESCE((SELECT total FROM total_count), 0) AS offer_count_all,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'P4'), 0) AS offer_count_p4,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'G5'), 0) AS offer_count_g5,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'FCS'), 0) AS offer_count_fcs,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'D2'), 0) AS offer_count_d2,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'D3'), 0) AS offer_count_d3,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'NAIA'), 0) AS offer_count_naia,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category = 'JUCO'), 0) AS offer_count_juco,
+            COALESCE((SELECT SUM(cnt) FROM offer_counts WHERE category NOT IN ('P4', 'G5', 'FCS', 'D2', 'D3', 'NAIA', 'JUCO') OR category IS NULL), 0) AS offer_count_other
+        FROM (SELECT 1) AS dummy
     ) agg ON TRUE
     WHERE o.coach_ask_to_remove IS NULL
     WITH DATA;
@@ -1448,6 +1605,28 @@ def create_materialized_views():
         ("mv_juco_athletes_wide", mv_juco_athletes_wide_drop, mv_juco_athletes_wide_create),
         ("mv_activity_feed", mv_activity_feed_drop, mv_activity_feed_create)
     ]
+
+    # Filter MVs based on BUILD_MVS configuration
+    mv_operations = [
+        (name, drop, create) for name, drop, create in mv_operations
+        if BUILD_MVS.get(name, False)
+    ]
+
+    # Apply START_FROM_MV if specified
+    if START_FROM_MV:
+        start_index = next(
+            (i for i, (name, _, _) in enumerate(mv_operations) if name == START_FROM_MV),
+            None
+        )
+        if start_index is not None:
+            safe_print(f"[MVs] Starting from {START_FROM_MV} (skipping {start_index} earlier MVs)")
+            mv_operations = mv_operations[start_index:]
+        else:
+            safe_print(f"[WARNING] START_FROM_MV='{START_FROM_MV}' not found in enabled MVs. Starting from beginning.")
+
+    if not mv_operations:
+        safe_print("[MVs] No materialized views to build (all disabled in BUILD_MVS)")
+        return
 
     for i, (mv_name, drop_stmt, create_stmt) in enumerate(mv_operations, 1):
         # DROP operation
@@ -1602,7 +1781,8 @@ def build_view_statements(config):
         conf_field = f"{suffix}_conference"
         naia_pkgs_list = naia_pkg if naia_pkg is not None else -1  # impossible package id
 
-    redacted_cols = standard_redacted_columns + config["redacted_columns"]
+    # Combine and deduplicate redacted columns (preserve order, keep first occurrence)
+    redacted_cols = list(dict.fromkeys(standard_redacted_columns + config["redacted_columns"]))
 
     RESERVED_WORDS = {"to"}  # extend if needed
 
@@ -1766,7 +1946,7 @@ SELECT t.* FROM intermediate.mv_hs_athletes_wide t
 WHERE t.sport_id = {sport_id} AND EXISTS (
     SELECT 1 FROM public.user_package_access upa
     WHERE upa.user_id = auth.uid() 
-      AND upa.customer_package_id = {platinum_pkg}
+      AND upa.customer_package_id IN ({platinum_pkg}, {old_gold_pkg})
 );"""
             }
 
@@ -1783,6 +1963,11 @@ WHERE t.sport_id = {sport_id} AND EXISTS (
             }
 
         if silver_plus_pkg is not None:
+            # For football, include both silver_plus (99) and naia_plus (103) packages
+            if is_football and naia_plus_pkg is not None:
+                pkg_list = ", ".join(str(p) for p in [silver_plus_pkg, naia_plus_pkg])
+            else:
+                pkg_list = str(silver_plus_pkg)
             views[f"vw_hs_athletes_wide_{suffix}_silver_plus"] = {
                 "drop": "",
                 "create": f"""CREATE OR REPLACE VIEW public.vw_hs_athletes_wide_{suffix}_silver_plus AS
@@ -1790,11 +1975,16 @@ SELECT t.* FROM intermediate.mv_hs_athletes_wide t
 WHERE t.sport_id = {sport_id} AND EXISTS (
     SELECT 1 FROM public.user_package_access upa
     WHERE upa.user_id = auth.uid() 
-      AND upa.customer_package_id = {silver_plus_pkg}
+      AND upa.customer_package_id IN ({pkg_list})
 );"""
             }
 
         if silver_pkg is not None:
+            # For football, include both silver (100) and naia (101) packages
+            if is_football and naia_pkg is not None:
+                pkg_list = ", ".join(str(p) for p in [silver_pkg, naia_pkg])
+            else:
+                pkg_list = str(silver_pkg)
             views[f"vw_hs_athletes_wide_{suffix}_silver"] = {
                 "drop": "",
                 "create": f"""CREATE OR REPLACE VIEW public.vw_hs_athletes_wide_{suffix}_silver AS
@@ -1802,7 +1992,7 @@ SELECT t.* FROM intermediate.mv_hs_athletes_wide t
 WHERE t.sport_id = {sport_id} AND EXISTS (
     SELECT 1 FROM public.user_package_access upa
     WHERE upa.user_id = auth.uid() 
-      AND upa.customer_package_id = {silver_pkg}
+      AND upa.customer_package_id IN ({pkg_list})
 );"""
             }
 
@@ -1831,7 +2021,7 @@ SELECT t.* FROM intermediate.mv_activity_feed t
 WHERE t.sport_id = {sport_id} AND EXISTS (
     SELECT 1 FROM public.user_package_access upa
     WHERE upa.user_id = auth.uid() 
-      AND upa.customer_package_id = {platinum_pkg}
+      AND upa.customer_package_id IN ({platinum_pkg}, {old_gold_pkg})
 );"""
             }
 
@@ -1865,10 +2055,10 @@ WHERE t.sport_id = {sport_id} AND EXISTS (
 def create_admin_views():
     """Create admin views for packages 3, 4, 5"""
     safe_print("[ADMIN VIEWS] Creating admin views...")
-    
+
     # Admin package list
     _admin_pkg_list = ", ".join(str(p) for p in EXTRA_FULL_ACCESS_PKGS)  # "3, 4, 5"
-    
+
     admin_views = {
         "vw_admin_college_athlete": {
             "drop": "DROP VIEW IF EXISTS public.vw_admin_college_athlete;",
@@ -1889,7 +2079,8 @@ WHERE EXISTS (
 CREATE VIEW public.vw_admin_hs_athlete AS
 SELECT t.*
 FROM intermediate.mv_hs_athletes_wide t
-WHERE EXISTS (
+WHERE t.sport_id = 21
+  AND EXISTS (
   SELECT 1
   FROM public.user_package_access upa
   WHERE upa.user_id = auth.uid()
@@ -1921,34 +2112,26 @@ WHERE EXISTS (
   WHERE upa.user_id = auth.uid()
     AND upa.customer_package_id IN ({_admin_pkg_list})
 );"""
-        },
-        "vw_high_school": {
-            "drop": "DROP VIEW IF EXISTS public.vw_high_school;",
-            "create": """
-CREATE VIEW public.vw_high_school AS
-SELECT *
-FROM intermediate.mv_school_fact_wide
-WHERE school_type = 'High School'
-   OR (school_type = 'Junior College' AND juco_has_football = 'Yes');"""
         }
     }
-    
+
     view_count = len(admin_views)
     safe_print(f"[ADMIN VIEWS] Total admin views to create: {view_count}")
-    
+
     for i, (view_name, view_def) in enumerate(admin_views.items(), 1):
         safe_print(f"[ADMIN VIEWS] {i}/{view_count} - Creating {view_name}...")
-        
+
         # Drop the view first
         run_sql(view_def["drop"])
-        
+
         # Create the view
         run_sql(view_def["create"])
 
+
 def create_high_school_view():
-    """Create the high school view"""
+    """Create the high school view (public, not admin-only)"""
     safe_print("[HIGH SCHOOL VIEW] Creating vw_high_school...")
-    
+
     high_school_view = {
         "vw_high_school": {
             "drop": "DROP VIEW IF EXISTS public.vw_high_school;",
@@ -1960,15 +2143,42 @@ WHERE school_type = 'High School'
    OR (school_type = 'Junior College' AND juco_has_football = 'Yes');"""
         }
     }
-    
+
     for view_name, view_def in high_school_view.items():
         safe_print(f"[HIGH SCHOOL VIEW] Creating {view_name}...")
-        
+
         # Drop the view first
         run_sql(view_def["drop"])
-        
+
         # Create the view
         run_sql(view_def["create"])
+
+
+def create_pub_fb_hs_athlete_view():
+    """Create the public football high school athlete view"""
+    safe_print("[PUBLIC VIEW] Creating vw_pub_fb_hs_athlete...")
+
+    view_def = {
+        "drop": "DROP VIEW IF EXISTS public.vw_pub_fb_hs_athlete;",
+        "create": """
+CREATE VIEW public.vw_pub_fb_hs_athlete AS
+SELECT 
+    athlete_id,
+    athlete_first_name AS first_name,
+    athlete_last_name AS last_name,
+    athlete_knack_id AS knack_id,
+    school_id,
+    school_name
+FROM intermediate.mv_hs_athletes_wide
+WHERE sport_id = 21;"""
+    }
+
+    # Drop the view first
+    run_sql(view_def["drop"])
+
+    # Create the view
+    run_sql(view_def["create"])
+
 
 def create_activity_feed_views():
     """Create only activity feed views (football only)"""
@@ -2025,11 +2235,25 @@ def create_public_views():
     for i, (view_name, view_def) in enumerate(all_views.items(), 1):
         safe_print(f"[PUBLIC VIEWS] {i}/{view_count} - Creating {view_name}...")
 
-        # Only drop if it's not empty (some views don't need dropping)
-        if view_def["drop"]:
-            run_sql(view_def["drop"])
-
-        run_sql(view_def["create"])
+        # Try CREATE OR REPLACE first (faster for most cases)
+        try:
+            run_sql(view_def["create"])
+        except Exception as e:
+            error_msg = str(e)
+            # Check if it's a column rename conflict error
+            if "cannot change name of view column" in error_msg or "rename column" in error_msg.lower():
+                safe_print(f"[PUBLIC VIEWS] Column rename conflict detected for {view_name}, dropping and recreating...")
+                # Drop the view first, then recreate
+                if view_def.get("drop"):
+                    run_sql(view_def["drop"])
+                else:
+                    # Generate a default DROP statement if none provided
+                    run_sql(f"DROP VIEW IF EXISTS public.{view_name} CASCADE;")
+                # Now recreate
+                run_sql(view_def["create"])
+            else:
+                # Re-raise if it's a different error
+                raise
 
 
 def create_source_table_indexes():
@@ -2131,232 +2355,45 @@ def main():
         # Test connection first
         test_connection()
 
-        if CREATE_VIEWS_ONLY:
-            # Only create public views (skip MV creation)
-            safe_print("\n[VIEWS ONLY] Creating public views...")
-            
-            # Create all public views
-            create_public_views()
-            
-            # Create admin views
-            create_admin_views()
-            
-            # Create high school view
-            create_high_school_view()
-            
-        elif REFRESH_ACTIVITY_FEED_ONLY:
-            # Only refresh activity feed MV and views
-            safe_print("\n[ACTIVITY FEED ONLY] Refreshing activity feed materialized view and views...")
+        step_num = 1
 
-            # Define activity feed MV creation SQL
-            mv_activity_feed_create = """
-            CREATE MATERIALIZED VIEW intermediate.mv_activity_feed AS
-            SELECT 
-                o.id AS offer_id,
-                o.created_at AS offer_created_at,
-                o.source,
-                o.type,
-                o.coach_ask_to_remove,
-                o.ended_at,
-                o.walk_on,
-                o.offer_date,
-                a.sport_id,
-                a.first_name,
-                a.last_name,
-                a.school_name as ath_school,
-                a.school_id as ath_school_id,
-                -- === Athlete's current school (2nd SFW join, prefixed ath_school_*) ===
-                sfw_ath.address_city AS ath_school_address_city,
-                sfw_ath.school_state AS ath_school_school_state,
-                sfw_ath.county_id AS ath_school_county_id,
-                sfw_ath.address_latitude AS ath_school_address_latitude,
-                sfw_ath.address_longitude AS ath_school_address_longitude,
-                sfw_ath.school_type AS ath_school__school_type,
-                -- === Athlete Fact Wide (prefixed) ===
-                afw.athlete_id AS afw_athlete_id,
-                afw.year AS afw_year,
-                afw.primary_position AS afw_primary_position,
-                CASE WHEN afw.height_feet ~ '^-?\\d+(\\.\\d+)?$' THEN afw.height_feet::NUMERIC END AS afw_height_feet,
-                CASE WHEN afw.height_inch ~ '^-?\\d+(\\.\\d+)?$' THEN afw.height_inch::NUMERIC END AS afw_height_inch,
-                CASE WHEN afw.weight ~ '^-?\\d+(\\.\\d+)?$' THEN afw.weight::NUMERIC END AS afw_weight,
-                afw.high_school AS afw_high_school,
-                afw.previous_schools AS afw_previous_schools,
-                afw.major AS afw_major,
-                afw.twitter AS afw_twitter,
-                afw.club AS afw_club,
-                afw.hand AS afw_hand,
-                afw.image_url AS afw_image_url,
-                afw.address_state AS afw_address_state,
-                afw.elig_remaining AS afw_elig_remaining,
-                CASE WHEN afw.gpa ~ '^-?\\d+(\\.\\d+)?$' THEN afw.gpa::NUMERIC END AS afw_gpa,
-                afw.highlight AS afw_highlight,
-                afw.summer_league AS afw_summer_league,
-                afw.survey_completed AS afw_survey_completed,
-                afw.is_receiving_athletic_aid AS afw_is_receiving_athletic_aid,
-                afw.faith_based_school AS afw_faith_based_school,
-                afw.track_wrestling_profile AS afw_track_wrestling_profile,
-                afw.wrestle_stat_link AS afw_wrestle_stat_link,
-                afw.stats_url AS afw_stats_url,
-                CASE WHEN afw.roster_year ~ '^-?\\d+(\\.\\d+)?$' THEN afw.roster_year::NUMERIC END AS afw_roster_year,
-                afw.utr_link AS afw_utr_link,
-                afw.long_jump AS afw_long_jump,
-                afw.college_career_score AS afw_college_career_score,
-                afw.hs_career_score AS afw_hs_career_score,
-                afw.football_career_score AS afw_football_career_score,
-                afw.predicted_transfer_destination AS afw_predicted_transfer_destination,
-                CASE WHEN afw.transfer_odds ~ '^-?\\d+(\\.\\d+)?$' THEN afw.transfer_odds::NUMERIC END AS afw_transfer_odds,
-                afw.up_predictions AS afw_up_predictions,
-                afw.down_predictions AS afw_down_predictions,
-                afw.flat_predictions AS afw_flat_predictions,
-                afw.risk_category AS afw_risk_category,
-                afw.pred_direction AS afw_pred_direction,
-                afw.rivals_rating AS afw_rivals_rating,
-                afw.shot_put AS afw_shot_put,
-                afw.forty AS afw_forty,
-                afw.shuttle AS afw_shuttle,
-                afw.three_cone AS afw_three_cone,
-                afw.broad_jump AS afw_broad_jump,
-                afw.vert_jump AS afw_vert_jump,
-                afw.roster_link AS afw_roster_link,
-                afw.athletic_projection AS afw_athletic_projection,
-                CASE WHEN afw.grad_year ~ '^-?\\d+(\\.\\d+)?$' THEN afw.grad_year::NUMERIC END AS afw_grad_year,
-                afw.hs_highlight AS afw_hs_highlight,
-                CASE WHEN afw.sat ~ '^-?\\d+(\\.\\d+)?$' THEN afw.sat::NUMERIC END AS afw_sat,
-                CASE WHEN afw.act ~ '^-?\\d+(\\.\\d+)?$' THEN afw.act::NUMERIC END AS afw_act,
-                afw.gpa_type AS afw_gpa_type,
-                afw.hs_coach_hide AS afw_hs_coach_hide,
-                afw.best_offer AS afw_best_offer,
-                afw.income AS afw_income,
-                afw.added_date AS afw_added_date,
-                afw.last_major_change AS afw_last_major_change,
-                afw.on3_consensus_rating AS afw_on3_consensus_rating,
-                afw.on3_rating AS afw_on3_rating,
-                afw._247_rating AS afw__247_rating,
-                afw.espn_rating AS afw_espn_rating,
-                afw.on3_consensus_stars AS afw_on3_consensus_stars,
-                afw.on3_stars AS afw_on3_stars,
-                afw._247_stars AS afw__247_stars,
-                afw.espn_stars AS afw_espn_stars,
-                afw.income_category AS afw_income_category,
-                -- === School Fact Wide (prefixed) ===
-                sfw.school_id AS sfw_school_id,
-                sfw.school_name AS sfw_school_name,
-                sfw.msoc_conference AS sfw_msoc_conference,
-                sfw.school_type AS sfw_school_type,
-                sfw.athletic_association AS sfw_athletic_association,
-                sfw.division AS sfw_division,
-                sfw.sub_division AS sfw_sub_division,
-                sfw.bsb_conference AS sfw_bsb_conference,
-                sfw.fbs_conf_group AS sfw_fbs_conf_group,
-                sfw.school_state AS sfw_school_state,
-                sfw.academic_ranking AS sfw_academic_ranking,
-                sfw.conference AS sfw_conference,
-                sfw.wbb_conference AS sfw_wbb_conference,
-                sfw.mbb_conference AS sfw_mbb_conference,
-                sfw.wvol_conference AS sfw_wvol_conference,
-                sfw.sb_conference AS sfw_sb_conference,
-                sfw.mlax_conference AS sfw_mlax_conference,
-                sfw.wlax_conference AS sfw_wlax_conference,
-                sfw.mten_conference AS sfw_mten_conference,
-                sfw.wten_conference AS sfw_wten_conference,
-                sfw.mglf_conference AS sfw_mglf_conference,
-                sfw.wglf_conference AS sfw_wglf_conference,
-                sfw.mtaf_conference AS sfw_mtaf_conference,
-                sfw.wtaf_conference AS sfw_wtaf_conference,
-                sfw.mswm_conference AS sfw_mswm_conference,
-                sfw.wswm_conference AS sfw_wswm_conference,
-                sfw.mwre_conference AS sfw_mwre_conference,
-                sfw.wsoc_conference AS sfw_wsoc_conference,
-                sfw.juco_region AS sfw_juco_region,
-                sfw.juco_division AS sfw_juco_division,
-                sfw.juco_has_football AS sfw_juco_has_football,
-                sfw.address_state AS sfw_address_state,
-                sfw.academics AS sfw_academics,
-                sfw.address_latitude AS sfw_address_latitude,
-                sfw.address_longitude AS sfw_address_longitude,
-                sfw.college_player_producing AS sfw_college_player_producing,
-                sfw.d1_player_producing AS sfw_d1_player_producing,
-                sfw.team_quality AS sfw_team_quality,
-                sfw.athlete_income AS sfw_athlete_income,
-                sfw.county_id AS sfw_county_id,
-                sfw.affiliation AS sfw_affiliation,
-                sfw.private_public AS sfw_private_public,
-                sfw.hs_state AS sfw_hs_state,
-                sfw.hc_name AS sfw_hc_name,
-                sfw.hc_email AS sfw_hc_email,
-                sfw.hc_number AS sfw_hc_number,
-                sfw.hs_county AS sfw_hs_county,
-                agg.counts_by_group AS offer_counts_by_group
-            FROM offer o
-            LEFT JOIN intermediate.mv_athlete_fact_wide afw ON afw.athlete_id = o.athlete_id
-            LEFT JOIN intermediate.mv_school_fact_wide sfw ON sfw.school_id = o.school_id
-            LEFT JOIN athlete_with_school a ON a.id = o.athlete_id
-            LEFT JOIN intermediate.mv_school_fact_wide sfw_ath ON sfw_ath.school_id = a.school_id
-            LEFT JOIN LATERAL (
-                SELECT COALESCE(
-                    jsonb_object_agg(category, cnt ORDER BY category),
-                    '{}'::jsonb
-                ) AS counts_by_group
-                FROM (
-                    SELECT sf.value AS category, COUNT(*) AS cnt
-                    FROM offer o2
-                    JOIN school_fact sf ON sf.school_id = o2.school_id AND sf.data_type_id = 252
-                    WHERE o2.type = 'offer' AND o2.athlete_id = o.athlete_id
-                    GROUP BY sf.value
-                ) t
-            ) agg ON TRUE
-            WHERE o.coach_ask_to_remove IS NULL
-            WITH DATA;
-            """
-
-            # Drop and recreate activity feed MV
-            safe_print("[ACTIVITY FEED] Dropping mv_activity_feed...")
-            run_sql("DROP MATERIALIZED VIEW IF EXISTS intermediate.mv_activity_feed CASCADE;")
-
-            safe_print("[ACTIVITY FEED] Creating mv_activity_feed...")
-            run_sql(mv_activity_feed_create)
-
-            # Create indexes for activity feed MV
-            safe_print("[ACTIVITY FEED] Creating indexes for mv_activity_feed...")
-            create_indexes_for_mv("mv_activity_feed")
-
-            # Create only activity feed views (football only)
-            safe_print("[ACTIVITY FEED] Creating activity feed views...")
-            create_activity_feed_views()
-            
-            # Create high school view
-            safe_print("[ACTIVITY FEED] Creating high school view...")
-            create_high_school_view()
-
+        # Step 1: Create source table indexes (if enabled)
+        if CREATE_SOURCE_INDEXES:
+            safe_print(f"\n[STEP {step_num}] Creating source table indexes...")
+            create_source_table_indexes()
+            step_num += 1
         else:
-            # Full build process
-            # Step 1: Create source table indexes for better performance (only if needed)
-            if CREATE_SOURCE_INDEXES:
-                safe_print("\n[STEP 1] Creating source table indexes...")
-                create_source_table_indexes()
-                safe_print("[INFO] Set CREATE_SOURCE_INDEXES = False to skip this step in future runs")
-            else:
-                safe_print("\n[STEP 1] Skipping source table indexes (CREATE_SOURCE_INDEXES = False)")
+            safe_print("\n[SKIP] Source table indexes (CREATE_SOURCE_INDEXES = False)")
 
-            # Step 2: Create materialized views with data and indexes
-            step_num = 2 if CREATE_SOURCE_INDEXES else 1
-            safe_print(f"\n[STEP {step_num}] Creating materialized views with data and indexes...")
+        # Step 2: Create materialized views (if any are enabled)
+        if any(BUILD_MVS.values()):
+            safe_print(f"\n[STEP {step_num}] Creating materialized views...")
             create_materialized_views()
+            step_num += 1
+        else:
+            safe_print("\n[SKIP] Materialized views (all disabled in BUILD_MVS)")
 
-            # Step 3: Create public views
-            step_num = 3 if CREATE_SOURCE_INDEXES else 2
-            safe_print(f"\n[STEP {step_num}] Creating public views...")
-            create_public_views()
+        # Step 3: Create views (based on BUILD_VIEWS configuration)
+        if any(BUILD_VIEWS.values()):
+            safe_print(f"\n[STEP {step_num}] Creating views...")
             
-            # Step 4: Create admin views
-            step_num = 4 if CREATE_SOURCE_INDEXES else 3
-            safe_print(f"\n[STEP {step_num}] Creating admin views...")
-            create_admin_views()
+            if BUILD_VIEWS.get("public_views", False):
+                safe_print("[VIEWS] Creating public views...")
+                create_public_views()
             
-            # Step 5: Create high school view
-            step_num = 5 if CREATE_SOURCE_INDEXES else 4
-            safe_print(f"\n[STEP {step_num}] Creating high school view...")
-            create_high_school_view()
+            if BUILD_VIEWS.get("admin_views", False):
+                safe_print("[VIEWS] Creating admin views...")
+                create_admin_views()
+            
+            if BUILD_VIEWS.get("high_school_view", False):
+                safe_print("[VIEWS] Creating high school view...")
+                create_high_school_view()
+            
+            if BUILD_VIEWS.get("pub_fb_hs_athlete", False):
+                safe_print("[VIEWS] Creating public FB HS athlete view...")
+                create_pub_fb_hs_athlete_view()
+        else:
+            safe_print("\n[SKIP] Views (all disabled in BUILD_VIEWS)")
 
         end_time = datetime.datetime.now()
         duration = end_time - start_time

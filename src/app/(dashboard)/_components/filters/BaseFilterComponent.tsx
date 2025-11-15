@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Button, Drawer, Collapse, Flex, Input, Select, DatePicker, Slider, Checkbox } from 'antd';
+import { Button, Drawer, Collapse, Flex, Input, Select, DatePicker, Slider, Checkbox, message } from 'antd';
 import { CloseOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
 import { FilterConfig, FilterField, getFieldByKey } from './FilterConfig';
 import { FilterBadges } from './FilterBadges';
-import { SavedFilters, SavedFilter, saveFilterToStorage, getSavedFiltersFromStorage, deleteFilterFromStorage } from './SavedFilters';
+import { SavedFilters, SavedFilter } from './SavedFilters';
 import { renderFilterField } from './FilterFieldRenderer';
+import { fetchSavedFilters, saveFilter, deleteSavedFilter, SavedFilterDB } from '@/lib/queries';
+import { useCustomer, useUser } from '@/contexts/CustomerContext';
 import dayjs from 'dayjs';
 
 // ============================================================================
@@ -22,6 +24,7 @@ interface BaseFilterComponentProps {
   onResetFilters: () => void;
   initialFilters?: Record<string, any>;
   className?: string;
+  dataSource?: string; // Search page identifier (e.g., 'transfer_portal', 'hs_athletes')
 }
 
 export function BaseFilterComponent({
@@ -29,18 +32,49 @@ export function BaseFilterComponent({
   onApplyFilters,
   onResetFilters,
   initialFilters = {},
-  className = ""
+  className = "",
+  dataSource = 'transfer_portal'
 }: BaseFilterComponentProps) {
   const [filterState, setFilterState] = useState<Record<string, any>>(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState<Record<string, any>>(initialFilters);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [isLoadingFilters, setIsLoadingFilters] = useState(false);
+  
+  const { activeCustomerId } = useCustomer();
+  const userDetails = useUser();
 
-  // Load saved filters on mount
+  // Convert SavedFilterDB to SavedFilter format
+  const convertToSavedFilter = (dbFilter: SavedFilterDB): SavedFilter => {
+    return {
+      id: dbFilter.id,
+      name: dbFilter.name,
+      config: dbFilter.settings,
+      createdAt: dbFilter.created_at,
+      is_favorited: dbFilter.is_favorited
+    };
+  };
+
+  // Load saved filters from database
   useEffect(() => {
-    const saved = getSavedFiltersFromStorage();
-    setSavedFilters(saved);
-  }, []);
+    const loadSavedFilters = async () => {
+      if (!activeCustomerId || !dataSource) return;
+      
+      setIsLoadingFilters(true);
+      try {
+        const dbFilters = await fetchSavedFilters(activeCustomerId, dataSource);
+        const convertedFilters = dbFilters.map(convertToSavedFilter);
+        setSavedFilters(convertedFilters);
+      } catch (error) {
+        console.error('Error loading saved filters:', error);
+        message.error('Failed to load saved filters');
+      } finally {
+        setIsLoadingFilters(false);
+      }
+    };
+
+    loadSavedFilters();
+  }, [activeCustomerId, dataSource]);
 
   // Handle filter value changes
   const handleFilterChange = (key: string, value: any) => {
@@ -146,15 +180,46 @@ export function BaseFilterComponent({
   };
 
   // Handle saving a filter
-  const handleSaveFilter = (filter: SavedFilter) => {
-    saveFilterToStorage(filter);
-    setSavedFilters(prev => [...prev, filter]);
+  const handleSaveFilter = async (filter: SavedFilter) => {
+    if (!activeCustomerId || !userDetails?.id) {
+      message.error('Unable to save filter: missing customer or user information');
+      return;
+    }
+
+    try {
+      const dbFilter = await saveFilter(
+        activeCustomerId,
+        userDetails.id,
+        dataSource,
+        filter.name,
+        filter.config,
+        filter.is_favorited || false
+      );
+      
+      const convertedFilter = convertToSavedFilter(dbFilter);
+      setSavedFilters(prev => [...prev, convertedFilter]);
+      message.success('Filter saved successfully');
+    } catch (error) {
+      console.error('Error saving filter:', error);
+      message.error('Failed to save filter');
+    }
   };
 
   // Handle deleting a saved filter
-  const handleDeleteFilter = (filterId: string) => {
-    deleteFilterFromStorage(filterId);
-    setSavedFilters(prev => prev.filter(f => f.id !== filterId));
+  const handleDeleteFilter = async (filterId: string | number) => {
+    if (typeof filterId !== 'number') {
+      message.error('Invalid filter ID');
+      return;
+    }
+
+    try {
+      await deleteSavedFilter(filterId);
+      setSavedFilters(prev => prev.filter(f => f.id !== filterId));
+      message.success('Filter deleted successfully');
+    } catch (error) {
+      console.error('Error deleting filter:', error);
+      message.error('Failed to delete filter');
+    }
   };
 
   // Render a single filter field
@@ -210,7 +275,7 @@ export function BaseFilterComponent({
       </Flex>
 
       {/* Filter Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'visible', padding: '0 16px' }}>
         <Collapse
           defaultActiveKey={config.sections
             .filter(section => section.defaultExpanded !== false)
@@ -225,17 +290,17 @@ export function BaseFilterComponent({
             )
           }
           expandIconPosition="end"
-          style={{ backgroundColor: '#fff' }}
+          style={{ backgroundColor: '#fff', overflow: 'visible' }}
         >
           {config.sections.map(section => (
             <Collapse.Panel
               key={section.key}
               header={section.title}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '8px', overflow: 'visible' }}
             >
-              <div style={{ padding: '12px' }}>
+              <div style={{ padding: '12px 12px 12px 6px', overflow: 'visible', position: 'relative' }}>
                 {section.fields.map(field => (
-                  <div key={field.key} style={{ marginBottom: '12px' }}>
+                  <div key={field.key} style={{ marginBottom: '12px', overflow: 'visible', position: 'relative', zIndex: field.type === 'camp' ? 1050 : 'auto' }}>
                     {/* Only show field label if there are multiple fields in the section */}
                     {section.fields.length > 1 && (
                       <label style={{ 
@@ -315,8 +380,9 @@ export function BaseFilterComponent({
         open={isPanelOpen}
         width={config.maxWidth || 400}
         styles={{
-          body: { padding: 0 },
-          header: { display: 'none' }
+          body: { padding: 0, overflowX: 'visible' },
+          header: { display: 'none' },
+          wrapper: { overflow: 'visible' }
         }}
         maskClosable={true}
         destroyOnClose={false}

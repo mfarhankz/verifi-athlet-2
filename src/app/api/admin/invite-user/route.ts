@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { email, firstName, lastName, phone, customerId, sendEmail = true } = await request.json();
+    const { email, firstName, lastName, phone, customerId, main_contact, sendEmail = true } = await request.json();
 
     // Validate inputs
     if (!email) {
@@ -66,6 +66,10 @@ export async function POST(request: NextRequest) {
     if (!customerId) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
     }
+
+    // Normalize phone number: remove all non-digit characters
+    // Store as digits only (e.g., "701-425-2821" becomes "7014252821")
+    const normalizedPhone = phone ? phone.replace(/\D/g, '') : null;
 
     // Validate that the customer exists
     console.log('Validating customer:', customerId);
@@ -158,23 +162,31 @@ export async function POST(request: NextRequest) {
     if (inviteData.user) {
       try {
         // Create user details record
-        if (firstName || lastName || phone) {
-          console.log('Creating user detail record for:', inviteData.user.id);
-          const { error: userDetailError } = await supabaseAdmin
-            .from('user_detail')
-            .insert({
-              id: inviteData.user.id,
-              name_first: firstName || null,
-              name_last: lastName || null,
-              phone: phone || null,
-            });
+        // Always create the record when inviting a user
+        console.log('Creating user detail record for:', inviteData.user.id);
+        const { error: userDetailError } = await supabaseAdmin
+          .from('user_detail')
+          .insert({
+            id: inviteData.user.id,
+            auth_user_id: inviteData.user.id,
+            name_first: firstName || null,
+            name_last: lastName || null,
+            phone: normalizedPhone || null,
+            main_contact: main_contact !== undefined ? main_contact : false,
+          });
 
-          if (userDetailError) {
-            console.error('Error creating user details:', userDetailError);
-            // Don't fail the invitation, just log the error
-          } else {
-            console.log('User detail record created successfully');
-          }
+        if (userDetailError) {
+          console.error('Error creating user details:', userDetailError);
+          console.error('Full error details:', JSON.stringify(userDetailError, null, 2));
+          // Return error with details for debugging
+          return NextResponse.json({ 
+            error: 'User invited but failed to create user details',
+            details: userDetailError.message,
+            code: userDetailError.code,
+            hint: userDetailError.hint
+          }, { status: 500 });
+        } else {
+          console.log('User detail record created successfully');
         }
 
         // Create user-customer mapping

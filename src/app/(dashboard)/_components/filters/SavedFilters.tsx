@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Button, Input, List, Popconfirm, message, Tooltip } from 'antd';
+import { Button, Input, Popconfirm, message } from 'antd';
 import { HeartOutlined, HeartFilled, SearchOutlined, DeleteOutlined } from '@ant-design/icons';
 import { FilterConfig } from './FilterConfig';
 
@@ -13,18 +13,19 @@ import { FilterConfig } from './FilterConfig';
 // ============================================================================
 
 export interface SavedFilter {
-  id: string;
+  id: string | number;
   name: string;
   config: Record<string, unknown>;
   createdAt: string;
   isActive?: boolean;
+  is_favorited?: boolean;
 }
 
 interface SavedFiltersProps {
   currentFilters: Record<string, unknown>;
   onLoadFilter: (filters: Record<string, unknown>) => void;
   onSaveFilter: (filter: SavedFilter) => void;
-  onDeleteFilter: (filterId: string) => void;
+  onDeleteFilter: (filterId: string | number) => void;
   savedFilters: SavedFilter[];
   className?: string;
 }
@@ -75,7 +76,7 @@ export function SavedFilters({
   };
 
   // Handle deleting a saved filter
-  const handleDeleteFilter = (filterId: string) => {
+  const handleDeleteFilter = (filterId: string | number) => {
     onDeleteFilter(filterId);
     message.success('Filter deleted successfully');
   };
@@ -88,45 +89,6 @@ export function SavedFilters({
   return (
     <div className={`saved-filters ${className}`}>
       {/* Save Filter Input */}
-      <Tooltip title="Coming Soon" placement="top">
-        <div style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          gap: "8px",
-          marginBottom: "12px",
-          opacity: 0.5,
-          pointerEvents: "none"
-        }}>
-          <Input
-            placeholder="Name this filter"
-            value={filterName}
-            onChange={(e) => setFilterName(e.target.value)}
-            style={{ flex: 1 }}
-            onPressEnter={handleSaveFilter}
-            disabled
-          />
-          <Button
-            type="text"
-            icon={isCurrentFilterSaved() ? 
-              <HeartFilled style={{ color: "#ff4d4f", fontSize: '16px' }} /> : 
-              <HeartOutlined style={{ color: "#ff4d4f", fontSize: '16px' }} />
-            }
-            onClick={handleSaveFilter}
-            disabled
-            title="Coming Soon"
-          />
-          <Button
-            type="text"
-            icon={<SearchOutlined />}
-            onClick={() => setShowSavedFilters(!showSavedFilters)}
-            disabled
-            title="Coming Soon"
-          />
-        </div>
-      </Tooltip>
-
-      {/* Original Save Filter Input - Commented Out */}
-      {/* 
       <div style={{ 
         display: "flex", 
         alignItems: "center", 
@@ -157,7 +119,6 @@ export function SavedFilters({
           title={showSavedFilters ? "Hide saved filters" : "Show saved filters"}
         />
       </div>
-      */}
 
       {/* Saved Filters List */}
       {showSavedFilters && (
@@ -186,82 +147,73 @@ export function SavedFilters({
                 {searchFilter ? 'No filters match your search' : 'No saved filters yet'}
               </div>
             ) : (
-              <List
-                dataSource={filteredSavedFilters}
-                renderItem={(filter) => (
-                  <List.Item
+              <div>
+                {filteredSavedFilters.map((filter) => (
+                  <div
+                    key={filter.id}
+                    onClick={() => handleLoadFilter(filter)}
                     style={{
-                      padding: '8px 0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
                       borderBottom: '1px solid #f0f0f0',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
                     }}
-                    actions={[
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f5f5f5';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      flex: 1,
+                      minWidth: 0
+                    }}>
+                      {filter.is_favorited && (
+                        <HeartFilled style={{ color: "#ff4d4f", fontSize: '14px', flexShrink: 0 }} />
+                      )}
+                      <span style={{ 
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {filter.name}
+                      </span>
+                    </div>
+                    <Popconfirm
+                      title="Delete this filter?"
+                      description="This filter will be removed for your entire staff and cannot be undone."
+                      onConfirm={(e) => {
+                        e?.stopPropagation();
+                        handleDeleteFilter(filter.id);
+                      }}
+                      onCancel={(e) => e?.stopPropagation()}
+                      okText="Delete"
+                      cancelText="Cancel"
+                    >
                       <Button
-                        key="load"
                         type="text"
                         size="small"
+                        icon={<DeleteOutlined />}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleLoadFilter(filter);
                         }}
-                        style={{ color: '#1890ff' }}
-                      >
-                        Load
-                      </Button>,
-                      <Popconfirm
-                        key="delete"
-                        title="Delete this filter?"
-                        description="This action cannot be undone."
-                        onConfirm={(e) => {
-                          e?.stopPropagation();
-                          handleDeleteFilter(filter.id);
+                        style={{ 
+                          color: '#ff4d4f',
+                          flexShrink: 0
                         }}
-                        onCancel={(e) => e?.stopPropagation()}
-                        okText="Delete"
-                        cancelText="Cancel"
-                      >
-                        <Button
-                          type="text"
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{ color: '#ff4d4f' }}
-                        />
-                      </Popconfirm>
-                    ]}
-                    onClick={() => handleLoadFilter(filter)}
-                  >
-                    <List.Item.Meta
-                      title={
-                        <div style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: '8px' 
-                        }}>
-                          <span style={{ fontWeight: 500 }}>{filter.name}</span>
-                          {filter.isActive && (
-                            <span style={{ 
-                              fontSize: '10px', 
-                              color: '#52c41a',
-                              backgroundColor: '#f6ffed',
-                              padding: '2px 6px',
-                              borderRadius: '2px',
-                              border: '1px solid #b7eb8f'
-                            }}>
-                              ACTIVE
-                            </span>
-                          )}
-                        </div>
-                      }
-                      description={
-                        <span style={{ fontSize: '12px', color: '#999' }}>
-                          Saved {new Date(filter.createdAt).toLocaleDateString()}
-                        </span>
-                      }
-                    />
-                  </List.Item>
-                )}
-              />
+                      />
+                    </Popconfirm>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -271,7 +223,7 @@ export function SavedFilters({
 }
 
 // ============================================================================
-// HELPER FUNCTIONS
+// HELPER FUNCTIONS (Legacy localStorage - kept for backward compatibility)
 // ============================================================================
 
 export const saveFilterToStorage = (filter: SavedFilter): void => {
@@ -294,7 +246,7 @@ export const getSavedFiltersFromStorage = (): SavedFilter[] => {
   }
 };
 
-export const deleteFilterFromStorage = (filterId: string): void => {
+export const deleteFilterFromStorage = (filterId: string | number): void => {
   try {
     const saved = getSavedFiltersFromStorage();
     const updated = saved.filter(f => f.id !== filterId);

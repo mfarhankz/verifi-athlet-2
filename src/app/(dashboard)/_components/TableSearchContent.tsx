@@ -30,7 +30,8 @@ import Filters from "../_components/Filters";
 import AthleteProfileContent from "../_components/AthleteProfileContent";
 import HSAthleteProfileContent from "../_components/HSAthleteProfileContent";
 import SchoolProfileContent from "../_components/SchoolProfileContent";
-import { fetchAthleteData, fetchSportColumnConfig, fetchSeasonData, fetchSchools, getUserPackagesForSport, fetchHighSchoolColumnConfig, fetchAthleteRatings, fetchRecruitingAreasForCoach, convertStateIdsToAbbrevs, convertCountyIdsToNames } from "@/lib/queries";
+import { fetchAthleteData, fetchSportColumnConfig, fetchSeasonData, fetchSchools, getUserPackagesForSport, fetchHighSchoolColumnConfig, fetchAthleteRatings, fetchRecruitingAreasForCoach, convertStateIdsToAbbrevs, convertCountyIdsToNames, getDefaultBoardForAdding, getPackageIdsByType } from "@/lib/queries";
+import { hasPackageAccess } from "@/utils/navigationUtils";
 import { US_STATE_ABBREVIATIONS } from '@/utils/constants';
 import { AthleteData, Comment, SportStatConfig, HighSchoolData } from "@/types/database";
 import { useSearch } from '../_components/SearchContext';
@@ -51,6 +52,7 @@ import ChooseBoardDropdownWithStatus from './ChooseBoardDropdownWithStatus';
 import SuccessPopover from './SuccessPopover';
 import { preparePrintRequestData, sendPrintRequest, convertSchoolId } from '@/utils/printUtils';
 import { fetchUserDetails } from '@/utils/utils';
+import CSVExport from './CSVExport';
 
 const boxStyle: React.CSSProperties = {
   width: "100%",
@@ -818,9 +820,10 @@ export function TableSearchContent({
     }] : []),
     // Dynamic columns based on sport_stat_config
     ...(dynamicColumns.length > 0 
-      ? dynamicColumns.map((col) => {
-          const tooltip = getColumnTooltip(col.display_name);
-          return {
+      ? dynamicColumns.flatMap((col, index) => {
+          const tooltip = getColumnTooltip(col.display_name, col.sport_id);
+          const isOfferColumn = col.display_name?.toLowerCase() === 'offer';
+          const columnDef = {
             title: () => (
               <div style={{ 
                 display: 'flex', 
@@ -829,7 +832,7 @@ export function TableSearchContent({
                 width: '100%'
               }}>
                 {tooltip && <InfoIcon tooltip={tooltip} style={{ marginRight: '4px', marginLeft: '0' }} />}
-                <span>{col.display_name}</span>
+                <span>{isOfferColumn && dataSource === 'hs_athletes' ? 'Best Offer' : col.display_name}</span>
               </div>
             ),
             dataIndex: col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_'),
@@ -902,6 +905,67 @@ export function TableSearchContent({
               return formatStatDecimal(value, col.decimal_places, col.is_percentage, col.convert_negative_to_zero);
             },
           };
+
+          // If this is the Offer column and we're on hs_athletes, insert the # column right after it
+          if (isOfferColumn && dataSource === 'hs_athletes') {
+            return [
+              columnDef,
+              {
+                title: "# Offer",
+                key: "offer_count",
+                dataIndex: "offer_count_all",
+                width: 100,
+                sorter: true,
+                render: (value: any, record: any) => {
+                  const offerCountAll = record.offer_count_all || 0;
+                  const offerCountP4 = record.offer_count_p4 || 0;
+                  const offerCountG5 = record.offer_count_g5 || 0;
+                  // Try to get FCS from offer_counts_by_group JSONB or from a direct field
+                  const offerCountsByGroup = record.offer_counts_by_group || {};
+                  const offerCountFcs = record.offer_count_fcs || offerCountsByGroup.FCS || offerCountsByGroup.fcs || 0;
+                  const offerCountD2 = record.offer_count_d2 || 0;
+                  const offerCountD3 = record.offer_count_d3 || 0;
+                  const offerCountNaia = record.offer_count_naia || 0;
+                  const offerCountJuco = record.offer_count_juco || 0;
+                  const offerCountOther = record.offer_count_other || 0;
+                  
+                  // Build the breakdown text, only showing categories with counts > 0
+                  const breakdownParts: string[] = [];
+                  if (offerCountP4 > 0) breakdownParts.push(`P4: ${offerCountP4}`);
+                  if (offerCountG5 > 0) breakdownParts.push(`G5: ${offerCountG5}`);
+                  if (offerCountFcs > 0) breakdownParts.push(`FCS: ${offerCountFcs}`);
+                  if (offerCountD2 > 0) breakdownParts.push(`D2: ${offerCountD2}`);
+                  if (offerCountD3 > 0) breakdownParts.push(`D3: ${offerCountD3}`);
+                  if (offerCountNaia > 0) breakdownParts.push(`NAIA: ${offerCountNaia}`);
+                  if (offerCountJuco > 0) breakdownParts.push(`JUCO: ${offerCountJuco}`);
+                  if (offerCountOther > 0) breakdownParts.push(`Other: ${offerCountOther}`);
+                  
+                  // Split into chunks of 2 categories per line
+                  const breakdownLines: string[] = [];
+                  for (let i = 0; i < breakdownParts.length; i += 2) {
+                    breakdownLines.push(breakdownParts.slice(i, i + 2).join(' '));
+                  }
+                  
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', lineHeight: '1.2' }}>
+                        {offerCountAll}
+                      </div>
+                      {breakdownLines.length > 0 && (
+                        <div style={{ fontSize: '10px', color: '#666', lineHeight: '1.2', marginTop: '2px', textAlign: 'center' }}>
+                          {breakdownLines.map((line, index) => (
+                            <div key={index}>{line}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                },
+              }
+            ];
+          }
+          
+          return [columnDef];
         })
       : []
     ),
@@ -994,8 +1058,9 @@ export function TableSearchContent({
       
       // Add data type 24 field for unified location filter
       if (filters.location && filters.location.values && filters.location.values.length > 0) {
-        if ((filters.location.type === 'school_state' || filters.location.type === 'international') && dataTypeColumnMap[24]) {
-          filterColumns.add(dataTypeColumnMap[24]);
+        if (filters.location.type === 'school_state' || filters.location.type === 'international') {
+          // For high schools, use school_state column directly
+          filterColumns.add('school_state');
         }
       }
       
@@ -1100,20 +1165,21 @@ export function TableSearchContent({
         }
         // Handle other location filters that use values array
         else if (filters.location.values && filters.location.values.length > 0) {
-          if (filters.location.type === 'school_state' && dataTypeColumnMap[24]) {
-            query = query.in(dataTypeColumnMap[24], filters.location.values);
+          if (filters.location.type === 'school_state') {
+            // For high schools, use school_state column directly
+            query = query.in('school_state', filters.location.values);
           } else if (filters.location.type === 'county' && dataTypeColumnMap[991]) {
             query = query.in(dataTypeColumnMap[991], filters.location.values);
-          } else if (filters.location.type === 'international' && dataTypeColumnMap[24]) {
-            // Handle international filter for high schools
+          } else if (filters.location.type === 'international') {
+            // Handle international filter for high schools - use school_state column
             if (filters.location.values.includes('ALL_INTERNATIONAL')) {
-              // Filter out US states - show all international schools
-              query = query.not(dataTypeColumnMap[24], 'in', `(${US_STATE_ABBREVIATIONS.map(state => `"${state}"`).join(',')})`);
-              query = query.not(dataTypeColumnMap[24], 'is', null);
-              query = query.not(dataTypeColumnMap[24], 'eq', '');
+              // Filter out US states - show all international schools (anything not in US state list)
+              query = query.not('school_state', 'in', `(${US_STATE_ABBREVIATIONS.map(state => `"${state}"`).join(',')})`);
+              query = query.not('school_state', 'is', null);
+              query = query.not('school_state', 'eq', '');
             } else {
-              // Filter by specific international locations
-              query = query.in(dataTypeColumnMap[24], filters.location.values);
+              // Filter by specific international locations in school_state
+              query = query.in('school_state', filters.location.values);
             }
           }
         }
@@ -1408,16 +1474,22 @@ export function TableSearchContent({
           currentDynamicColumns = [];
           currentFilterColumns = [];
         }
-        
-        // Fetch season data for the header
+      }
+      
+      // Always fetch season data when sport_id is available (independent of column fetching)
+      // This ensures seasonData is set even if columns were already loaded
+      // Fetch if sport changed, if we haven't set sportId yet, or if this is an initial load
+      const shouldFetchSeason = !sportId || 
+        sportId !== activeCustomer.sport_id || 
+        (isInitialLoad && seasonData === null);
+      
+      if (shouldFetchSeason) {
         try {
           const season = await fetchSeasonData(Number(activeCustomer.sport_id), dataSource);
           setSeasonData(season);
         } catch (error) {
           setSeasonData(null);
         }
-      } else {
-
       }
       
       // Create display columns list based on the configuration
@@ -1678,7 +1750,7 @@ export function TableSearchContent({
       filters: activeFilters,
       search: searchQuery
     });
-  }, [loading, hasMore, page, sortField, sortOrder, activeFilters, searchQuery]); // Added activeFilters and searchQuery to dependencies
+  }, [loading, hasMore, page, sortField, sortOrder, activeFilters, searchQuery, loadAthleteData]); // Added loadAthleteData to dependencies to prevent stale closures
 
   useEffect(() => {
     const handleScroll = () => {
@@ -2026,24 +2098,10 @@ export function TableSearchContent({
       const boardName = boardNameOverride || selectedBoardName;
       
       if (!boardId) {
-        // Get or create the Main board as fallback
-        const { data: boardData, error: boardError } = await supabase
-          .from('recruiting_board_board')
-          .select('id')
-          .eq('customer_id', activeCustomerId)
-          .eq('name', 'Main')
-          .is('recruiting_board_column_id', null)
-          .is('ended_at', null)
-          .single();
-
-        if (boardError && boardError.code !== 'PGRST116') {
-          alert(`Error finding recruiting board: ${boardError.message}`);
-          return;
-        }
-
-        boardId = boardData?.id;
+        // Get the default board (Main if exists, or single board if only one exists)
+        boardId = await getDefaultBoardForAdding(activeCustomerId);
         
-        // Create Main board if it doesn't exist
+        // Create Main board if no boards exist
         if (!boardId) {
           const { data: newBoard, error: createError } = await supabase
             .from('recruiting_board_board')
@@ -2164,7 +2222,8 @@ export function TableSearchContent({
           source: dataSource === 'transfer_portal' ? 'portal' : 
                   dataSource === 'juco' ? 'juco' : 
                   dataSource === 'hs_athletes' ? 'high_school' :
-                  dataSource === 'all_athletes' ? 'pre-portal' : null
+                  dataSource === 'all_athletes' ? 'pre-portal' : null,
+          customer_position: athlete.primary_position || athlete.position || null
         });
       }
 
@@ -2177,6 +2236,58 @@ export function TableSearchContent({
       if (insertError) {
         alert(`Error adding athletes to recruiting board: ${insertError.message || 'Unknown error'}`);
         return;
+      }
+
+      // If any of the added athletes are pre-transfer athletes, add them to player_tracking table (only for ultra, gold, or platinum packages)
+      if (dataSource === 'all_athletes') {
+        // Check if user has ultra, gold, or platinum packages
+        const userPackageNumbers = (userDetails?.packages || []).map(pkg => parseInt(pkg, 10));
+        const ultraPackageIds = getPackageIdsByType('ultra');
+        const goldPackageIds = getPackageIdsByType('gold');
+        const platinumPackageIds = getPackageIdsByType('platinum');
+        const allowedPackageIds = [...ultraPackageIds, ...goldPackageIds, ...platinumPackageIds];
+        
+        const hasAllowedPackage = hasPackageAccess(userPackageNumbers, allowedPackageIds);
+        
+        if (hasAllowedPackage) {
+          try {
+            // Fetch text_alert_default from user_detail table
+            const { data: userDetailData, error: userDetailError } = await supabase
+              .from('user_detail')
+              .select('text_alert_default')
+              .eq('id', userId)
+              .single();
+
+            if (userDetailError) {
+              console.error("Error fetching user detail for text_alert_default:", userDetailError);
+              // Continue even if we can't get text_alert_default
+            }
+
+            // text_alert should be a boolean based on text_alert_default (default to false if not found)
+            const textAlert = userDetailData?.text_alert_default ?? false;
+
+            // Insert into player_tracking table for each pre-transfer athlete
+            const trackingEntries = athletesToAdd.map(athlete => ({
+              athlete_id: athlete.id,
+              user_id: userId,
+              customer_id: activeCustomerId,
+              recipient: userId,
+              text_alert: textAlert
+            }));
+
+            const { error: trackingError } = await supabase
+              .from('player_tracking')
+              .insert(trackingEntries);
+
+            if (trackingError) {
+              console.error("Error adding athletes to player_tracking:", trackingError);
+              // Don't fail the whole operation if player_tracking insert fails
+            }
+          } catch (trackingErr) {
+            console.error("Error in player_tracking insert:", trackingErr);
+            // Don't fail the whole operation if player_tracking insert fails
+          }
+        }
       }
 
       // Show success message with accurate count
@@ -2424,7 +2535,47 @@ export function TableSearchContent({
           filterLabels.push(`School State: ${values?.join(', ') || 'None'}`);
           break;
         case 'radius':
-          filterLabels.push(`Radius: ${radius?.center || 'No center'} (${radius?.distance || 0} miles)`);
+          if (radius?.center && radius?.distance) {
+            try {
+              // Use coordinates if available, otherwise geocode the center
+              let centerLat: number, centerLng: number;
+              
+              if ((radius as any).coordinates?.lat && (radius as any).coordinates?.lng) {
+                centerLat = (radius as any).coordinates.lat;
+                centerLng = (radius as any).coordinates.lng;
+              } else {
+                // Geocode the center location to get coordinates
+                const { geocodeLocation } = await import('@/utils/geocoding');
+                const centerLocation = await geocodeLocation(radius.center);
+                
+                if (centerLocation) {
+                  centerLat = centerLocation.lat;
+                  centerLng = centerLocation.lng;
+                } else {
+                  // Fallback to center string if geocoding fails
+                  filterLabels.push(`Radius: ${radius.center} (${radius.distance} miles)`);
+                  break;
+                }
+              }
+              
+              // Calculate bounding box using the same logic as database queries
+              const { getBoundingBox } = await import('@/utils/geocoding');
+              const boundingBox = getBoundingBox(centerLat, centerLng, radius.distance);
+              
+              // Format as Min/Max filters for address_latitude and address_longitude
+              // Round to nearest 0.01 (2 decimal places)
+              filterLabels.push(`address_latitude Min: ${Math.round(boundingBox.minLat * 100) / 100}`);
+              filterLabels.push(`address_latitude Max: ${Math.round(boundingBox.maxLat * 100) / 100}`);
+              filterLabels.push(`address_longitude Min: ${Math.round(boundingBox.minLng * 100) / 100}`);
+              filterLabels.push(`address_longitude Max: ${Math.round(boundingBox.maxLng * 100) / 100}`);
+            } catch (error) {
+              console.error('Error formatting radius filter:', error);
+              // Fallback to center string if there's an error
+              filterLabels.push(`Radius: ${radius.center} (${radius.distance} miles)`);
+            }
+          } else {
+            filterLabels.push(`Radius: ${radius?.center || 'No center'} (${radius?.distance || 0} miles)`);
+          }
           break;
         case 'recruiting_area':
           filterLabels.push(`Recruiting Area: ${recruitingArea?.coachId ? 'Coach Selected' : 'No Coach'}`);
@@ -2487,13 +2638,9 @@ export function TableSearchContent({
                       filterColumns.find(col => col.data_type_id.toString() === dataTypeId);
         const filterValue = activeFilters[key];
         if (filterValue && typeof filterValue === 'object' && 'comparison' in filterValue && 'value' in filterValue) {
-          // Use display_name or data_type_name from sport_stat_config
-          let columnName = column?.display_name || column?.data_type_name;
-          
-          // If we still don't have a name, use the dataTypeId as fallback
-          if (!columnName) {
-            columnName = `Stat ${dataTypeId}`;
-          }
+          // Fetch the actual name from the data_type table instead of using display_name
+          const dataTypeName = await getDataTypeName(Number(dataTypeId));
+          let columnName = dataTypeName;
           
           // For baseball (sport_id 6), add stat category prefix (capitalize first letter, then add hyphen)
           // Exclude position-agnostic stats like GP (Games Played)
@@ -2656,6 +2803,247 @@ export function TableSearchContent({
                     renderActiveFilters={renderActiveFilters}
                   />
                 )}
+                {(dataSource === 'transfer_portal' || dataSource === 'all_athletes' || dataSource === 'hs_athletes' || dataSource === 'high_schools' || dataSource === 'juco') && (
+                  <CSVExport<any>
+                    fetchData={async (page: number, pageSize: number) => {
+                      // Handle high schools separately
+                      if (dataSource === 'high_schools') {
+                        let currentColumns = hsColumns;
+                        if (hsColumns.length === 0) {
+                          const configs = await fetchHighSchoolColumnConfig();
+                          let cols = configs.map(cfg => ({
+                            dataIndex: cfg.sanitized_column_name,
+                            display_name: cfg.display_name,
+                            search_column_display: cfg.search_column_display,
+                            data_type_id: cfg.data_type_id
+                          }));
+                          cols = cols.filter(c => Number(c.search_column_display) > 0);
+                          cols.sort((a, b) => a.search_column_display - b.search_column_display);
+                          currentColumns = cols;
+                        }
+
+                        const highSchoolData = await fetchHighSchoolData({
+                          page,
+                          limit: pageSize,
+                          search: localSearchInput,
+                          selectColumns: currentColumns.map(c => c.dataIndex),
+                          filters: activeFilters,
+                          sortField,
+                          sortOrder
+                        });
+
+                        return {
+                          data: highSchoolData.data,
+                          hasMore: highSchoolData.hasMore || false,
+                          totalCount: highSchoolData.totalCount || 0
+                        };
+                      }
+
+                      // Handle athlete data sources
+                      if (!activeCustomer?.sport_id || !activeCustomerId) {
+                        throw new Error('No customer or sport found');
+                      }
+
+                      // Use current filters and search
+                      const fetchParams = {
+                        page,
+                        limit: pageSize,
+                        sportId: activeCustomer.sport_id,
+                        dataSource: dataSource,
+                        displayColumns: [
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].date ? ['date'] : []),
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].athletic_aid ? ['athletic_aid'] : []),
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].position ? ['position'] : []),
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].high_name ? ['high_name'] : []),
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].state ? ['state'] : []),
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].college_state ? ['school_state'] : []),
+                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].true_score ? ['true_score'] : []),
+                          ...(dynamicColumns.map(col => col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_')))
+                        ],
+                        sportAbbrev: activeSportAbbrev || undefined,
+                        userPackages: userDetails?.packages || [],
+                        dynamicColumns: filterColumns,
+                        userSchoolId: activeCustomer?.school_id,
+                        ...(Object.keys(activeFilters).length > 0 && { filters: activeFilters, search: localSearchInput }),
+                        ...(sortField && sortOrder && { sortField, sortOrder })
+                      };
+
+                      const result = await fetchAthleteData(activeSport, fetchParams);
+                      return {
+                        data: result.data,
+                        hasMore: result.hasMore || false,
+                        totalCount: result.totalCount || 0
+                      };
+                    }}
+                    transformRow={(item) => {
+                      const row: (string | number)[] = [];
+                      
+                      // Handle high schools
+                      if (dataSource === 'high_schools') {
+                        // Add school name as first column
+                        row.push(item.school || item.school_name || '');
+                        // Then add all other columns
+                        hsColumns.forEach(col => {
+                          const value = item[col.dataIndex as keyof typeof item];
+                          if (value !== null && value !== undefined) {
+                            row.push(typeof value === 'number' ? value : String(value));
+                          } else {
+                            row.push('');
+                          }
+                        });
+                        return row;
+                      }
+                      
+                      // Handle athlete data sources
+                      const athlete = item as AthleteData;
+                      
+                      // Separate Name column fields into individual columns
+                      row.push(athlete.athlete_name || ''); // Name
+                      
+                      // For hs_athletes, skip Year and Division
+                      if (dataSource !== 'hs_athletes') {
+                        row.push(athlete.year || ''); // Year
+                        row.push(athlete.division || ''); // Division
+                      }
+                      
+                      row.push(athlete.name_name || ''); // Current School
+                      row.push(athlete.commit_school_name || ''); // Commit School
+                      row.push(athlete.commit_date ? new Date(athlete.commit_date).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''); // Commit Date
+                      
+                      const config = DATA_SOURCE_COLUMN_CONFIG[dataSource];
+                      if (config.date) row.push(athlete.date || '');
+                      if (config.athletic_aid) row.push(athlete.athletic_aid || '');
+                      if (config.position) row.push(athlete.position || '');
+                      
+                      // For hs_athletes and juco, skip High School column
+                      if (dataSource !== 'hs_athletes' && dataSource !== 'juco' && config.high_name) {
+                        row.push(athlete.high_name || ''); // High School
+                      }
+                      
+                      if (config.state) row.push(athlete.state || '');
+                      if (config.college_state) row.push(athlete.school_state || '');
+                      // Removed true_score
+                      
+                      // Add dynamic columns
+                      dynamicColumns.forEach(col => {
+                        // Skip high_name if it's in dynamic columns (duplicate)
+                        const colName = col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_');
+                        if (colName === 'high_name' || colName === 'high_school') {
+                          return; // Skip duplicate high school column
+                        }
+                        
+                        const isOfferColumn = col.display_name?.toLowerCase() === 'offer';
+                        
+                        // Special handling for height (data_type_id 304)
+                        if (col.data_type_id === 304) {
+                          const heightFeet = athlete.height_feet;
+                          const heightInch = athlete.height_inch;
+                          if (heightFeet && heightInch) {
+                            row.push(`${heightFeet}'${heightInch}"`);
+                          } else if (heightFeet) {
+                            row.push(`${heightFeet}'0"`);
+                          } else {
+                            row.push('');
+                          }
+                          return;
+                        }
+                        
+                        const value = athlete[colName as keyof AthleteData];
+                        if (value !== null && value !== undefined) {
+                          row.push(typeof value === 'number' ? value : String(value));
+                        } else {
+                          row.push('');
+                        }
+                        
+                        // For hs_athletes, add Number of Offers after the Offer column
+                        if (isOfferColumn && dataSource === 'hs_athletes') {
+                          row.push(athlete.offer_count_all ?? 0); // Number of Offers
+                        }
+                      });
+                      
+                      return row;
+                    }}
+                    headers={
+                      dataSource === 'high_schools'
+                        ? ['School Name', ...hsColumns.map(col => col.display_name || col.dataIndex)]
+                        : [
+                            'Name', // Separated from Name column
+                            // For hs_athletes, skip Year and Division
+                            ...(dataSource !== 'hs_athletes' ? ['Year', 'Division'] : []),
+                            'Current School', // Separated from Name column
+                            'Commit School', // Separated from Name column
+                            'Commit Date', // Separated from Name column
+                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].date ? ['Date'] : []),
+                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].athletic_aid ? ['Athletic Aid'] : []),
+                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].position ? ['Position'] : []),
+                            // For hs_athletes and juco, skip High School column
+                            ...(dataSource !== 'hs_athletes' && dataSource !== 'juco' && DATA_SOURCE_COLUMN_CONFIG[dataSource].high_name ? ['High School'] : []),
+                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].state ? ['State'] : []),
+                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].college_state ? ['College State'] : []),
+                            // Removed True Score
+                            ...dynamicColumns
+                              .filter(col => {
+                                // Filter out duplicate high_name/high_school from dynamic columns
+                                const colName = col.sanitized_column_name || col.data_type_name?.toLowerCase().replace(/\s+/g, '_') || col.display_name.toLowerCase().replace(/\s+/g, '_');
+                                return colName !== 'high_name' && colName !== 'high_school';
+                              })
+                              .flatMap(col => {
+                                const isOfferColumn = col.display_name?.toLowerCase() === 'offer';
+                                const displayName = col.display_name || col.data_type_name || col.sanitized_column_name || '';
+                                
+                                // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
+                                if (isOfferColumn && dataSource === 'hs_athletes') {
+                                  return ['Best Offer', 'Number of Offers'];
+                                }
+                                return [displayName];
+                              })
+                          ]
+                    }
+                    filename={
+                      dataSource === 'transfer_portal' ? 'transfers' :
+                      dataSource === 'all_athletes' ? 'pre-portal' :
+                      dataSource === 'hs_athletes' ? 'hs-athletes' :
+                      dataSource === 'juco' ? 'juco' :
+                      'high-schools'
+                    }
+                    maxRows={
+                      dataSource === 'transfer_portal' ? 50 :
+                      dataSource === 'all_athletes' ? 50 :
+                      dataSource === 'hs_athletes' ? 1000 :
+                      dataSource === 'high_schools' ? 500 :
+                      dataSource === 'juco' ? 50 :
+                      50
+                    }
+                    disabled={
+                      dataSource === 'high_schools' 
+                        ? false 
+                        : (!activeCustomerId || !activeCustomer?.sport_id)
+                    }
+                    userId={userDetails?.id}
+                    customerId={activeCustomerId || undefined}
+                    tableName={
+                      dataSource === 'transfer_portal' ? 'transfers' :
+                      dataSource === 'all_athletes' ? 'pre-portal' :
+                      dataSource === 'hs_athletes' ? 'hs-athletes' :
+                      dataSource === 'high_schools' ? 'high-schools' :
+                      dataSource === 'juco' ? 'juco' :
+                      'unknown'
+                    }
+                    filterDetails={activeFilters}
+                    buttonProps={{ style: { marginRight: '12px' } }}
+                    emailColumnName={
+                      dataSource === 'high_schools' 
+                        ? (() => {
+                            const emailColumn = hsColumns.find(col => 
+                              col.display_name?.toLowerCase().includes('email') || 
+                              col.dataIndex?.toLowerCase().includes('email')
+                            );
+                            return emailColumn?.dataIndex;
+                          })()
+                        : undefined
+                    }
+                  />
+                )}
                 <Filters 
                   onApplyFilters={applyFilters} 
                   onResetFilters={resetFilters} 
@@ -2743,13 +3131,30 @@ export function TableSearchContent({
                 </Button>
               )}
             </Space>
-            {seasonData && dataSource !== 'hs_athletes' && (
+            {dataSource !== 'hs_athletes' && (
               <div style={{ 
-                fontSize: '12px',
-                fontStyle: 'italic',
-                color: '#666'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
               }}>
-                Stats on Display from the {seasonData} season
+                {seasonData && (
+                  <div style={{ 
+                    fontSize: '12px',
+                    fontStyle: 'italic',
+                    color: '#666'
+                  }}>
+                    Stats on Display from the {seasonData} season
+                  </div>
+                )}
+                <Button
+                  onClick={loadMoreData}
+                  disabled={loading || !hasMore}
+                  loading={loading}
+                  size="small"
+                  type="default"
+                >
+                  Load More (25)
+                </Button>
               </div>
             )}
           </div>
@@ -2941,9 +3346,9 @@ export function TableSearchContent({
         footer={null}
         width="95vw"
         style={{ top: 20 }}
+        className="new-modal-ui"
         styles={{ 
           body: {
-            padding: 0,
             height: 'calc(100vh - 100px)',
             overflow: 'hidden'
           }
@@ -2962,6 +3367,7 @@ export function TableSearchContent({
                   onAddToBoard={handleModalAddToRecruitingBoard}
                   isInModal={true}
                   dataSource={'hs_athletes'}
+                  onClose={handleClosePlayerModal}
                 />
               ) : (
                 <HSAthleteProfileContent
@@ -2969,6 +3375,7 @@ export function TableSearchContent({
                   onAddToBoard={handleModalAddToRecruitingBoard}
                   isInModal={true}
                   dataSource={'hs_athletes'}
+                  onClose={handleClosePlayerModal}
                 />
               )
             ) : (

@@ -24,7 +24,7 @@ export const FILTER_VISIBILITY_CONFIG = {
   recruiting_board: ['position', 'division', 'year', 'height', 'weight', 'schools', 'conference', 'athletic_aid', 'status', 'date_entered', 'survey_completed'] as string[],
   all_athletes: ['position', 'division', 'year', 'height', 'weight', 'location', 'schools', 'conference',  'stats', 'transfer-odds', 'status', 'honors'] as string[],
   high_schools: ['location', 'hs-school-type', 'hs-prospects-score', 'hs-d1-prospects-score', 'hs-team-quality-score', 'hs-athlete-income-score', 'hs-academics-score', 'hs-religious-affiliation'] as string[],
-  hs_athletes: ['grad_year', 'position', 'height', 'weight', 'athletic_projection', 'offer-commit', 'academics-income', 'verified-filters', 'recruiting-service-ratings', 'location'] as string[],
+  hs_athletes: ['location', 'hs-school-type', 'grad_year', 'position', 'height', 'weight', 'athletic_projection', 'offer-commit', 'academics-income', 'verified-filters', 'recruiting-service-ratings', 'camp'] as string[],
   activity_feed: ['event-parameters', 'recruiting-college-info', 'athlete-info'] as string[]
 };
 
@@ -250,8 +250,14 @@ const FIELD_DEFINITIONS = {
   }
 };
 
-export const createGenericFilterConfig = (dataSource: DataSourceType): FilterConfig => {
-  const visibilityConfig = FILTER_VISIBILITY_CONFIG[dataSource];
+export const createGenericFilterConfig = (dataSource: DataSourceType, sportAbbrev?: string): FilterConfig => {
+  // For football, replace 'division' with 'level' in visibility config for transfer_portal and all_athletes
+  let visibilityConfig = FILTER_VISIBILITY_CONFIG[dataSource];
+  const isFootball = sportAbbrev?.toLowerCase() === 'fb';
+  
+  if (isFootball && (dataSource === 'transfer_portal' || dataSource === 'all_athletes')) {
+    visibilityConfig = visibilityConfig.map(key => key === 'division' ? 'level' : key);
+  }
   
   const allSections = [
     {
@@ -313,6 +319,14 @@ export const createGenericFilterConfig = (dataSource: DataSourceType): FilterCon
           ]
         }
       ]
+    },
+    {
+      key: "level", // Level (for football - maps to fbs_conf_group)
+      title: "Level",
+      collapsible: true,
+      defaultExpanded: false,
+      fields: [],
+      fieldRefs: ["level"] // Reuse existing level field definition
     },
     {
       key: "year", // Year
@@ -863,6 +877,12 @@ export const createGenericFilterConfig = (dataSource: DataSourceType): FilterCon
             { value: 'Signed', label: 'Signed' },
             { value: 'Unsigned', label: 'Unsigned' }
           ]
+        },
+        {
+          key: "offer_count",
+          label: "Offer Count",
+          type: "offer-count" as const,
+          placeholder: "Select category and enter count range"
         }
       ]
     },
@@ -953,6 +973,20 @@ export const createGenericFilterConfig = (dataSource: DataSourceType): FilterCon
           label: "Show Archived Athletes",
           type: "checkbox" as const,
           placeholder: "Show archived athletes"
+        }
+      ]
+    },
+    {
+      key: "camp",
+      title: "Camp",
+      collapsible: true,
+      defaultExpanded: false,
+      fields: [
+        {
+          key: "camp",
+          label: "Camp Events",
+          type: "camp" as const,
+          placeholder: "Select camp events"
         }
       ]
     },
@@ -1070,6 +1104,11 @@ export const createGenericFilterConfig = (dataSource: DataSourceType): FilterCon
             { value: "offer", label: "Offer" },
             { value: "visit", label: "Visit" },
             { value: "camp", label: "Camp" },
+            { value: "coach note", label: "Coach Note" },
+            { value: "coach call", label: "Coach Call" },
+            { value: "coach message", label: "Coach Message" },
+            { value: "coach visit", label: "Coach Visit" },
+            { value: "coach multiple visit", label: "Coach Multiple Visit" },
             { value: "newProfile", label: "New Profile" },
             { value: "changedSchool", label: "Changed High School" },
             { value: "ratingChange", label: "Meaningful Rating Change" },

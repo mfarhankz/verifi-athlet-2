@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Card, Select, Input, Table, Tag, Modal, Button, Typography } from "antd";
+import { Card, Select, Input, Table, Tag, Modal, Button, Typography, message } from "antd";
 
 const { Text } = Typography;
 import { AppstoreAddOutlined, TeamOutlined } from '@ant-design/icons';
-import { fetchDataTypesInUse, fetchAthleteDataTypes, fetchAthleteFactData, insertAthleteFact, searchAthletes, fetchAthletesFromSportView, updateAthleteBasicInfo, fetchAthleteSchoolHistory, searchSchools, updateAthleteSchoolRecord, transferAthlete, fetchSchoolDataTypesInUse, fetchSchoolDataTypes, fetchSchoolFactData, insertSchoolFact, updateSchoolBasicInfo, fetchCustomerDataTypesInUse, fetchCustomerDataTypes, fetchCustomerFactData, insertCustomerFact, updateCustomerBasicInfo, searchCustomers, fetchSports, searchCoaches, fetchCoachDataTypes, fetchCoachFactData, insertCoachFact, updateCoachBasicInfo, fetchCoachSchoolHistory, updateCoachSchoolRecord, fetchCoachDataTypesInUse, endCoachSchoolRecord, transferCoach, saveNewCoach } from '@/lib/queries';
+import { fetchAllDataTypes, fetchAthleteDataTypes, fetchAthleteFactData, insertAthleteFact, searchAthletes, fetchAthletesFromSportView, updateAthleteBasicInfo, fetchAthleteSchoolHistory, searchSchools, updateAthleteSchoolRecord, transferAthlete, fetchSchoolDataTypesInUse, fetchSchoolDataTypes, fetchSchoolFactData, insertSchoolFact, updateSchoolBasicInfo, fetchCustomerDataTypesInUse, fetchCustomerDataTypes, fetchCustomerFactData, insertCustomerFact, updateCustomerBasicInfo, searchCustomers, fetchSports, searchCoaches, fetchCoachDataTypes, fetchCoachFactData, insertCoachFact, updateCoachBasicInfo, fetchCoachSchoolHistory, updateCoachSchoolRecord, fetchCoachDataTypesInUse, endCoachSchoolRecord, transferCoach, saveNewCoach } from '@/lib/queries';
 
 interface EditViewDataTabProps {
   selectedDataType: string;
@@ -20,14 +20,20 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   const [athleteData, setAthleteData] = useState<any[]>([]);
   const [loadingAthleteData, setLoadingAthleteData] = useState(false);
   const [athleteSearchInput, setAthleteSearchInput] = useState<string>('');
+  const [athletePagination, setAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
+  const [selectedAthleteSearchSport, setSelectedAthleteSearchSport] = useState<number | undefined>(undefined);
   
   // HS Athlete states
   const [hsAthleteData, setHsAthleteData] = useState<any[]>([]);
   const [loadingHsAthleteData, setLoadingHsAthleteData] = useState(false);
+  const [hsAthletePagination, setHsAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
+  const [selectedHsAthleteSearchSport, setSelectedHsAthleteSearchSport] = useState<number | undefined>(undefined);
   
   // JUCO Athlete states
   const [jucoAthleteData, setJucoAthleteData] = useState<any[]>([]);
   const [loadingJucoAthleteData, setLoadingJucoAthleteData] = useState(false);
+  const [jucoAthletePagination, setJucoAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
+  const [selectedJucoAthleteSearchSport, setSelectedJucoAthleteSearchSport] = useState<number | undefined>(undefined);
   
   // All Athletes states
   const [allAthletes, setAllAthletes] = useState<any[]>([]);
@@ -68,6 +74,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   const [schoolData, setSchoolData] = useState<any[]>([]);
   const [loadingSchoolData, setLoadingSchoolData] = useState(false);
   const [schoolSearchInput, setSchoolSearchInput] = useState<string>('');
+  const [schoolPagination, setSchoolPagination] = useState({ current: 1, pageSize: 50, total: 0 });
 
   // School modal state
   const [selectedSchool, setSelectedSchool] = useState<any>(null);
@@ -89,6 +96,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   const [customerData, setCustomerData] = useState<any[]>([]);
   const [loadingCustomerData, setLoadingCustomerData] = useState(false);
   const [customerSearchInput, setCustomerSearchInput] = useState<string>('');
+  const [customerPagination, setCustomerPagination] = useState({ current: 1, pageSize: 50, total: 0 });
   const [sports, setSports] = useState<any[]>([]);
   const [selectedCustomerSport, setSelectedCustomerSport] = useState<string | undefined>(undefined);
 
@@ -107,6 +115,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   const [coachData, setCoachData] = useState<any[]>([]);
   const [loadingCoachData, setLoadingCoachData] = useState(false);
   const [coachSearchInput, setCoachSearchInput] = useState<string>('');
+  const [coachPagination, setCoachPagination] = useState({ current: 1, pageSize: 50, total: 0 });
   const [selectedCoachSport, setSelectedCoachSport] = useState<string | undefined>(undefined);
 
   // Coach modal state
@@ -195,24 +204,39 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
     try {
       setLoadingDataTypes(true);
       
-      // Get data types from the view that shows only data types in use
-      const dataTypes = await fetchDataTypesInUse();
+      // Step 1: Load all data types immediately (fast, small table)
+      const allDataTypes = await fetchAllDataTypes();
       
-      // Now fetch data types that this specific athlete has
-      const athleteData = await fetchAthleteDataTypes(athleteId);
-      
-      // Extract athlete's data type IDs
-      const athleteDataTypeIds: number[] = (athleteData as unknown as { data_type_id: number }[])?.map((item: { data_type_id: number }) => item.data_type_id) || [];
-      
-      // Mark which data types the athlete has
-      const dataTypesWithStatus = dataTypes?.map((dataType: any) => ({
+      // Set all data types immediately
+      const initialDataTypes = allDataTypes?.map((dataType: any) => ({
         ...dataType,
-        athleteHasIt: athleteDataTypeIds.includes(dataType.id)
+        athleteHasIt: false // Will be updated after fetching athlete data
       })) || [];
       
-      setDataTypes(dataTypesWithStatus);
-    } catch (error) {
-    } finally {
+      setDataTypes(initialDataTypes);
+      setLoadingDataTypes(false); // Show data types immediately
+      
+      // Step 2: Fetch athlete's data types (fast, specific to athlete)
+      try {
+        const athleteData = await fetchAthleteDataTypes(athleteId);
+        const athleteDataTypeIds: number[] = (athleteData as unknown as { data_type_id: number }[])?.map((item: { data_type_id: number }) => item.data_type_id) || [];
+        
+        // Update with athlete data immediately
+        setDataTypes((prevDataTypes: any[]) => {
+          return prevDataTypes.map((dataType: any) => ({
+            ...dataType,
+            athleteHasIt: athleteDataTypeIds.includes(dataType.id)
+          }));
+        });
+      } catch (athleteError) {
+        console.error('Error loading athlete data types:', athleteError);
+      }
+      
+    } catch (error: any) {
+      console.error('Error loading all data types:', error);
+      const errorMessage = error?.message || error?.error_description || 'Failed to load data types';
+      message.error(`Error loading data types: ${errorMessage}`);
+      setDataTypes([]);
       setLoadingDataTypes(false);
     }
   };
@@ -309,8 +333,8 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
     
     try {
       setLoadingSchoolSearch(true);
-      const schools = await searchSchools(query);
-      setSchoolSearchResults(schools);
+      const result = await searchSchools(query);
+      setSchoolSearchResults(result.data);
     } catch (error) {
     } finally {
       setLoadingSchoolSearch(false);
@@ -318,13 +342,14 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   };
 
   // Function to fetch school data for the school data type
-  const fetchSchoolData = async () => {
+  const fetchSchoolData = async (page: number = 1) => {
     if (selectedDataType !== 'school') return;
     
     try {
       setLoadingSchoolData(true);
-      const data = await searchSchools(debouncedSchoolSearch, 50);
-      setSchoolData(data);
+      const result = await searchSchools(debouncedSchoolSearch, 50, page);
+      setSchoolData(result.data);
+      setSchoolPagination(prev => ({ ...prev, current: page, total: result.total }));
     } catch (error) {
     } finally {
       setLoadingSchoolData(false);
@@ -425,7 +450,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   };
 
   // Function to fetch athlete data with table type parameter
-  const fetchAthleteDataByType = async (dataType: string, tableType: 'college' | 'hs' | 'juco') => {
+  const fetchAthleteDataByType = async (dataType: string, tableType: 'college' | 'hs' | 'juco', page: number = 1) => {
     if (selectedDataType !== dataType) return;
     
     try {
@@ -438,7 +463,12 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
         setLoadingJucoAthleteData(true);
       }
       
-      const data = await searchAthletes(debouncedAthleteSearch, 25, tableType);
+      // Get the selected sport for this data type
+      const selectedSport = dataType === 'athlete' ? selectedAthleteSearchSport :
+                           dataType === 'hs_athlete' ? selectedHsAthleteSearchSport :
+                           selectedJucoAthleteSearchSport;
+      
+      const result = await searchAthletes(debouncedAthleteSearch, 25, tableType, page, selectedSport);
 
       // Map sport_id to sport name for display
       const sportIdToName: Record<number, string> = {
@@ -466,18 +496,21 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       };
 
       // Map sport_id to sport name
-      const dataWithSportNames = (data || []).map((athlete: any) => ({
+      const dataWithSportNames = (result.data || []).map((athlete: any) => ({
         ...athlete,
         sport_name: sportIdToName[athlete.sport_id as keyof typeof sportIdToName] || `Sport ID: ${athlete.sport_id}`
       }));
 
-      // Set appropriate data state
+      // Set appropriate data state and pagination
       if (dataType === 'athlete') {
         setAthleteData(dataWithSportNames);
+        setAthletePagination(prev => ({ ...prev, current: page, total: result.total }));
       } else if (dataType === 'hs_athlete') {
         setHsAthleteData(dataWithSportNames);
+        setHsAthletePagination(prev => ({ ...prev, current: page, total: result.total }));
       } else if (dataType === 'juco_athlete') {
         setJucoAthleteData(dataWithSportNames);
+        setJucoAthletePagination(prev => ({ ...prev, current: page, total: result.total }));
       }
     } catch (error) {
     } finally {
@@ -493,16 +526,16 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   };
 
   // Legacy functions for backward compatibility
-  const fetchAthleteData = async () => {
-    return fetchAthleteDataByType('athlete', 'college');
+  const fetchAthleteData = async (page: number = 1) => {
+    return fetchAthleteDataByType('athlete', 'college', page);
   };
 
-  const fetchHsAthleteData = async () => {
-    return fetchAthleteDataByType('hs_athlete', 'hs');
+  const fetchHsAthleteData = async (page: number = 1) => {
+    return fetchAthleteDataByType('hs_athlete', 'hs', page);
   };
 
-  const fetchJucoAthleteData = async () => {
-    return fetchAthleteDataByType('juco_athlete', 'juco');
+  const fetchJucoAthleteData = async (page: number = 1) => {
+    return fetchAthleteDataByType('juco_athlete', 'juco', page);
   };
 
   // Function to load school data types and mark which ones the school has
@@ -747,13 +780,14 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   };
 
   // Function to fetch customer data for the customer data type
-  const fetchCustomerData = async () => {
+  const fetchCustomerData = async (page: number = 1) => {
     if (selectedDataType !== 'customer') return;
     
     try {
       setLoadingCustomerData(true);
-      const data = await searchCustomers(debouncedCustomerSearch, 50, selectedCustomerSport);
-      setCustomerData(data);
+      const result = await searchCustomers(debouncedCustomerSearch, 50, selectedCustomerSport, page);
+      setCustomerData(result.data);
+      setCustomerPagination(prev => ({ ...prev, current: page, total: result.total }));
     } catch (error) {
       console.error('Error in fetchCustomerData:', error);
     } finally {
@@ -762,12 +796,13 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   };
 
   // Function to fetch coach data for the coach data type
-  const fetchCoachData = async () => {
+  const fetchCoachData = async (page: number = 1) => {
     if (selectedDataType !== 'coach') return;
     try {
       setLoadingCoachData(true);
-      const data = await searchCoaches(debouncedCoachSearch, 50, selectedCoachSport);
-      setCoachData(data);
+      const result = await searchCoaches(debouncedCoachSearch, 50, selectedCoachSport, page);
+      setCoachData(result.data);
+      setCoachPagination(prev => ({ ...prev, current: page, total: result.total }));
     } catch (error) {
       console.error('Error in fetchCoachData:', error);
     } finally {
@@ -942,18 +977,25 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
 
   // Effect to fetch data when data type is selected and search changes
   useEffect(() => {
+    // Reset pagination to page 1 when search changes
     if (selectedDataType === 'athlete') {
-      fetchAthleteData();
+      setAthletePagination(prev => ({ ...prev, current: 1 }));
+      fetchAthleteData(1);
     } else if (selectedDataType === 'hs_athlete') {
-      fetchHsAthleteData();
+      setHsAthletePagination(prev => ({ ...prev, current: 1 }));
+      fetchHsAthleteData(1);
     } else if (selectedDataType === 'juco_athlete') {
-      fetchJucoAthleteData();
+      setJucoAthletePagination(prev => ({ ...prev, current: 1 }));
+      fetchJucoAthleteData(1);
     } else if (selectedDataType === 'school') {
-      fetchSchoolData();
+      setSchoolPagination(prev => ({ ...prev, current: 1 }));
+      fetchSchoolData(1);
     } else if (selectedDataType === 'customer') {
-      fetchCustomerData();
+      setCustomerPagination(prev => ({ ...prev, current: 1 }));
+      fetchCustomerData(1);
     } else if (selectedDataType === 'coach') {
-      fetchCoachData();
+      setCoachPagination(prev => ({ ...prev, current: 1 }));
+      fetchCoachData(1);
     } else {
       // Reset data when switching away from data types
       setAthleteData([]);
@@ -966,8 +1008,19 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       setSchoolSearchInput('');
       setCustomerSearchInput('');
       setCoachSearchInput('');
+      // Reset pagination
+      setAthletePagination({ current: 1, pageSize: 25, total: 0 });
+      setHsAthletePagination({ current: 1, pageSize: 25, total: 0 });
+      setJucoAthletePagination({ current: 1, pageSize: 25, total: 0 });
+      setSchoolPagination({ current: 1, pageSize: 50, total: 0 });
+      setCustomerPagination({ current: 1, pageSize: 50, total: 0 });
+      setCoachPagination({ current: 1, pageSize: 50, total: 0 });
+      // Reset sport filters
+      setSelectedAthleteSearchSport(undefined);
+      setSelectedHsAthleteSearchSport(undefined);
+      setSelectedJucoAthleteSearchSport(undefined);
     }
-  }, [selectedDataType, debouncedAthleteSearch, debouncedSchoolSearch, debouncedCustomerSearch, debouncedCoachSearch, selectedCustomerSport, selectedCoachSport]);
+  }, [selectedDataType, debouncedAthleteSearch, debouncedSchoolSearch, debouncedCustomerSearch, debouncedCoachSearch, selectedCustomerSport, selectedCoachSport, selectedAthleteSearchSport, selectedHsAthleteSearchSport, selectedJucoAthleteSearchSport]);
 
   // Load athletes when sport changes
   useEffect(() => {
@@ -1113,11 +1166,42 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <Text strong>Search:</Text>
                 <Input
-                  placeholder="Search by name or school (space-separated words)"
+                  placeholder="Search by name, school, or athlete ID"
                   value={athleteSearchInput}
                   onChange={(e) => setAthleteSearchInput(e.target.value)}
                   style={{ width: 400 }}
                   allowClear
+                />
+                <Text strong>Sport Filter:</Text>
+                <Select
+                  placeholder="All Sports"
+                  value={
+                    selectedDataType === 'athlete' ? selectedAthleteSearchSport :
+                    selectedDataType === 'hs_athlete' ? selectedHsAthleteSearchSport :
+                    selectedJucoAthleteSearchSport
+                  }
+                  onChange={(value) => {
+                    if (selectedDataType === 'athlete') {
+                      setSelectedAthleteSearchSport(value);
+                    } else if (selectedDataType === 'hs_athlete') {
+                      setSelectedHsAthleteSearchSport(value);
+                    } else if (selectedDataType === 'juco_athlete') {
+                      setSelectedJucoAthleteSearchSport(value);
+                    }
+                  }}
+                  allowClear
+                  style={{ width: 200 }}
+                  showSearch
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={[
+                    { value: undefined, label: 'All Sports' },
+                    ...allSports.map(sport => ({
+                      value: sport.id,
+                      label: `${sport.name} (${sport.abbrev.toUpperCase()})`
+                    }))
+                  ]}
                 />
               </div>
               
@@ -1133,7 +1217,28 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                   loadingJucoAthleteData
                 }
                 rowKey="athlete_id"
-                pagination={false}
+                pagination={{
+                  current: selectedDataType === 'athlete' ? athletePagination.current :
+                           selectedDataType === 'hs_athlete' ? hsAthletePagination.current :
+                           jucoAthletePagination.current,
+                  pageSize: selectedDataType === 'athlete' ? athletePagination.pageSize :
+                           selectedDataType === 'hs_athlete' ? hsAthletePagination.pageSize :
+                           jucoAthletePagination.pageSize,
+                  total: selectedDataType === 'athlete' ? athletePagination.total :
+                         selectedDataType === 'hs_athlete' ? hsAthletePagination.total :
+                         jucoAthletePagination.total,
+                  showSizeChanger: false,
+                  showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} athletes`,
+                  onChange: (page) => {
+                    if (selectedDataType === 'athlete') {
+                      fetchAthleteData(page);
+                    } else if (selectedDataType === 'hs_athlete') {
+                      fetchHsAthleteData(page);
+                    } else if (selectedDataType === 'juco_athlete') {
+                      fetchJucoAthleteData(page);
+                    }
+                  }
+                }}
                 scroll={{ x: 'max-content' }}
                 onRow={(record) => ({
                   onClick: () => handleAthleteClick(record),
@@ -1744,7 +1849,14 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                 dataSource={schoolData}
                 loading={loadingSchoolData}
                 rowKey="id"
-                pagination={false}
+                pagination={{
+                  current: schoolPagination.current,
+                  pageSize: schoolPagination.pageSize,
+                  total: schoolPagination.total,
+                  showSizeChanger: false,
+                  showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} schools`,
+                  onChange: (page) => fetchSchoolData(page)
+                }}
                 scroll={{ x: 'max-content' }}
                 onRow={(record) => ({
                   onClick: () => handleSchoolClick(record),
@@ -1814,7 +1926,14 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                 dataSource={coachData}
                 loading={loadingCoachData}
                 rowKey="id"
-                pagination={false}
+                pagination={{
+                  current: coachPagination.current,
+                  pageSize: coachPagination.pageSize,
+                  total: coachPagination.total,
+                  showSizeChanger: false,
+                  showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} coaches`,
+                  onChange: (page) => fetchCoachData(page)
+                }}
                 scroll={{ x: 'max-content' }}
                 onRow={(record) => ({
                   onClick: () => handleCoachClick(record),
@@ -1899,7 +2018,14 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                 dataSource={customerData}
                 loading={loadingCustomerData}
                 rowKey="id"
-                pagination={false}
+                pagination={{
+                  current: customerPagination.current,
+                  pageSize: customerPagination.pageSize,
+                  total: customerPagination.total,
+                  showSizeChanger: false,
+                  showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} customers`,
+                  onChange: (page) => fetchCustomerData(page)
+                }}
                 scroll={{ x: 'max-content' }}
                 onRow={(record) => ({
                   onClick: () => handleCustomerClick(record),
@@ -2372,7 +2498,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                   setLoadingCoachSchoolOptions(true);
                   try {
                     const results = await searchSchools(q, 50); // Increased limit for better search
-                    setCoachSchoolNewSchoolOptions(results || []);
+                    setCoachSchoolNewSchoolOptions(results.data || []);
                   } catch (error) {
                     console.error('Error searching schools:', error);
                     setCoachSchoolNewSchoolOptions([]);
@@ -2645,8 +2771,8 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
               const query = e.target.value;
               setNewCoachSchoolQuery(query);
               if (query.trim()) {
-                const schools = await searchSchools(query, 10);
-                setNewCoachSchoolOptions(schools || []);
+                const result = await searchSchools(query, 10);
+                setNewCoachSchoolOptions(result.data || []);
               } else {
                 setNewCoachSchoolOptions([]);
               }

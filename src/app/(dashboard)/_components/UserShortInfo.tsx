@@ -22,6 +22,7 @@ interface UserShortInfoProps {
   athleteWeight?: string;
   ratingName?: string | null;
   ratingColor?: string | null;
+  customerPosition?: string;
 }
 
 export default function UserShortInfo({
@@ -41,7 +42,8 @@ export default function UserShortInfo({
   athleteHeight,
   athleteWeight,
   ratingName,
-  ratingColor
+  ratingColor,
+  customerPosition
 }: UserShortInfoProps) {
   // Format height and weight for display
   const formatHeightWeight = () => {
@@ -124,15 +126,22 @@ export default function UserShortInfo({
         </div>
       </Flex>
       {footer && 
-      <Flex className="justify-between pr-2 pl-1 w-[97%]">
-        <Typography.Text>{formatHeightWeight()}</Typography.Text>
-        <Typography.Text className="items-center">
-          <span className="user-icon">
-            {userFirstName && userLastName ? `${userFirstName.charAt(0)}${userLastName.charAt(0)}` : 'JA'}
-          </span> 
-          {userFirstName && userLastName ? `${userFirstName} ${userLastName}` : 'James Alex'}
-        </Typography.Text>
-      </Flex>
+      <>
+        <Flex className="justify-between pr-2 pl-1 w-[97%]">
+          <Typography.Text>{formatHeightWeight()}</Typography.Text>
+          <Typography.Text className="items-center">
+            <span className="user-icon">
+              {userFirstName && userLastName ? `${userFirstName.charAt(0)}${userLastName.charAt(0)}` : 'JA'}
+            </span> 
+            {userFirstName && userLastName ? `${userFirstName} ${userLastName}` : 'James Alex'}
+          </Typography.Text>
+        </Flex>
+        {customerPosition && (
+          <Flex className="pr-2 pl-1 w-[97%]">
+            <Typography.Text>{customerPosition}</Typography.Text>
+          </Flex>
+        )}
+      </>
 }
     </Flex>
   );

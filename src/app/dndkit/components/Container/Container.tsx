@@ -138,7 +138,7 @@ export const Container = forwardRef<HTMLDivElement, Props>(
                     X
                   </button>
                 ) : undefined}
-                <Handle {...handleProps} />
+                {handleProps && Object.keys(handleProps).length > 0 && label !== "Unassigned" && <Handle {...handleProps} />}
               </div>
             </div>
             {/* Hidden section - removed Actual, Budget, Diff columns and related data */}

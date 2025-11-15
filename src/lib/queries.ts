@@ -193,7 +193,7 @@ export function getUserPackagesForSport(sport: string, userPackageIds: number[])
 
 /**
  * Get the best (least restrictive) package for a sport from user's packages
- * Priority: elite/ultra > gold > silver > starter > naia > juco
+ * Priority: elite/ultra > platinum > gold > silver_plus > silver > starter > naia > juco
  */
 export function getBestPackageForSport(sport: string, userPackageIds: number[]): PackageDefinition | null {
   const userPackages = getUserPackagesForSport(sport, userPackageIds);
@@ -202,10 +202,15 @@ export function getBestPackageForSport(sport: string, userPackageIds: number[]):
   
   // Define priority order (lower number = higher priority)
   const priorityMap: Record<string, number> = {
-    'elite': 1,
     'ultra': 1,
+    'platinum': 1,
+    'elite': 2,
     'gold': 2,
-    'silver': 3,
+    'pg_gold': 2,
+    'silver_plus': 3,
+    'naia_silver_plus': 3,
+    'silver': 4,
+    'pg_silver': 4,
     'starter': 4,
     'naia': 5,
     'juco': 6,
@@ -360,12 +365,26 @@ export async function fetchCustomerPackageDetails(customerId: string): Promise<P
       return null;
     }
 
-    // Get the package ID from the first active package
-    const packageId = customerPackages[0].customer_package.id;
-    
-    // Find the package definition
-    const packageDefinition = getPackageById(packageId);
-    return packageDefinition || null;
+    // Map all active package IDs to definitions
+    type CustomerPackageRow = { customer_package: { id: number } };
+    const packageDefinitions: PackageDefinition[] = (customerPackages as CustomerPackageRow[])
+      .map((row) => getPackageById(row.customer_package.id))
+      .filter((pkg): pkg is PackageDefinition => !!pkg);
+
+    // Prefer football packages that grant activity feed access
+    const allowedSuffixes = new Set(['platinum', 'gold', 'silver_plus']);
+    const footballEligible = packageDefinitions
+      .filter(p => p.sport === 'fb' && allowedSuffixes.has(p.hs_suffix));
+
+    if (footballEligible.length > 0) {
+      // Rank by hs_suffix priority: platinum > gold > silver_plus
+      const priority: Record<string, number> = { platinum: 1, gold: 2, silver_plus: 3 };
+      footballEligible.sort((a, b) => (priority[a.hs_suffix] || 99) - (priority[b.hs_suffix] || 99));
+      return footballEligible[0];
+    }
+
+    // Otherwise, return the first known package definition (backward compatible)
+    return packageDefinitions[0] || null;
   } catch (error) {
     console.error('Error in fetchCustomerPackageDetails:', error);
     return null;
@@ -885,6 +904,10 @@ function getColumnsToSelect(filters?: FilterState, displayColumns?: string[], da
     if (filters.divisions?.length) {
       columns.add('division');
     }
+    // Level filter for football (maps to fbs_conf_group)
+    if (filters.level?.length && sportAbbrev?.toLowerCase() === 'fb') {
+      columns.add('fbs_conf_group');
+    }
     if (filters.states?.length) {
       columns.add('address_state');
     }
@@ -1005,6 +1028,25 @@ function getColumnsToSelect(filters?: FilterState, displayColumns?: string[], da
       columns.add('income_category');
     }
     
+    // Add offer count columns if offer count filter is used (for hs_athletes)
+    if (filters.offer_count && filters.offer_count.category && dataSource === 'hs_athletes') {
+      columns.add('offer_count_all');
+      columns.add('offer_count_p4');
+      columns.add('offer_count_g5');
+      columns.add('offer_count_fcs');
+      columns.add('offer_count_d2');
+      columns.add('offer_count_d3');
+      columns.add('offer_count_naia');
+      columns.add('offer_count_juco');
+      columns.add('offer_count_other');
+      columns.add('offer_counts_by_group');
+    }
+    
+    // Add school_type column if school type filter is used (for hs_athletes)
+    if (filters.hsSchoolType?.length) {
+      columns.add('school_type');
+    }
+    
     // Add date added column if date added filter is used
     if (filters.added_date) {
       columns.add('added_date');
@@ -1122,6 +1164,19 @@ function getColumnsToSelect(filters?: FilterState, displayColumns?: string[], da
   // Add highlight field for video icon display
   columns.add('highlight');
   
+  // Add offer count columns for hs_athletes
+  if (dataSource === 'hs_athletes') {
+    columns.add('offer_count_all');
+    columns.add('offer_count_p4');
+    columns.add('offer_count_g5');
+    columns.add('offer_count_fcs');
+    columns.add('offer_count_d2');
+    columns.add('offer_count_d3');
+    columns.add('offer_count_naia');
+    columns.add('offer_count_juco');
+    columns.add('offer_count_other');
+  }
+  
   // Add stat columns needed for true score calculation
   // columns.add('woba'); // woba_score
   // columns.add('fip'); // fip_score
@@ -1190,10 +1245,10 @@ export async function fetchAthleteData(
       viewName = `vw_athletes_wide_${sportAbbrev}`;
     }
     // Debug log removed('viewName', viewName);
+    console.log('Pulling list of athletes from database table/view:', viewName);
     // Determine which columns to select
     const columnsToSelect = getColumnsToSelect(options?.filters, options?.displayColumns, dataSource, options?.dynamicColumns, sportAbbrev);
     const selectString = columnsToSelect.join(', ');
-    
     // Build the base query using the new wide view
     let query = supabase
       .from(viewName)
@@ -1208,6 +1263,10 @@ export async function fetchAthleteData(
       }
       if (options.filters.divisions?.length) {
         query = query.in('division', options.filters.divisions);
+      }
+      // Level filter for football (maps to fbs_conf_group)
+      if (options.filters.level?.length && options.sportAbbrev?.toLowerCase() === 'fb') {
+        query = query.in('fbs_conf_group', options.filters.level);
       }
       // Handle location filters (states and international) with OR logic
       if (options.filters.states?.length || options.filters.international?.length) {
@@ -1427,12 +1486,19 @@ export async function fetchAthleteData(
       if (options.filters.grad_year) {
         const gradYearFilter = options.filters.grad_year;
         
-        if (gradYearFilter.comparison === 'between' && gradYearFilter.minValue !== undefined && gradYearFilter.maxValue !== undefined) {
-          query = query.gte('grad_year', gradYearFilter.minValue).lte('grad_year', gradYearFilter.maxValue);
-        } else if (gradYearFilter.comparison === 'min' && gradYearFilter.value !== undefined) {
-          query = query.gte('grad_year', gradYearFilter.value);
-        } else if (gradYearFilter.comparison === 'max' && gradYearFilter.value !== undefined) {
-          query = query.lte('grad_year', gradYearFilter.value);
+        // Handle array format (multiselect)
+        if (Array.isArray(gradYearFilter) && gradYearFilter.length > 0) {
+          query = query.in('grad_year', gradYearFilter);
+        }
+        // Handle object format with comparison operators (legacy support)
+        else if (typeof gradYearFilter === 'object' && !Array.isArray(gradYearFilter)) {
+          if (gradYearFilter.comparison === 'between' && gradYearFilter.minValue !== undefined && gradYearFilter.maxValue !== undefined) {
+            query = query.gte('grad_year', gradYearFilter.minValue).lte('grad_year', gradYearFilter.maxValue);
+          } else if (gradYearFilter.comparison === 'min' && gradYearFilter.value !== undefined) {
+            query = query.gte('grad_year', gradYearFilter.value);
+          } else if (gradYearFilter.comparison === 'max' && gradYearFilter.value !== undefined) {
+            query = query.lte('grad_year', gradYearFilter.value);
+          }
         }
       }
       
@@ -1479,6 +1545,90 @@ export async function fetchAthleteData(
         } else if (signedValues.includes('Unsigned')) {
           // Only Unsigned selected - filter for null sign_school_name
           query = query.is('sign_school_name', null);
+        }
+      }
+      
+      // Offer Count filter for high school athletes
+      if (options.filters.offer_count && options.filters.offer_count.category && dataSource === 'hs_athletes') {
+        const offerCountFilter = options.filters.offer_count;
+        let columnName = '';
+        
+        // Map category to column name
+        switch (offerCountFilter.category) {
+          case 'All':
+            columnName = 'offer_count_all';
+            break;
+          case 'P4':
+            columnName = 'offer_count_p4';
+            break;
+          case 'G5':
+            columnName = 'offer_count_g5';
+            break;
+          case 'FCS':
+            columnName = 'offer_count_fcs';
+            break;
+          case 'D2':
+            columnName = 'offer_count_d2';
+            break;
+          case 'NAIA':
+            columnName = 'offer_count_naia';
+            break;
+          case 'D3':
+            columnName = 'offer_count_d3';
+            break;
+          case 'JUCO':
+            columnName = 'offer_count_juco';
+            break;
+          case 'Other':
+            columnName = 'offer_count_other';
+            break;
+        }
+        
+        if (columnName && offerCountFilter.comparison) {
+          // Apply filters based on comparison type
+          if (offerCountFilter.comparison === 'between') {
+            if (offerCountFilter.minValue !== undefined) {
+              query = query.gte(columnName, offerCountFilter.minValue);
+            }
+            if (offerCountFilter.maxValue !== undefined) {
+              query = query.lte(columnName, offerCountFilter.maxValue);
+            }
+          } else if (offerCountFilter.comparison === 'min' && offerCountFilter.value !== undefined) {
+            query = query.gte(columnName, offerCountFilter.value);
+          } else if (offerCountFilter.comparison === 'max' && offerCountFilter.value !== undefined) {
+            query = query.lte(columnName, offerCountFilter.value);
+          }
+        }
+      }
+      
+      // Camp filter for high school athletes
+      if (options.filters.camp && Array.isArray(options.filters.camp) && options.filters.camp.length > 0 && dataSource === 'hs_athletes') {
+        const campFilters = options.filters.camp;
+        const campConditions: string[] = [];
+        
+        for (const campFilter of campFilters) {
+          if (campFilter.source) {
+            // Build pattern based on what's provided
+            // Format: ***YEAR*** *&*SOURCE*&* **&DISPLAY_NAME**&
+            if (campFilter.display_name && campFilter.year) {
+              // Full match: ***YEAR*** *&*SOURCE*&* **&DISPLAY_NAME**&
+              const pattern = `***${campFilter.year}*** *&*${campFilter.source}*&* **&${campFilter.display_name}**&`;
+              campConditions.push(`camp_attendance_text.ilike.%${pattern}%`);
+            } else if (campFilter.year) {
+              // Source + Year match: ***YEAR*** *&*SOURCE*&*
+              const pattern = `***${campFilter.year}*** *&*${campFilter.source}*&*`;
+              campConditions.push(`camp_attendance_text.ilike.%${pattern}%`);
+            } else {
+              // Source only match: *&*SOURCE*&*
+              const pattern = `*&*${campFilter.source}*&*`;
+              campConditions.push(`camp_attendance_text.ilike.%${pattern}%`);
+            }
+          }
+        }
+        
+        // Combine all camp conditions with OR
+        if (campConditions.length > 0) {
+          query = query.or(campConditions.join(','));
         }
       }
       
@@ -1551,6 +1701,11 @@ export async function fetchAthleteData(
       // Income Category filter for high school athletes
       if (options.filters.income_category?.length) {
         query = query.in('income_category', options.filters.income_category);
+      }
+      
+      // School Type filter for high school athletes (HS/JUCO selection)
+      if (options.filters.hsSchoolType?.length && dataSource === 'hs_athletes') {
+        query = query.in('school_type', options.filters.hsSchoolType);
       }
       
       // Date Added filter for high school athletes
@@ -2268,47 +2423,18 @@ export async function fetchAthleteData(
       }
     }
 
-    // Fetch height data from athlete_fact table if data_type_id 304 is in dynamic columns
-    const heightData: Record<string, { height_feet: number | null; height_inch: number | null }> = {};
-    if (options?.dynamicColumns?.some(col => col.data_type_id === 304)) {
-      const athleteIds = filteredAthleteData.map((row: any) => row.athlete_id);
-      if (athleteIds.length > 0) {
-        try {
-          const { data: factData, error: factError } = await supabase
-            .from('athlete_fact')
-            .select('athlete_id, data_type_id, value')
-            .in('athlete_id', athleteIds)
-            .in('data_type_id', [4, 5]) // height_feet and height_inch
-            .or('inactive.is.null,inactive.eq.false');
-
-          if (factError) {
-            console.error('Error fetching height data:', factError);
-          } else if (factData) {
-            // Group by athlete_id and extract height data
-            factData.forEach((fact: any) => {
-              if (!heightData[fact.athlete_id]) {
-                heightData[fact.athlete_id] = { height_feet: null, height_inch: null };
-              }
-              if (fact.data_type_id === 4) {
-                heightData[fact.athlete_id].height_feet = parseInt(fact.value);
-              } else if (fact.data_type_id === 5) {
-                heightData[fact.athlete_id].height_inch = parseInt(fact.value);
-              }
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching height data:', error);
-        }
-      }
-      
-    }
+    // Height data is already included in the view columns (height_feet, height_inch)
+    // No need to fetch separately from athlete_fact table
 
     // Transform the data directly from the view (both data sources use the same logic)
     const transformedData = filteredAthleteData.map((row: any) => {
       // Calculate true score from the stat columns - take highest from woba and fip
       const wobaScore = row.woba_score ? parseFloat(row.woba_score) : 0;
       const fipScore = row.fip_score ? parseFloat(row.fip_score) : 0;
-      const trueScore = Math.max(wobaScore, fipScore);
+      const verifiedRating = row.verified_rating ? parseFloat(row.verified_rating) : 0;
+      const gmbpmScore = row.gmbpm_score ? parseFloat(row.gmbpm_score) : 0;
+      const footballCareerScore = row.football_career_score ? parseFloat(row.football_career_score) : 0;
+      const trueScore = Math.max(wobaScore, fipScore, verifiedRating, gmbpmScore, footballCareerScore);
 
       // Athletic aid is now processed upstream in the database
       const athleticAidValue = row.is_receiving_athletic_aid;
@@ -2349,9 +2475,9 @@ export async function fetchAthleteData(
         ast: parseInt(row.assists || '0'),
         gk_min: parseInt(row.gk_min || '0'),
         true_score: trueScore,
-        // Add height data if available
-        height_feet: heightData[row.athlete_id]?.height_feet || (row.height_feet ? parseInt(row.height_feet) : null),
-        height_inch: heightData[row.athlete_id]?.height_inch || (row.height_inch ? parseInt(row.height_inch) : null),
+        // Add height data from view columns
+        height_feet: row.height_feet ? parseInt(row.height_feet) : null,
+        height_inch: row.height_inch ? parseInt(row.height_inch) : null,
         // Add highlight field if available
         highlight: row.highlight || null,
         // Add any additional dynamic stats that were selected
@@ -3460,24 +3586,45 @@ export async function fetchAthleteById(athleteId: string, userPackages?: string[
   }
 }
 
-// Helper function to get or create the "Main" board for a customer
+// Helper function to get or create a board for a customer
+// Returns the board with the lowest order number if multiple exist, or the single board if only one exists
 export async function getOrCreateMainBoard(customerId: string): Promise<string> {
   try {
-    // First, try to get the existing "Main" board
-    const { data: existingBoard, error: fetchError } = await supabase
+    // Fetch all main boards (those with NULL column_id) for this customer
+    const { data: allBoards, error: fetchAllError } = await supabase
       .from('recruiting_board_board')
-      .select('id')
+      .select('id, display_order')
       .eq('customer_id', customerId)
-      .eq('name', 'Main')
       .is('recruiting_board_column_id', null) // Main boards have NULL column_id
       .is('ended_at', null)
-      .single();
+      .order('display_order', { ascending: true });
 
-    if (!fetchError && existingBoard) {
-      return existingBoard.id;
+    if (fetchAllError) {
+      console.error('Error fetching boards:', fetchAllError);
+      throw new Error('Failed to fetch boards');
     }
 
-    // If no Main board exists, create one
+    // If there are any boards, return the appropriate one
+    if (allBoards && allBoards.length > 0) {
+      // If there's only one board, return that board
+      if (allBoards.length === 1) {
+        console.log('[getOrCreateMainBoard] One board exists. Using that board.');
+        return allBoards[0].id;
+      }
+
+      // If there are multiple boards, return the one with the lowest order number
+      // Sort boards: null display_order values are treated as high (come last)
+      const sortedBoards = [...allBoards].sort((a, b) => {
+        const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER;
+        return orderA - orderB;
+      });
+      
+      console.log('[getOrCreateMainBoard] Multiple boards exist. Using board with lowest order number.');
+      return sortedBoards[0].id;
+    }
+
+    // If no boards exist at all, create a new board
     const { data: newBoard, error: createError } = await supabase
       .from('recruiting_board_board')
       .insert({
@@ -3490,14 +3637,59 @@ export async function getOrCreateMainBoard(customerId: string): Promise<string> 
       .single();
 
     if (createError) {
-      console.error('Error creating Main board:', createError);
-      throw new Error('Failed to create Main board');
+      console.error('Error creating board:', createError);
+      throw new Error('Failed to create board');
     }
 
     return newBoard.id;
   } catch (error) {
     console.error('Error in getOrCreateMainBoard:', error);
     throw error;
+  }
+}
+
+// Helper function to get the default board for adding athletes
+// Returns Main board if it exists, or the single board if only one exists, or creates Main if none exist
+export async function getDefaultBoardForAdding(customerId: string): Promise<string | null> {
+  try {
+    // Fetch all main boards (those with NULL column_id) for this customer
+    const { data: allBoards, error: fetchAllError } = await supabase
+      .from('recruiting_board_board')
+      .select('id, name, display_order')
+      .eq('customer_id', customerId)
+      .is('recruiting_board_column_id', null) // Only main boards
+      .is('ended_at', null)
+      .order('display_order', { ascending: true });
+
+    if (fetchAllError) {
+      console.error('Error fetching boards:', fetchAllError);
+      return null;
+    }
+
+    // If no boards exist, return null (caller should create a board)
+    if (!allBoards || allBoards.length === 0) {
+      return null;
+    }
+
+    // If there's only one board, return that board
+    if (allBoards.length === 1) {
+      console.log('[getDefaultBoardForAdding] One board exists. Using that board.');
+      return allBoards[0].id;
+    }
+
+    // If there are multiple boards, return the one with the lowest order number
+    // Sort boards: null display_order values are treated as high (come last)
+    const sortedBoards = [...allBoards].sort((a, b) => {
+      const orderA = a.display_order ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.display_order ?? Number.MAX_SAFE_INTEGER;
+      return orderA - orderB;
+    });
+    
+    console.log('[getDefaultBoardForAdding] Multiple boards exist. Using board with lowest order number.');
+    return sortedBoards[0].id;
+  } catch (error) {
+    console.error('Error in getDefaultBoardForAdding:', error);
+    return null;
   }
 }
 
@@ -3704,6 +3896,12 @@ export async function createRecruitingBoardPosition(customerId: string, position
 
 export async function updateRecruitingBoardPositionOrder(customerId: string, positions: { id: string; display_order: number }[]): Promise<void> {
   try {
+    console.log('💾 [DB UPDATE] updateRecruitingBoardPositionOrder called:', {
+      customerId,
+      positionCount: positions.length,
+      positions: positions.map(p => ({ id: p.id, display_order: p.display_order }))
+    });
+
     // Determine a safe temporary base that exceeds any existing display_order on this board
     // 1) Find the boardId for these positions (assume all belong to the same board)
     const { data: sampleCols, error: sampleErr } = await supabase
@@ -3740,37 +3938,141 @@ export async function updateRecruitingBoardPositionOrder(customerId: string, pos
       tempBase = Math.max(currentMax + 1000, 1_000_000);
     }
 
+    // Get the target display_order values we want to set
+    const targetOrders = new Set(positions.map(p => p.display_order));
+    const positionIds = new Set(positions.map(p => p.id));
+
+    // Phase 0: Find and move any columns that currently have our target display_order values
+    // (but aren't in our update list) to temporary values to avoid conflicts
+    const conflictingColumns: { id: string; tempOrder: number }[] = [];
+    if (boardId && targetOrders.size > 0) {
+      // First get all columns with target orders
+      const { data: allColsWithTargetOrder, error: allColsErr } = await supabase
+        .from('recruiting_board_column')
+        .select('id, display_order')
+        .eq('customer_id', customerId)
+        .eq('recruiting_board_board_id', boardId)
+        .in('display_order', Array.from(targetOrders))
+        .is('ended_at', null);
+
+      if (allColsErr) {
+        console.error('[updateRecruitingBoardPositionOrder] Failed to find columns with target orders:', allColsErr);
+        throw new Error('Failed to update column order');
+      }
+
+      // Filter to only those not in our update list
+      const conflictingCols = allColsWithTargetOrder?.filter((col: { id: string; display_order: number }) => !positionIds.has(col.id)) || [];
+
+      if (conflictingCols && conflictingCols.length > 0) {
+        console.log(`💾 [DB UPDATE] Found ${conflictingCols.length} conflicting columns that need to be moved temporarily`);
+        
+        const conflictTempBase = tempBase + positions.length + 1000; // Use a different range for conflicts
+        for (let i = 0; i < conflictingCols.length; i++) {
+          const col = conflictingCols[i];
+          const tempOrder = conflictTempBase + i + 1;
+          conflictingColumns.push({ id: col.id, tempOrder });
+          
+          console.log(`💾 [DB UPDATE] Phase 0 - Moving conflicting column ${col.id} from ${col.display_order} to temp ${tempOrder}`);
+          
+          const { error } = await supabase
+            .from('recruiting_board_column')
+            .update({ display_order: tempOrder })
+            .eq('id', col.id)
+            .eq('customer_id', customerId);
+
+          if (error) {
+            console.error('❌ [DB UPDATE] Error moving conflicting column (phase 0):', error);
+            throw new Error('Failed to update column order');
+          }
+        }
+      }
+    }
+
     // Phase 1: Set all display_orders to unique temporary values beyond current max
     for (let i = 0; i < positions.length; i++) {
       const position = positions[i];
       const tempOrder = tempBase + i + 1; // guaranteed unique and above current max
-      const { error } = await supabase
+      
+      console.log(`💾 [DB UPDATE] Phase 1 - Setting column ${position.id} to temp order ${tempOrder}`);
+      
+      const { error, data } = await supabase
         .from('recruiting_board_column')
         .update({ display_order: tempOrder })
         .eq('id', position.id)
-        .eq('customer_id', customerId);
+        .eq('customer_id', customerId)
+        .select();
 
       if (error) {
-        console.error('Error updating column order (phase 1):', error);
+        console.error('❌ [DB UPDATE] Error updating column order (phase 1):', error);
         throw new Error('Failed to update column order');
       }
+      
+      console.log(`✅ [DB UPDATE] Phase 1 - Successfully set column ${position.id} to temp order ${tempOrder}`, data);
     }
 
     // Phase 2: Set display_orders to final values
     for (const position of positions) {
-      const { error } = await supabase
+      console.log(`💾 [DB UPDATE] Phase 2 - Setting column ${position.id} to final order ${position.display_order}`);
+      
+      const { error, data } = await supabase
         .from('recruiting_board_column')
         .update({ display_order: position.display_order })
         .eq('id', position.id)
-        .eq('customer_id', customerId);
+        .eq('customer_id', customerId)
+        .select();
 
       if (error) {
-        console.error('Error updating column order (phase 2):', error);
+        console.error('❌ [DB UPDATE] Error updating column order (phase 2):', error);
         throw new Error('Failed to update column order');
       }
+      
+      console.log(`✅ [DB UPDATE] Phase 2 - Successfully set column ${position.id} to final order ${position.display_order}`, data);
     }
+
+    // Phase 3: Restore conflicting columns to their original positions (if any)
+    // Note: We need to find what their original positions should be now
+    // For now, we'll leave them at temp values - they should be handled by the next update
+    // Or we could recalculate based on the new order, but that's complex
+    // Actually, let's just leave them - the user can fix the order if needed
+    // Or better: find the next available order values for them
+    
+    if (conflictingColumns.length > 0 && boardId) {
+      // Find the max display_order after our updates (excluding conflicting columns)
+      const conflictingIds = conflictingColumns.map(c => c.id);
+      const { data: allColsAfterUpdate, error: maxErr } = await supabase
+        .from('recruiting_board_column')
+        .select('id, display_order')
+        .eq('customer_id', customerId)
+        .eq('recruiting_board_board_id', boardId)
+        .is('ended_at', null)
+        .order('display_order', { ascending: false });
+
+      // Filter out conflicting columns
+      const maxAfterUpdate = allColsAfterUpdate?.filter((col: { id: string; display_order: number }) => !conflictingIds.includes(col.id));
+
+      if (!maxErr && maxAfterUpdate && maxAfterUpdate.length > 0) {
+        const newBase = (maxAfterUpdate[0]?.display_order ?? 0) + 1;
+        for (let i = 0; i < conflictingColumns.length; i++) {
+          const newOrder = newBase + i;
+          console.log(`💾 [DB UPDATE] Phase 3 - Restoring conflicting column ${conflictingColumns[i].id} to order ${newOrder}`);
+          
+          const { error } = await supabase
+            .from('recruiting_board_column')
+            .update({ display_order: newOrder })
+            .eq('id', conflictingColumns[i].id)
+            .eq('customer_id', customerId);
+
+          if (error) {
+            console.error('❌ [DB UPDATE] Error restoring conflicting column (phase 3):', error);
+            // Don't throw - this is not critical
+          }
+        }
+      }
+    }
+    
+    console.log('✅ [DB UPDATE] updateRecruitingBoardPositionOrder completed successfully');
   } catch (error) {
-    console.error('Error in updateRecruitingBoardPositionOrder:', error);
+    console.error('❌ [DB UPDATE] Error in updateRecruitingBoardPositionOrder:', error);
     throw error;
   }
 }
@@ -3846,6 +4148,17 @@ export async function updateRecruitingBoardRanks(
   boardId?: string | null
 ): Promise<void> {
   try {
+    console.log('💾 [DB UPDATE] updateRecruitingBoardRanks called:', {
+      customerId,
+      boardId,
+      updateCount: updates.length,
+      updates: updates.map(u => ({
+        recruitingBoardId: u.recruitingBoardId,
+        rank: u.rank,
+        position: u.position
+      }))
+    });
+
     // Get the board ID - use provided one or get/create Main board
     const activeBoardId = boardId || await getOrCreateMainBoard(customerId);
 
@@ -3901,8 +4214,40 @@ export async function updateRecruitingBoardRanks(
 
     // Process each column separately using two-phase update to avoid rank conflicts
     for (const [columnKey, columnUpdates] of updatesByColumn) {
+      console.log(`💾 [DB UPDATE] Processing column ${columnKey} with ${columnUpdates.length} updates`);
+      
       // Phase 1: Set all ranks to temporary high values to avoid conflicts
-      const tempOffset = 999999;
+      // Get the current max rank for this column to ensure our temp values are unique
+      let tempOffset = 999999; // Fallback
+      if (columnKey !== 'null' && activeBoardId) {
+        const { data: maxRankData, error: maxRankError } = await supabase
+          .from('recruiting_board_athlete')
+          .select('rank')
+          .eq('recruiting_board_column_id', columnKey)
+          .eq('recruiting_board_board_id', activeBoardId)
+          .is('ended_at', null)
+          .order('rank', { ascending: false })
+          .limit(1);
+        
+        if (!maxRankError && maxRankData && maxRankData.length > 0) {
+          const currentMaxRank = maxRankData[0].rank || 0;
+          // Use a safe offset that's well above the current max, with extra space for concurrent updates
+          // Add timestamp component to make it unique across concurrent calls
+          const timestampComponent = Date.now() % 100000; // Last 5 digits of timestamp
+          tempOffset = Math.max(currentMaxRank + 1000000, 999999) + timestampComponent;
+        } else {
+          // If we can't get max rank, use timestamp-based offset
+          const timestampComponent = Date.now() % 100000;
+          tempOffset = 999999 + timestampComponent;
+        }
+      } else {
+        // For null column or if we can't determine, use timestamp-based offset
+        const timestampComponent = Date.now() % 100000;
+        tempOffset = 999999 + timestampComponent;
+      }
+      
+      console.log(`💾 [DB UPDATE] Using temp offset ${tempOffset} for column ${columnKey}`);
+      
       for (const update of columnUpdates) {
         const tempRank = tempOffset + update.rank;
         const updateData: any = { rank: tempRank };
@@ -3911,16 +4256,21 @@ export async function updateRecruitingBoardRanks(
           updateData.recruiting_board_column_id = (update as any)._columnId;
         }
 
-        const { error } = await supabase
+        console.log(`💾 [DB UPDATE] Phase 1 - Setting temp rank ${tempRank} for athlete ${update.recruitingBoardId}`, updateData);
+
+        const { error, data } = await supabase
           .from('recruiting_board_athlete')
           .update(updateData)
           .eq('id', update.recruitingBoardId)
-          .is('ended_at', null);
+          .is('ended_at', null)
+          .select();
 
         if (error) {
-          console.error('Error updating recruiting board rank (phase 1):', error);
+          console.error('❌ [DB UPDATE] Error updating recruiting board rank (phase 1):', error);
           throw new Error('Failed to update recruiting board rank');
         }
+        
+        console.log(`✅ [DB UPDATE] Phase 1 - Successfully updated athlete ${update.recruitingBoardId} to temp rank ${tempRank}`, data);
       }
 
       // Phase 2: Set ranks to final values
@@ -3931,18 +4281,25 @@ export async function updateRecruitingBoardRanks(
           updateData.recruiting_board_column_id = (update as any)._columnId;
         }
 
-        const { error } = await supabase
+        console.log(`💾 [DB UPDATE] Phase 2 - Setting final rank ${update.rank} for athlete ${update.recruitingBoardId}`, updateData);
+
+        const { error, data } = await supabase
           .from('recruiting_board_athlete')
           .update(updateData)
           .eq('id', update.recruitingBoardId)
-          .is('ended_at', null);
+          .is('ended_at', null)
+          .select();
 
         if (error) {
-          console.error('Error updating recruiting board rank (phase 2):', error);
+          console.error('❌ [DB UPDATE] Error updating recruiting board rank (phase 2):', error);
           throw new Error('Failed to update recruiting board rank');
         }
+        
+        console.log(`✅ [DB UPDATE] Phase 2 - Successfully updated athlete ${update.recruitingBoardId} to final rank ${update.rank}`, data);
       }
     }
+    
+    console.log('✅ [DB UPDATE] updateRecruitingBoardRanks completed successfully for all updates');
   } catch (error) {
     console.error('Error in updateRecruitingBoardRanks:', error);
     throw error;
@@ -3963,6 +4320,42 @@ export async function endRecruitingBoardAthlete(recruitingBoardId: string): Prom
     }
   } catch (error) {
     console.error('Error in endRecruitingBoardAthlete:', error);
+    throw error;
+  }
+}
+
+export async function clearRecruitingBoard(boardId: string, customerId: string): Promise<number> {
+  try {
+    // First verify that the board belongs to the customer
+    const { data: boardData, error: boardError } = await supabase
+      .from('recruiting_board_board')
+      .select('id, customer_id')
+      .eq('id', boardId)
+      .eq('customer_id', customerId)
+      .single();
+
+    if (boardError || !boardData) {
+      console.error('Error verifying board ownership:', boardError);
+      throw new Error('Board not found or access denied');
+    }
+
+    // Now clear all athletes from this board
+    const { data, error } = await supabase
+      .from('recruiting_board_athlete')
+      .update({ ended_at: new Date().toISOString() })
+      .eq('recruiting_board_board_id', boardId)
+      .eq('customer_id', customerId)
+      .is('ended_at', null)
+      .select();
+
+    if (error) {
+      console.error('Error clearing recruiting board:', error);
+      throw new Error('Failed to clear recruiting board');
+    }
+
+    return data?.length || 0;
+  } catch (error) {
+    console.error('Error in clearRecruitingBoard:', error);
     throw error;
   }
 }
@@ -4033,7 +4426,8 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
         athlete_tier,
         recruiting_board_column_id,
         rank,
-        source
+        source,
+        customer_position
       `)
       .eq('recruiting_board_board_id', activeBoardId)
       .is('ended_at', null) // Only show athletes that haven't been ended/removed
@@ -4239,6 +4633,10 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
           });
         }
 
+        // Determine the conference column name for this sport
+        // Football uses 'conference', all other sports use '{sport}_conference'
+        const conferenceColumn = sportAbbrev === 'fb' ? 'conference' : `${sportAbbrev}_conference`;
+
         // Query each data source in priority order
         for (const source of dataSources) {
           // Skip if we already have data for all athletes from higher priority sources
@@ -4272,7 +4670,7 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
                 primary_position,
                 m_status,
                 survey_completed,
-                conference
+                ${conferenceColumn}
               `)
               .in('athlete_id', remainingAthleteIds);
 
@@ -4284,10 +4682,17 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
               // Add data source information to each athlete record
               sportAthleteData.forEach((athlete: any) => {
                 if (!athleteDetailsMap[athlete.athlete_id]) {
-                  athleteDetailsMap[athlete.athlete_id] = {
+                  // Normalize the conference column - map sport-specific column to 'conference'
+                  const normalizedAthlete = {
                     ...athlete,
+                    conference: athlete[conferenceColumn] || athlete.conference || '',
                     data_source: source.dataSource
                   };
+                  // Remove the sport-specific conference column if it exists
+                  if (conferenceColumn !== 'conference' && normalizedAthlete[conferenceColumn] !== undefined) {
+                    delete normalizedAthlete[conferenceColumn];
+                  }
+                  athleteDetailsMap[athlete.athlete_id] = normalizedAthlete;
                 }
               });
             }
@@ -4334,6 +4739,31 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
 
     if (!recruitingBoardDataTransformed || recruitingBoardDataTransformed.length === 0) {
       return [];
+    }
+
+    // Fetch player tracking data for the current user
+    const trackingMap = new Map<string, { text_alert: boolean }>();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        const athleteIds = recruitingBoardDataTransformed.map((item: any) => item.athlete_id).filter(Boolean);
+        if (athleteIds.length > 0) {
+          const { data: trackingData, error: trackingError } = await supabase
+            .from('player_tracking')
+            .select('athlete_id, text_alert')
+            .eq('user_id', session.user.id)
+            .in('athlete_id', athleteIds);
+          
+          if (!trackingError && trackingData) {
+            trackingData.forEach((tracking: any) => {
+              trackingMap.set(tracking.athlete_id, { text_alert: tracking.text_alert || false });
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[fetchRecruitingBoardData] Error fetching player tracking data:', error);
+      // Continue without tracking data if fetch fails
     }
 
     // Debug log removed(`[fetchRecruitingBoardData] All data fetched from dynamic views. Starting final data transformation`);
@@ -4419,6 +4849,7 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
         direction: "Flat",
         position: columnIdToName.get(item.recruiting_board_column_id) || 'Unassigned',
         primary_position: athlete?.primary_position || '',
+        customer_position: item.customer_position || '', // Position from recruiting_board_athlete table
         school_id: athlete?.school_id || '',
         conference: athlete?.conference || '',
         status: athlete?.m_status || '',
@@ -4432,7 +4863,9 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
         rank: item.rank,
         // Map data_source to source if source is not set
         source: item.source || (athlete?.data_source === 'hs_athletes' ? 'high_school' : null),
-        data_source: athlete?.data_source || 'unknown' // Add data source information
+        data_source: athlete?.data_source || 'unknown', // Add data source information
+        // Player tracking status
+        player_tracking: trackingMap.get(athlete?.athlete_id) || null
       };
     });
 
@@ -4604,6 +5037,8 @@ export async function fetchSportColumnConfig(sportId: string, allStats: boolean 
       988: { name: 'Avg/g', decimalPlaces: 1 },
       989: { name: 'Avg/g', decimalPlaces: 1 },
       990: { name: 'Avg', decimalPlaces: 1 },
+      1135: { name: 'DPS', decimalPlaces: 1 },
+      1136: { name: 'V', decimalPlaces: 0, convertNegativeToZero: true }, // Verified Rating - no decimal places, convert negatives to zero
       // Add more mappings as needed
     };
 
@@ -5051,6 +5486,151 @@ async function fetchSchoolFactsWithBatching(schoolIds: string[]): Promise<any[]>
 }
 // Cache for international options to prevent repeated expensive queries
 const internationalOptionsCache = new Map<string, string[]>();
+
+// ============================================================================
+// CAMP FILTER QUERY FUNCTIONS
+// ============================================================================
+
+// Cache for camp event data to avoid repeated queries
+let campEventDataCache: Array<{
+  source: string;
+  start_date: string;
+  name: string;
+  org: string | null;
+  state_name: string | null;
+}> | null = null;
+
+/**
+ * Fetch all camp event data once and cache it
+ */
+async function fetchAllCampEventData(): Promise<Array<{
+  source: string;
+  start_date: string;
+  name: string;
+  org: string | null;
+  state_name: string | null;
+}>> {
+  // Return cached data if available
+  if (campEventDataCache) {
+    return campEventDataCache;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('camp_event')
+      .select(`
+        source,
+        start_date,
+        name,
+        org,
+        state:state_id (
+          name
+        )
+      `)
+      .not('source', 'is', null)
+      .not('start_date', 'is', null);
+
+    if (error) {
+      console.error('Error fetching camp event data:', error);
+      return [];
+    }
+
+    // Process and cache the data
+    const processedData = (data || []).map((item: any) => ({
+      source: item.source,
+      start_date: item.start_date,
+      name: item.name || '',
+      org: item.org,
+      state_name: (item.state as any)?.name || null
+    }));
+
+    campEventDataCache = processedData;
+    return processedData;
+  } catch (error) {
+    console.error('Error fetching camp event data:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch distinct camp event sources
+ */
+export async function fetchCampSources(): Promise<string[]> {
+  try {
+    const data = await fetchAllCampEventData();
+    
+    // Get distinct sources
+    const distinctSources = Array.from(new Set(data.map(item => item.source).filter(Boolean))) as string[];
+    return distinctSources.sort();
+  } catch (error) {
+    console.error('Error fetching camp sources:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch distinct years for a given source
+ */
+export async function fetchCampYearsBySource(source: string): Promise<number[]> {
+  try {
+    const data = await fetchAllCampEventData();
+    
+    // Filter by source and extract years
+    const years = data
+      .filter(item => item.source === source && item.start_date)
+      .map(item => {
+        const date = new Date(item.start_date);
+        return date.getFullYear();
+      })
+      .filter((year): year is number => !isNaN(year));
+
+    // Get distinct years and sort descending
+    const distinctYears = Array.from(new Set(years));
+    return distinctYears.sort((a, b) => b - a);
+  } catch (error) {
+    console.error('Error fetching camp years:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch camp event display names (name or state name) for a given source and year
+ */
+export async function fetchCampDisplayNames(source: string, year: number): Promise<Array<{ display_name: string; source: string; year: number }>> {
+  try {
+    const data = await fetchAllCampEventData();
+    
+    // Filter by source and year, then create display names
+    const results = data
+      .filter(item => {
+        if (!item.start_date || item.source !== source) return false;
+        const eventYear = new Date(item.start_date).getFullYear();
+        return eventYear === year;
+      })
+      .map(item => {
+        // Use name if org is not null/empty, otherwise use state name
+        const displayName = (item.org && item.org.trim() !== '') 
+          ? item.name 
+          : item.state_name || item.name || 'Unknown';
+        
+        return {
+          display_name: displayName,
+          source: item.source,
+          year: year
+        };
+      });
+
+    // Get distinct display names
+    const uniqueResults = Array.from(
+      new Map(results.map(item => [item.display_name, item])).values()
+    );
+
+    return uniqueResults.sort((a, b) => a.display_name.localeCompare(b.display_name));
+  } catch (error) {
+    console.error('Error fetching camp display names:', error);
+    return [];
+  }
+}
 
 export async function fetchInternationalOptions(sportId?: string): Promise<string[]> {
   // Check cache first
@@ -5729,7 +6309,7 @@ export async function fetchUserDetailsByIds(userIds: string[]): Promise<any[]> {
     
     const { data: batchData, error: batchError } = await supabase
       .from('user_detail')
-      .select('id, name_first, name_last, phone, last_sign_in_at')
+      .select('id, name_first, name_last, phone, last_sign_in_at, main_contact')
       .in('id', batch);
     
     if (batchError) {
@@ -5747,17 +6327,255 @@ export async function fetchUserDetailsByIds(userIds: string[]): Promise<any[]> {
 
 // Fetch all data types in use
 export async function fetchDataTypesInUse(): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('vw_af_data_types_in_use')
-    .select('id, name')
-    .order('name');
-  
-  if (error) {
-    console.error('Error fetching data types:', error);
+  try {
+    // Try the view first (for backward compatibility)
+    const { data, error } = await supabase
+      .from('vw_af_data_types_in_use')
+      .select('id, name')
+      .order('name');
+    
+    if (error) {
+      // If timeout or view doesn't exist, fall back to direct query
+      if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('does not exist')) {
+        console.warn('View vw_af_data_types_in_use timed out or not found, using fallback query');
+        return await fetchDataTypesInUseFallback();
+      }
+      
+      console.error('Error fetching data types:', error);
+      // Provide more detailed error information
+      const errorMessage = error.message || error.details || error.hint || 'Unknown error';
+      const enhancedError = new Error(`Failed to fetch data types: ${errorMessage}`);
+      (enhancedError as any).originalError = error;
+      throw enhancedError;
+    }
+    
+    return data || [];
+  } catch (error: any) {
+    console.error('Error in fetchDataTypesInUse:', error);
+    
+    // If it's a timeout error, try fallback
+    if (error.message?.includes('timeout') || error.code === '57014') {
+      console.warn('View query timed out, using fallback query');
+      try {
+        return await fetchDataTypesInUseFallback();
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        throw new Error(`Error fetching data types: Both view and fallback queries failed. ${fallbackError instanceof Error ? fallbackError.message : 'Unknown error'}`);
+      }
+    }
+    
+    // Re-throw with better error message if it's not already enhanced
+    if (error.message && error.message.includes('Failed to fetch data types')) {
+      throw error;
+    }
+    throw new Error(`Error fetching data types: ${error?.message || error?.error_description || 'Unknown error'}`);
+  }
+}
+
+// Fallback function to fetch data types directly from athlete_fact table
+async function fetchDataTypesInUseFallback(): Promise<any[]> {
+  try {
+    // Step 1: Get all data_types first (fast, small table)
+    const { data: allDataTypes, error: allDataTypesError } = await supabase
+      .from('data_type')
+      .select('id, name')
+      .order('name');
+    
+    if (allDataTypesError) {
+      console.error('Error fetching all data types:', allDataTypesError);
+      throw allDataTypesError;
+    }
+    
+    if (!allDataTypes || allDataTypes.length === 0) {
+      return [];
+    }
+    
+    // Step 2: Sample athlete_fact to find which data types are actually in use
+    // Use a reasonable sample size that won't timeout
+    // We'll sample recent records first (most likely to be active)
+    try {
+      const { data: athleteFactsSample, error: sampleError } = await supabase
+        .from('athlete_fact')
+        .select('data_type_id')
+        .is('inactive', null)
+        .order('created_at', { ascending: false })
+        .limit(20000); // Sample 20k recent records - should be fast enough
+      
+      if (!sampleError && athleteFactsSample && athleteFactsSample.length > 0) {
+        // Get unique data_type_ids from the sample
+        const usedDataTypeIds = new Set(
+          athleteFactsSample.map((f: any) => f.data_type_id).filter((id: any) => id != null)
+        );
+        
+        // Filter data_types to only those that are in use
+        const dataTypesInUse = allDataTypes.filter((dt: any) => usedDataTypeIds.has(dt.id));
+        
+        if (dataTypesInUse.length > 0) {
+          console.log(`Fallback: Found ${dataTypesInUse.length} data types in use (from sample of ${athleteFactsSample.length} athlete_fact records)`);
+          return dataTypesInUse;
+        }
+      }
+      
+      // If sampling failed or found nothing, log but continue to return all
+      if (sampleError) {
+        console.warn('Error sampling athlete_fact for data types:', sampleError);
+      }
+    } catch (sampleError: any) {
+      // If sampling fails (e.g., timeout), just return all data types
+      console.warn('Sampling athlete_fact failed, returning all data types:', sampleError?.message || sampleError);
+    }
+    
+    // Fallback: return all data types if we couldn't determine which are in use
+    console.warn('Using fallback: returning all data types (could not filter by usage)');
+    return allDataTypes;
+  } catch (error: any) {
+    console.error('Error in fetchDataTypesInUseFallback:', error);
     throw error;
   }
-  
-  return data || [];
+}
+
+// Fetch all data types from the data_type table (fast, small table)
+export async function fetchAllDataTypes(): Promise<any[]> {
+  try {
+    const { data, error } = await supabase
+      .from('data_type')
+      .select('id, name')
+      .order('name');
+    
+    if (error) {
+      console.error('Error fetching all data types:', error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (error: any) {
+    console.error('Error in fetchAllDataTypes:', error);
+    throw error;
+  }
+}
+
+// Fetch data types that are in use (from view or fallback)
+export async function fetchDataTypesInUseIds(): Promise<number[]> {
+  try {
+    // Try the view first (for backward compatibility)
+    const { data, error } = await supabase
+      .from('vw_af_data_types_in_use')
+      .select('id')
+      .order('name');
+    
+    if (error) {
+      // If timeout or view doesn't exist, fall back to sampling
+      if (error.code === '57014' || error.message?.includes('timeout') || error.message?.includes('does not exist')) {
+        console.warn('View vw_af_data_types_in_use timed out or not found, using fallback');
+        return await fetchDataTypesInUseIdsFallback();
+      }
+      
+      console.error('Error fetching data types in use:', error);
+      throw error;
+    }
+    
+    // Return just the IDs
+    return data?.map((item: any) => item.id) || [];
+  } catch (error: any) {
+    console.error('Error in fetchDataTypesInUseIds:', error);
+    
+    // If it's a timeout error, try fallback
+    if (error.message?.includes('timeout') || error.code === '57014') {
+      console.warn('View query timed out, using fallback query');
+      try {
+        return await fetchDataTypesInUseIdsFallback();
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        // Return empty array if both fail - we'll show all data types without "in use" markers
+        return [];
+      }
+    }
+    
+    // Return empty array on error - we'll show all data types without "in use" markers
+    return [];
+  }
+}
+
+// Fallback function to get data type IDs in use by sampling athlete_fact
+async function fetchDataTypesInUseIdsFallback(): Promise<number[]> {
+  try {
+    // Use a more comprehensive approach: sample from multiple time periods
+    // This ensures we catch data types that might not be in recent records
+    
+    // Strategy: Sample recent records first (most likely to be active)
+    // Then sample older records to catch data types that might be in use but older
+    const usedDataTypeIds = new Set<number>();
+    
+    // Sample 1: Recent records (last activity)
+    try {
+      const { data: recentSample, error: recentError } = await supabase
+        .from('athlete_fact')
+        .select('data_type_id')
+        .is('inactive', null)
+        .order('created_at', { ascending: false })
+        .limit(30000); // Increased sample size
+      
+      if (!recentError && recentSample && recentSample.length > 0) {
+        recentSample.forEach((f: any) => {
+          if (f.data_type_id != null) {
+            usedDataTypeIds.add(f.data_type_id);
+          }
+        });
+      }
+    } catch (recentError) {
+      console.warn('Error sampling recent athlete_fact records:', recentError);
+    }
+    
+    // Sample 2: Older records (to catch data types that might not be in recent records)
+    // Sample from different time periods to get better coverage
+    try {
+      const { data: olderSample, error: olderError } = await supabase
+        .from('athlete_fact')
+        .select('data_type_id')
+        .is('inactive', null)
+        .order('created_at', { ascending: true })
+        .limit(30000); // Sample older records too
+      
+      if (!olderError && olderSample && olderSample.length > 0) {
+        olderSample.forEach((f: any) => {
+          if (f.data_type_id != null) {
+            usedDataTypeIds.add(f.data_type_id);
+          }
+        });
+      }
+    } catch (olderError) {
+      console.warn('Error sampling older athlete_fact records:', olderError);
+    }
+    
+    // Sample 3: Random sampling to catch data types that might be distributed throughout
+    // This helps catch data types that are used but not concentrated in recent or old records
+    try {
+      // Get a random sample by ordering by a random column (if available) or by id
+      // Since Supabase doesn't support RANDOM() directly, we'll sample by different ranges
+      const { data: randomSample, error: randomError } = await supabase
+        .from('athlete_fact')
+        .select('data_type_id')
+        .is('inactive', null)
+        .limit(20000);
+      
+      if (!randomError && randomSample && randomSample.length > 0) {
+        randomSample.forEach((f: any) => {
+          if (f.data_type_id != null) {
+            usedDataTypeIds.add(f.data_type_id);
+          }
+        });
+      }
+    } catch (randomError) {
+      console.warn('Error sampling random athlete_fact records:', randomError);
+    }
+    
+    const result = Array.from(usedDataTypeIds) as number[];
+    console.log(`Fallback: Found ${result.length} unique data types in use from sampling`);
+    return result;
+  } catch (error: any) {
+    console.error('Error in fetchDataTypesInUseIdsFallback:', error);
+    return [];
+  }
 }
 
 // Fetch athlete data types for a specific athlete
@@ -5776,14 +6594,14 @@ export async function fetchAthleteDataTypes(athleteId: string): Promise<any[]> {
 }
 
 // Insert new athlete fact
-export async function insertAthleteFact(athleteId: string, dataTypeId: number, value: string): Promise<any> {
+export async function insertAthleteFact(athleteId: string, dataTypeId: number, value: string, source?: string): Promise<any> {
   const { data, error } = await supabase
     .from('athlete_fact')
     .insert({
       athlete_id: athleteId,
       data_type_id: dataTypeId,
       value: value,
-      source: 'manual_admin',
+      source: source || 'manual_admin',
       date: new Date().toISOString().split('T')[0]
     })
     .select()
@@ -5797,6 +6615,33 @@ export async function insertAthleteFact(athleteId: string, dataTypeId: number, v
   return data;
 }
 
+// Mark athlete fact as inactive (and all other facts with the same athlete_id and data_type_id)
+export async function markAthleteFactInactive(factId: string): Promise<void> {
+  // First, get the fact to retrieve athlete_id and data_type_id
+  const { data: factData, error: fetchError } = await supabase
+    .from('athlete_fact')
+    .select('athlete_id, data_type_id')
+    .eq('id', factId)
+    .single();
+  
+  if (fetchError || !factData) {
+    console.error('Error fetching athlete fact:', fetchError);
+    throw new Error(`No fact found with id: ${factId}`);
+  }
+  
+  // Mark all facts with the same athlete_id and data_type_id as inactive
+  const { error } = await supabase
+    .from('athlete_fact')
+    .update({ inactive: true })
+    .eq('athlete_id', factData.athlete_id)
+    .eq('data_type_id', factData.data_type_id);
+  
+  if (error) {
+    console.error('Error marking athlete facts as inactive:', error);
+    throw error;
+  }
+}
+
 // Fetch athlete fact data for a specific athlete and data type
 export async function fetchAthleteFactData(athleteId: string, dataTypeId: number, limit?: number): Promise<any[]> {
   let query = supabase
@@ -5804,6 +6649,7 @@ export async function fetchAthleteFactData(athleteId: string, dataTypeId: number
     .select('*')
     .eq('athlete_id', athleteId)
     .eq('data_type_id', dataTypeId)
+    .or('inactive.is.null,inactive.eq.false')
     .order('created_at', { ascending: false });
   
   if (limit) {
@@ -6071,7 +6917,10 @@ export async function fetchCoachDataTypesInUse(): Promise<any[]> {
 }
 
 // Search coaches from view vw_coach_school_sport (id, school, sport)
-export async function searchCoaches(searchTerm: string, limit: number = 25, sportName?: string): Promise<any[]> {
+export async function searchCoaches(searchTerm: string, limit: number = 25, sportName?: string, page: number = 1): Promise<{ data: any[]; total: number }> {
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
   let query = supabase
     .from('vw_coach_school_sport')
     .select(`
@@ -6081,8 +6930,7 @@ export async function searchCoaches(searchTerm: string, limit: number = 25, spor
       first_name,
       last_name,
       end_date
-    `)
-    .limit(limit);
+    `, { count: 'exact' });
 
   if (sportName && sportName.trim()) {
     query = query.ilike('sport', `%${sportName.trim()}%`);
@@ -6091,12 +6939,15 @@ export async function searchCoaches(searchTerm: string, limit: number = 25, spor
     query = query.ilike('school', `%${searchTerm.trim()}%`);
   }
 
-  const { data, error } = await query;
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
   if (error) {
     console.error('Error searching coaches:', error);
     throw error;
   }
-  return data || [];
+  return { data: data || [], total: count || 0 };
 }
 
 // Coach data-type helpers (facts come from coach_fact)
@@ -6282,15 +7133,17 @@ export async function transferCoach(
 }
 
 // Search customers from view vw_customer_school_sport (id, school, sport)
-export async function searchCustomers(searchTerm: string, limit: number = 25, sportName?: string): Promise<any[]> {
+export async function searchCustomers(searchTerm: string, limit: number = 25, sportName?: string, page: number = 1): Promise<{ data: any[]; total: number }> {
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
   let query = supabase
     .from('vw_customer_school_sport')
     .select(`
       id,
       school,
       sport
-    `)
-    .limit(limit);
+    `, { count: 'exact' });
 
   // Filter by sport name if provided
   if (sportName && sportName.trim()) {
@@ -6305,21 +7158,26 @@ export async function searchCustomers(searchTerm: string, limit: number = 25, sp
     query = query.ilike('school', `%${term}%`);
   }
 
-  const { data, error } = await query;
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
   
   if (error) {
     console.error('Error searching customers:', error);
     throw error;
   }
   
-  return data || [];
+  return { data: data || [], total: count || 0 };
 }
 // Search athletes with complex search logic - supports multiple table types
 export async function searchAthletes(
   searchTerm: string, 
   limit: number = 25, 
-  tableType: 'college' | 'hs' | 'juco' = 'college'
-): Promise<any[]> {
+  tableType: 'college' | 'hs' | 'juco' = 'college',
+  page: number = 1,
+  sportId?: number
+): Promise<{ data: any[]; total: number }> {
   // Map table type to actual table name
   const tableMap = {
     'college': 'vw_admin_college_athlete',
@@ -6332,6 +7190,9 @@ export async function searchAthletes(
     throw new Error(`Invalid table type: ${tableType}`);
   }
 
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
   let query = supabase
     .from(tableName)
     .select(`
@@ -6340,16 +7201,31 @@ export async function searchAthletes(
       athlete_last_name,
       sport_id,
       school_name
-    `)
-    .limit(limit);
+    `, { count: 'exact' });
+
+  // Filter by sport if provided
+  if (sportId !== undefined && sportId !== null) {
+    query = query.eq('sport_id', sportId);
+  }
 
   if (searchTerm.trim()) {
-    const searchTerms = searchTerm.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
+    const rawSearchTerm = searchTerm.trim();
+    const searchTerms = rawSearchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+    
+    // Check if the search term looks like a complete UUID (36 characters with hyphens)
+    const isCompleteUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawSearchTerm);
     
     if (searchTerms.length > 0) {
       if (searchTerms.length === 1) {
         const term = searchTerms[0];
-        query = query.or(`athlete_first_name.ilike.%${term}%,athlete_last_name.ilike.%${term}%,school_name.ilike.%${term}%`);
+        
+        // If it's a complete UUID, use exact match only on athlete_id
+        if (isCompleteUUID) {
+          query = query.eq('athlete_id', rawSearchTerm);
+        } else {
+          // Regular text search
+          query = query.or(`athlete_first_name.ilike.%${term}%,athlete_last_name.ilike.%${term}%,school_name.ilike.%${term}%`);
+        }
       } else if (searchTerms.length === 2) {
         const [firstTerm, secondTerm] = searchTerms;
         
@@ -6386,23 +7262,176 @@ export async function searchAthletes(
     }
   }
 
-  const { data, error } = await query;
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
   
   if (error) {
     console.error(`Error searching ${tableType} athletes:`, error);
     throw error;
   }
   
-  return data || [];
+  return { data: data || [], total: count || 0 };
 }
 
 // Legacy functions for backward compatibility
-export async function searchHsAthletes(searchTerm: string, limit: number = 25): Promise<any[]> {
-  return searchAthletes(searchTerm, limit, 'hs');
+export async function searchHsAthletes(searchTerm: string, limit: number = 25, page: number = 1, sportId?: number): Promise<{ data: any[]; total: number }> {
+  return searchAthletes(searchTerm, limit, 'hs', page, sportId);
 }
 
-export async function searchJucoAthletes(searchTerm: string, limit: number = 25): Promise<any[]> {
-  return searchAthletes(searchTerm, limit, 'juco');
+export async function searchJucoAthletes(searchTerm: string, limit: number = 25, page: number = 1, sportId?: number): Promise<{ data: any[]; total: number }> {
+  return searchAthletes(searchTerm, limit, 'juco', page, sportId);
+}
+
+// Fetch all HS athlete data from vw_admin_hs_athlete for data-ops page
+export async function fetchDataOpsHsAthletes(options?: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortField?: string | null;
+  sortOrder?: 'ascend' | 'descend' | null;
+}): Promise<{ data: any[]; totalCount?: number }> {
+  const { page = 1, limit = 25, search = '', sortField = null, sortOrder = null } = options || {};
+  const offset = (page - 1) * limit;
+
+  try {
+    const selectColumns = [
+      'athlete_id',
+      'athlete_first_name',
+      'athlete_last_name',
+      'athlete_email',
+      'athlete_cell',
+      'instagram',
+      'bio',
+      'award',
+      'birthday',
+      'athlete_address_zip',
+      'athlete_address_city',
+      'athlete_address_street',
+      'transcript_link',
+      'mile_split_link',
+      'all_position',
+      '_247_link',
+      'on3_link',
+      'zillow_address',
+      'parent_name',
+      'parent_email',
+      'parent_phone',
+      'captain',
+      'hs_coach_remove_reason',
+      'transcript_checked',
+      'athlete_original_source',
+      'hide_athlete',
+      'hs_coach_rating',
+      'grad_year',
+      'school_name',
+      'school_id',
+      'hs_highlight',
+      'added_date',
+      'athletic_projection',
+      'gpa',
+      'height_feet',
+      'height_inch',
+      'last_major_change',
+      'weight',
+      'act',
+      'address_state',
+      'hs_coach_hide',
+      'major',
+      'previous_schools',
+      'sat',
+      'twitter'
+    ];
+
+    let query = supabase
+      .from('vw_admin_hs_athlete')
+      .select(selectColumns.join(','), { count: 'exact' });
+
+    // Add search filter if provided
+    if (search && search.trim().length >= 2) {
+      const searchTerm = search.trim();
+      const searchTerms = searchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
+      
+      // Check if the search term looks like a complete UUID (36 characters with hyphens)
+      const isCompleteUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(searchTerm);
+      
+      if (isCompleteUUID) {
+        // For complete UUID, use exact match on athlete_id
+        query = query.eq('athlete_id', searchTerm);
+      } else if (searchTerms.length === 1) {
+        // Single word: search in all fields
+        const term = searchTerms[0];
+        query = query.or(`athlete_first_name.ilike.%${term}%,athlete_last_name.ilike.%${term}%,athlete_email.ilike.%${term}%,school_name.ilike.%${term}%`);
+      } else if (searchTerms.length === 2) {
+        // Two words: most likely first name and last name
+        const [firstTerm, secondTerm] = searchTerms;
+        
+        const conditions = [
+          // Exact order: first term in first name AND second term in last name
+          `and(athlete_first_name.ilike.%${firstTerm}%,athlete_last_name.ilike.%${secondTerm}%)`,
+          // Reverse order: second term in first name AND first term in last name
+          `and(athlete_first_name.ilike.%${secondTerm}%,athlete_last_name.ilike.%${firstTerm}%)`,
+          // Full search term in first name only
+          `athlete_first_name.ilike.%${firstTerm} ${secondTerm}%`,
+          // Full search term in last name only
+          `athlete_last_name.ilike.%${firstTerm} ${secondTerm}%`,
+          // Full search term in email
+          `athlete_email.ilike.%${firstTerm} ${secondTerm}%`,
+          // Full search term in school name
+          `school_name.ilike.%${firstTerm} ${secondTerm}%`
+        ];
+        
+        query = query.or(conditions.join(','));
+      } else {
+        // More than 2 words: try different combinations
+        const fullSearchTerm = searchTerms.join(' ');
+        const firstTerm = searchTerms[0];
+        const lastTerm = searchTerms[searchTerms.length - 1];
+        
+        const conditions = [
+          // First word in first name, rest in last name
+          `and(athlete_first_name.ilike.%${firstTerm}%,athlete_last_name.ilike.%${searchTerms.slice(1).join(' ')}%)`,
+          // All but last word in first name, last word in last name
+          `and(athlete_first_name.ilike.%${searchTerms.slice(0, -1).join(' ')}%,athlete_last_name.ilike.%${lastTerm}%)`,
+          // Full term in first name
+          `athlete_first_name.ilike.%${fullSearchTerm}%`,
+          // Full term in last name
+          `athlete_last_name.ilike.%${fullSearchTerm}%`,
+          // Full term in email
+          `athlete_email.ilike.%${fullSearchTerm}%`,
+          // Full term in school name
+          `school_name.ilike.%${fullSearchTerm}%`
+        ];
+        
+        query = query.or(conditions.join(','));
+      }
+    }
+
+    // Apply sorting
+    if (sortField && sortOrder) {
+      const order = sortOrder === 'ascend' ? 'asc' : 'desc';
+      query = query.order(sortField, { ascending: order === 'asc' });
+    } else {
+      // Default sorting by athlete_last_name ascending
+      query = query.order('athlete_last_name', { ascending: true });
+    }
+
+    // Apply pagination
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching data-ops HS athletes:', error);
+      throw error;
+    }
+
+    return { data: data || [], totalCount: count || 0 };
+  } catch (error) {
+    console.error('Error in fetchDataOpsHsAthletes:', error);
+    throw error;
+  }
 }
 
 // Check if user has athlete access
@@ -6688,13 +7717,14 @@ export async function updateUserAccess(userId: string, customerId: string, acces
 }
 
 // Update user details
-export async function updateUserDetails(userId: string, details: { name_first?: string; name_last?: string; phone?: string }): Promise<void> {
+export async function updateUserDetails(userId: string, details: { name_first?: string; name_last?: string; phone?: string; main_contact?: boolean }): Promise<void> {
   const { error } = await supabase
     .from('user_detail')
     .update({
       name_first: details.name_first || null,
       name_last: details.name_last || null,
       phone: details.phone || null,
+      main_contact: details.main_contact !== undefined ? details.main_contact : null,
     })
     .eq('id', userId);
 
@@ -6734,6 +7764,73 @@ export async function endAlerts(alertIds: string[]): Promise<void> {
 
   if (error) {
     console.error('Error ending alerts:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// OFFER ALERT FUNCTIONS
+// ============================================================================
+
+// Fetch offer alerts for customers
+export async function fetchOfferAlertsForCustomers(customerIds: string[]): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('offer_alert')
+    .select(`
+      id,
+      created_at,
+      customer_id,
+      user_id,
+      recipient,
+      rule,
+      filter,
+      alert_frequency,
+      weekly_day,
+      ended_at
+    `)
+    .in('customer_id', customerIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching offer alerts:', error);
+    throw error;
+  }
+  
+  return data || [];
+}
+
+// Create new offer alert
+export async function createOfferAlert(alertData: {
+  customer_id: string;
+  user_id: string;
+  recipient: string;
+  rule: string;
+  filter: string;
+  alert_frequency: string;
+  weekly_day?: string;
+}): Promise<void> {
+  const { error } = await supabase
+    .from('offer_alert')
+    .insert(alertData);
+
+  if (error) {
+    console.error('Error creating offer alert:', error);
+    throw error;
+  }
+}
+
+// End offer alerts
+export async function endOfferAlerts(alertIds: string[]): Promise<void> {
+  const now = new Date().toISOString();
+  
+  const { error } = await supabase
+    .from('offer_alert')
+    .update({ ended_at: now })
+    .in('id', alertIds)
+    .is('ended_at', null);
+
+  if (error) {
+    console.error('Error ending offer alerts:', error);
     throw error;
   }
 }
@@ -6887,6 +7984,10 @@ export async function loadSportUsersWithData(packageIds: number[], getUserDetail
           if (existingUser.access_end && !mapping.access_end) {
             existingUser.access_end = mapping.access_end;
           }
+          // Ensure main_contact is set from user data
+          if (user.main_contact !== undefined) {
+            existingUser.main_contact = user.main_contact;
+          }
         } else {
           // New user entry
           userMap.set(userKey, {
@@ -6900,7 +8001,8 @@ export async function loadSportUsersWithData(packageIds: number[], getUserDetail
             access_date: mapping.created_at || '',
             access_end: mapping.access_end,
             customer_id: mapping.customer_id,
-            last_sign_in_at: user.last_sign_in_at || null
+            last_sign_in_at: user.last_sign_in_at || null,
+            main_contact: user.main_contact || false
           });
         }
       });
@@ -7035,14 +8137,17 @@ export async function fetchAthleteSchoolHistory(athleteId: string): Promise<any[
 /**
  * Search schools by name
  */
-export async function searchSchools(query: string, limit: number = 50): Promise<any[]> {
+export async function searchSchools(query: string, limit: number = 50, page: number = 1): Promise<{ data: any[]; total: number }> {
   const { supabase } = await import('./supabaseClient');
   
-  const { data, error } = await supabase
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+  
+  const { data, error, count } = await supabase
     .from('school')
-    .select('id, name')
+    .select('id, name', { count: 'exact' })
     .ilike('name', `%${query}%`)
-    .limit(limit)
+    .range(from, to)
     .order('name');
 
   if (error) {
@@ -7050,7 +8155,7 @@ export async function searchSchools(query: string, limit: number = 50): Promise<
     throw new Error(`Failed to search schools: ${error.message}`);
   }
 
-  return data || [];
+  return { data: data || [], total: count || 0 };
 }
 
 /**
@@ -7325,13 +8430,312 @@ export async function updateCoachFact(coachId: string, dataTypeId: number, value
       .select();
 
     if (insertError) {
-      console.log(`[updateCoachFact] Error inserting new fact:`, insertError);
-      throw insertError;
+    console.log(`[updateCoachFact] Error inserting new fact:`, insertError);
+    throw insertError;
     }
     console.log(`[updateCoachFact] Insert result:`, insertResult);
     console.log(`[updateCoachFact] Successfully inserted new fact`);
   } catch (error) {
     console.error('Error in updateCoachFact:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// SAVED FILTERS FUNCTIONS
+// ============================================================================
+
+export interface SavedFilterDB {
+  id: number;
+  customer_id: string;
+  user_id: string;
+  search_page: string;
+  name: string;
+  is_favorited: boolean;
+  rank_order: number;
+  settings: Record<string, any>;
+  created_at: string;
+  ended_at: string | null;
+}
+
+/**
+ * Fetch saved filters for a customer and search page
+ */
+export async function fetchSavedFilters(
+  customerId: string,
+  searchPage: string
+): Promise<SavedFilterDB[]> {
+  try {
+    const { data, error } = await supabase
+      .from('saved_filter')
+      .select('*')
+      .eq('customer_id', customerId)
+      .eq('search_page', searchPage)
+      .is('ended_at', null)
+      .order('rank_order', { ascending: true })
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching saved filters:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in fetchSavedFilters:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save a new filter
+ */
+export async function saveFilter(
+  customerId: string,
+  userId: string,
+  searchPage: string,
+  name: string,
+  settings: Record<string, any>,
+  isFavorited: boolean = false,
+  rankOrder?: number
+): Promise<SavedFilterDB> {
+  try {
+    // If rankOrder is not provided, get the next rank_order for this customer and search_page
+    let nextRankOrder = rankOrder;
+    if (nextRankOrder === undefined) {
+      const { data: existingFilters } = await supabase
+        .from('saved_filter')
+        .select('rank_order')
+        .eq('customer_id', customerId)
+        .eq('search_page', searchPage)
+        .is('ended_at', null)
+        .order('rank_order', { ascending: false })
+        .limit(1);
+
+      nextRankOrder = existingFilters && existingFilters.length > 0
+        ? (existingFilters[0].rank_order || 0) + 1
+        : 0;
+    }
+
+    const { data, error } = await supabase
+      .from('saved_filter')
+      .insert({
+        customer_id: customerId,
+        user_id: userId,
+        search_page: searchPage,
+        name: name.trim(),
+        settings: settings,
+        is_favorited: isFavorited,
+        rank_order: nextRankOrder
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error saving filter:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in saveFilter:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update a saved filter
+ */
+export async function updateSavedFilter(
+  filterId: number,
+  updates: {
+    name?: string;
+    settings?: Record<string, any>;
+    is_favorited?: boolean;
+    rank_order?: number;
+  }
+): Promise<SavedFilterDB> {
+  try {
+    const { data, error } = await supabase
+      .from('saved_filter')
+      .update(updates)
+      .eq('id', filterId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating saved filter:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in updateSavedFilter:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a saved filter (soft delete by setting ended_at)
+ */
+export async function deleteSavedFilter(filterId: number): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('saved_filter')
+      .update({ ended_at: new Date().toISOString() })
+      .eq('id', filterId);
+
+    if (error) {
+      console.error('Error deleting saved filter:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in deleteSavedFilter:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// JOURNEY QUERIES
+// ============================================================================
+
+export interface JourneyDB {
+  id: number;
+  customer_id: string;
+  user_id: string;
+  name: string;
+  journey_details: Record<string, any>;
+  created_at: string;
+  ended_at: string | null;
+}
+
+/**
+ * Fetch saved journeys for a customer
+ */
+export async function fetchJourneys(
+  customerId: string
+): Promise<JourneyDB[]> {
+  try {
+    const { data, error } = await supabase
+      .from('journey')
+      .select('*')
+      .eq('customer_id', customerId)
+      .is('ended_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching journeys:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in fetchJourneys:', error);
+    throw error;
+  }
+}
+
+/**
+ * Save a new journey
+ */
+export async function saveJourney(
+  customerId: string,
+  userId: string,
+  name: string,
+  journeyDetails: Record<string, any>
+): Promise<JourneyDB> {
+  try {
+    const { data, error } = await supabase
+      .from('journey')
+      .insert({
+        customer_id: customerId,
+        user_id: userId,
+        name: name.trim(),
+        journey_details: journeyDetails
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error saving journey:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in saveJourney:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update a saved journey
+ */
+export async function updateJourney(
+  journeyId: number,
+  updates: {
+    name?: string;
+    journey_details?: Record<string, any>;
+  }
+): Promise<JourneyDB> {
+  try {
+    const { data, error } = await supabase
+      .from('journey')
+      .update(updates)
+      .eq('id', journeyId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating journey:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in updateJourney:', error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a saved journey (soft delete by setting ended_at)
+ */
+export async function deleteJourney(journeyId: number): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('journey')
+      .update({ ended_at: new Date().toISOString() })
+      .eq('id', journeyId);
+
+    if (error) {
+      console.error('Error deleting journey:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in deleteJourney:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update rank order for multiple filters
+ */
+export async function updateFilterRankOrders(
+  updates: Array<{ id: number; rank_order: number }>
+): Promise<void> {
+  try {
+    // Update each filter's rank_order
+    const updatePromises = updates.map(({ id, rank_order }) =>
+      supabase
+        .from('saved_filter')
+        .update({ rank_order })
+        .eq('id', id)
+    );
+
+    await Promise.all(updatePromises);
+  } catch (error) {
+    console.error('Error in updateFilterRankOrders:', error);
     throw error;
   }
 }

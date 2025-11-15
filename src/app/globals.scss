@@ -202,10 +202,10 @@ body,
       overflow: auto;
 
       .card {
-        background: var(--bg-white);
-        padding: 7px;
+        background: var(--bg-white) !important;
+        padding: 7px !important;
         text-align: left;
-        border: 1px solid rgba(28, 29, 77, 0.1);
+        border: 1px solid rgba(28, 29, 77, 0.1) !important;
         overflow: hidden;
         h2 {
           font-size: 28px;
@@ -492,127 +492,162 @@ body,
         }
       }
 
-      .error {
-        padding: 13px;
-        width: 100%;
-        display: block;
-        margin-bottom: 5px;
-        background: linear-gradient(
-          0deg,
-          rgb(255 151 130 / 25%) 0%,
-          rgb(255 151 130 / 25%) 100%
-        );
-        color: #1c1d4d;
-        font-size: 22px;
-        font-style: italic;
-        font-weight: 500;
-        line-height: normal;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        i {
-          width: 20px !important;
-          height: 20px !important;
-          margin-right: 0 !important;
-        }
-        .check {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #fff;
-          border: 1px solid rgba(28, 29, 77, 0.2);
-          font-size: 16px;
-          font-style: italic;
-          font-weight: 500;
-          line-height: normal;
-          letter-spacing: 0.16px;
-          padding: 5px;
-          margin-left: 10px;
-        }
-      }
-      .info {
-        padding: 10px;
-        width: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        background: linear-gradient(
-          270deg,
-          rgba(212, 249, 255, 0.5) 0%,
-          rgba(238, 224, 255, 0.5) 100%
-        );
-        span {
-          font-size: 16px;
-          font-style: normal;
-          font-weight: 400;
-          color: var(--primary);
-          letter-spacing: 0.16px;
-        }
-        h4 {
-          font-size: 22px;
-          font-style: normal;
-          font-weight: 500;
-          color: var(--primary);
-          margin-bottom: 0;
-        }
-        h6 {
-          font-size: 16px;
-          font-style: normal;
-          font-weight: 400 !important;
-          color: var(--primary);
-          margin-bottom: 0;
-        }
-      }
-
-      .progress {
-        h5 {
-          font-size: 22px;
-          font-style: italic;
-          font-weight: 600;
-          line-height: normal;
-          letter-spacing: -0.44px;
-          color: var(--primary);
-          margin-bottom: 15px;
-        }
-        span {
-          font-size: 18;
-          font-style: normal;
-          font-weight: 500;
-          color: var(--primary);
-          small {
-            font-size: 18;
-            font-style: normal;
-            font-weight: 500;
-            color: var(--primary);
-            opacity: 0.5;
-          }
-        }
-      }
-      .pages-link {
-        div {
-          display: flex;
-          align-items: center;
-          font-size: 14px;
-          font-style: normal;
-          //font-weight: 500;
-          color: #126db8;
-          i {
-            color: var(--primary);
-            opacity: 0.5;
-            font-size: 16px;
-            display: flex;
-          }
-        }
-      }
-
-      .xfeed {
-        font-size: 14px;
-        font-style: italic;
-        font-weight: 700;
-        color: var(--primary);
+      .card-withou-pading {
+        background: var(--bg-white) !important;
+        padding: 0;
+        text-align: left;
+        border: 1px solid rgba(28, 29, 77, 0.1) !important;
+        overflow: hidden;
       }
     }
+  }
+}
+
+// Also apply card styles when not inside .new-modal-ui (for isInModal case)
+.main-container-ui {
+  .card {
+    background: var(--bg-white) !important;
+    padding: 7px !important;
+    text-align: left;
+    border: 1px solid rgba(28, 29, 77, 0.1) !important;
+    overflow: hidden;
+  }
+  
+  .card-withou-pading {
+    background: var(--bg-white) !important;
+    padding: 0;
+    text-align: left;
+    border: 1px solid rgba(28, 29, 77, 0.1) !important;
+    overflow: hidden;
+  }
+  
+  // Remove overflow when inside modal (parent handles scrolling)
+  &.no-scroll {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  
+  .error {
+    padding: 13px;
+    width: 100%;
+    display: block;
+    margin-bottom: 5px;
+    background: linear-gradient(
+      0deg,
+      rgb(255 151 130 / 25%) 0%,
+      rgb(255 151 130 / 25%) 100%
+    );
+    color: #1c1d4d;
+    font-size: 22px;
+    font-style: italic;
+    font-weight: 500;
+    line-height: normal;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    i {
+      width: 20px !important;
+      height: 20px !important;
+      margin-right: 0 !important;
+    }
+    .check {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      border: 1px solid rgba(28, 29, 77, 0.2);
+      font-size: 16px;
+      font-style: italic;
+      font-weight: 500;
+      line-height: normal;
+      letter-spacing: 0.16px;
+      padding: 5px;
+      margin-left: 10px;
+    }
+  }
+  
+  .info {
+    padding: 10px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    background: linear-gradient(
+      270deg,
+      rgba(212, 249, 255, 0.5) 0%,
+      rgba(238, 224, 255, 0.5) 100%
+    );
+    span {
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 400;
+      color: var(--primary);
+      letter-spacing: 0.16px;
+    }
+    h4 {
+      font-size: 22px;
+      font-style: normal;
+      font-weight: 500;
+      color: var(--primary);
+      margin-bottom: 0;
+    }
+    h6 {
+      font-size: 16px;
+      font-style: normal;
+      font-weight: 400 !important;
+      color: var(--primary);
+      margin-bottom: 0;
+    }
+  }
+
+  .progress {
+    h5 {
+      font-size: 22px;
+      font-style: italic;
+      font-weight: 600;
+      line-height: normal;
+      letter-spacing: -0.44px;
+      color: var(--primary);
+      margin-bottom: 15px;
+    }
+    span {
+      font-size: 18;
+      font-style: normal;
+      font-weight: 500;
+      color: var(--primary);
+      small {
+        font-size: 18;
+        font-style: normal;
+        font-weight: 500;
+        color: var(--primary);
+        opacity: 0.5;
+      }
+    }
+  }
+  
+  .pages-link {
+    div {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      font-style: normal;
+      //font-weight: 500;
+      color: #126db8;
+      i {
+        color: var(--primary);
+        opacity: 0.5;
+        font-size: 16px;
+        display: flex;
+      }
+    }
+  }
+
+  .xfeed {
+    font-size: 14px;
+    font-style: italic;
+    font-weight: 700;
+    color: var(--primary);
   }
 }
 [class^="icon-svg"] {

@@ -51,6 +51,13 @@ export function FilterBadges({
     // Handle different value types
     if (Array.isArray(value)) {
       if (value.length === 0) return field.label;
+      
+      // Special handling for camp filter - count events
+      if (key === 'camp') {
+        const eventCount = value.length;
+        return `${field.label}: ${eventCount} ${eventCount === 1 ? 'event' : 'events'}`;
+      }
+      
       if (value.length === 1) {
         const option = field.options?.find(opt => opt.value === value[0]);
         return `${field.label}: ${option?.label || value[0]}`;

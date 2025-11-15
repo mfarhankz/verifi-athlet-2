@@ -1,0 +1,982 @@
+'use client';
+
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react';
+import { useRouter } from 'next/navigation';
+import { GoogleMap, useJsApiLoader, MarkerF, DirectionsRenderer, Libraries, InfoWindow, OverlayView, OverlayViewF } from '@react-google-maps/api';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { School } from '../types';
+import { supabase } from '@/lib/supabaseClient';
+import { useUser } from "@/contexts/CustomerContext";
+import { formatPhoneNumber } from "@/utils/utils";
+import { getPackageIdsBySport } from '@/lib/queries';
+import HighSchoolPrintComponent from '@/components/HighSchoolPrintComponent';
+
+// Helper function to determine score color
+function getScoreColor(score: number | undefined | null): string {
+  if (score === undefined || score === null) {return 'transparent'}
+  if (score >= 9) {return 'rgba(0, 255, 0, 0.5)'}
+  if (score >= 7) {
+    return 'rgba(173, 255, 47, 0.5)'; // Faded Yellow-Green
+  }
+  if (score >= 5) {
+    return 'rgba(255, 255, 0, 0.5)'; // Faded Yellow
+  }
+  if (score >= 3) {
+    return 'rgba(255, 140, 0, 0.5)'; // Faded Orange
+  }
+  return 'rgba(255, 0, 0, 0.5)'; // Faded Red
+}
+
+interface RouteInfo {
+  totalDistance: string;
+  totalTime: string;
+  legs: {
+    duration: string;
+    distance: string;
+  }[];
+}
+
+function SortableItem({ location, index, routeInfo, totalLocations, onRemove, userDetails, hasFootballPackage }: { 
+  location: School; 
+  index: number;
+  routeInfo?: RouteInfo;
+  totalLocations: number;
+  onRemove: (index: number) => void;
+  userDetails?: any;
+  hasFootballPackage?: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({ id: index });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      style={style}
+      className="p-3 border rounded-lg bg-white hover:bg-gray-50 relative group"
+    >
+      <div className="flex items-start">
+        <div
+          ref={setNodeRef}
+          className="flex-grow flex items-start cursor-move"
+          {...attributes}
+          {...listeners}
+        >
+          <span className="mr-3 font-semibold text-lg mt-1">{index + 1}.</span>
+          <div className="flex-grow">
+            {/* Top row - school, badges, and contact info in a 3-column layout */}
+            <div className="grid grid-cols-3 gap-4 mb-2">
+              {/* First column - School info */}
+              <div>
+                <div className="flex items-center flex-wrap mb-1">
+                  <div className="font-semibold text-lg mr-2">{location.school}</div>
+                  {location.record_2024 && hasFootballPackage && (
+                    <div className="text-gray-700 bg-blue-100 px-2 py-0.5 rounded text-xs mr-1">
+                      {location.record_2024}
+                    </div>
+                  )}
+                  {location.private_public && (
+                    <div className="text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-xs mr-1">
+                      {location.private_public}
+                    </div>
+                  )}
+                  {location.league_classification && (
+                    <div className="text-gray-700 bg-gray-100 px-2 py-0.5 rounded text-xs">
+                      {location.league_classification}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Address */}
+                <div className="text-gray-600 text-sm mb-1">{location.address}</div>
+                
+                {/* County and state with pipe separator */}
+                {(location.county || location.state) && (
+                  <div className="text-sm font-semibold">
+                    {location.county && <span>{location.county}</span>}
+                    {location.county && location.state && <span> | </span>}
+                    {location.state && <span>{location.state}</span>}
+                  </div>
+                )}
+              </div>
+              
+              {/* Second column - Coach information */}
+              <div className="text-sm">
+                {(location.head_coach_first || location.head_coach_last) && hasFootballPackage && (
+                  <div className="font-medium text-gray-800 mb-1">
+                    Coach: {location.head_coach_first} {location.head_coach_last}
+                  </div>
+                )}
+                {location.head_coach_email && hasFootballPackage && (
+                  <div className="text-gray-600">
+                    Email: {location.head_coach_email}
+                  </div>
+                )}
+                {location.head_coach_cell && hasFootballPackage && (
+                  <div className="text-gray-600">
+                    Cell: {formatPhoneNumber(location.head_coach_cell)} {(location.coach_best_contact === 'cell' || location.best_phone === 'Cell') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
+                  </div>
+                )}
+                {location.head_coach_work_phone && hasFootballPackage && (
+                  <div className="text-gray-600">
+                    Work: {formatPhoneNumber(location.head_coach_work_phone)} {(location.coach_best_contact === 'work' || location.best_phone === 'Office') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
+                  </div>
+                )}
+                {location.head_coach_home_phone && hasFootballPackage && (
+                  <div className="text-gray-600">
+                    Home: {formatPhoneNumber(location.head_coach_home_phone)} {(location.coach_best_contact === 'home' || location.best_phone === 'Home') && hasFootballPackage && <span className="text-blue-600 font-medium">(best)</span>}
+                  </div>
+                )}
+                {location.coach_twitter_handle && hasFootballPackage && (
+                  <div className="text-gray-600">
+                    Twitter: {location.coach_twitter_handle}
+                  </div>
+                )}
+                {location.coach_best_contact && location.coach_best_contact !== 'cell' && 
+                 location.coach_best_contact !== 'work' && location.coach_best_contact !== 'home' && 
+                 hasFootballPackage && (
+                  <div className="text-gray-600">
+                    Best Contact: {location.coach_best_contact}
+                  </div>
+                )}
+              </div>
+              
+              {/* Third column - AD and school information */}
+              <div className="text-sm">
+                {(location.ad_name_first || location.ad_name_last) && (
+                  <div className="font-medium text-gray-800 mb-1">
+                    AD: {location.ad_name_first} {location.ad_name_last}
+                  </div>
+                )}
+                {location.ad_email && (
+                  <div className="text-gray-600">
+                    Email: {location.ad_email}
+                  </div>
+                )}
+                {location.school_phone && (
+                  <div className="text-gray-600">
+                    School: {location.school_phone}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Visit info row that spans all columns */}
+            {location.visit_info && (
+              <div className="text-sm text-gray-700 border-t border-b py-1 mb-2">
+                <span className="font-medium">Visit Info:</span> {location.visit_info}
+              </div>
+            )}
+            
+            {/* Score display with same styling as page.tsx */}
+            {(location.score_college_player !== undefined || 
+              location.score_d1_producing !== undefined || 
+              location.score_team_quality !== undefined || 
+              location.score_income !== undefined ||
+              location.score_academics !== undefined) && (
+              <div className="mt-2 grid grid-cols-5 gap-1">
+                {location.score_college_player !== undefined && (
+                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_college_player) }}>
+                    <div className="text-xs text-gray-700 font-medium">College</div>
+                    <div className="font-bold text-black">{location.score_college_player}</div>
+                  </div>
+                )}
+                
+                {location.score_d1_producing !== undefined && (
+                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_d1_producing) }}>
+                    <div className="text-xs text-gray-700 font-medium">D1</div>
+                    <div className="font-bold text-black">{location.score_d1_producing}</div>
+                  </div>
+                )}
+                
+                {location.score_team_quality !== undefined && (
+                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_team_quality) }}>
+                    <div className="text-xs text-gray-700 font-medium">Team</div>
+                    <div className="font-bold text-black">{location.score_team_quality}</div>
+                  </div>
+                )}
+                
+                {location.score_income !== undefined && (
+                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_income) }}>
+                    <div className="text-xs text-gray-700 font-medium">Income</div>
+                    <div className="font-bold text-black">{location.score_income}</div>
+                  </div>
+                )}
+                
+                {location.score_academics !== undefined && (
+                  <div className="text-center" style={{ backgroundColor: getScoreColor(location.score_academics) }}>
+                    <div className="text-xs text-gray-700 font-medium">Acad</div>
+                    <div className="font-bold text-black">{location.score_academics}</div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove(index);
+          }}
+          type="button"
+          className="ml-2 p-2 rounded-lg transition-colors duration-200 flex items-center justify-center"
+          title="Remove stop"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
+      {routeInfo && index < routeInfo.legs.length && (
+        <div className="mt-2 text-sm text-gray-500 border-t pt-2">
+          {index < totalLocations - 1 && (
+            <div>Next stop: {routeInfo.legs[index].duration} ({routeInfo.legs[index].distance})</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function MapPage() {
+  const [selectedAddresses, setSelectedAddresses] = useState<string[]>([]);
+  const [storedSchoolData, setStoredSchoolData] = useState<School[]>([]);
+  const [locations, setLocations] = useState<School[]>([]);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const mapContentRef = useRef<HTMLDivElement>(null);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const userDetails = useUser();
+  
+  // Check if user has any football package to determine if coach info should be shown
+  const footballPackageIds = getPackageIdsBySport('fb');
+  const userPackageNumbers = (userDetails?.packages || []).map((pkg: any) => Number(pkg));
+  const hasFootballPackage = footballPackageIds.some(id => userPackageNumbers.includes(id));
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries,
+  });
+
+  // Add this useEffect to track when the map is fully loaded
+  useEffect(() => {
+    if (isLoaded && !loadError) {
+      setIsMapLoaded(true);
+    }
+  }, [isLoaded, loadError]);
+
+  const geocodeAddress = async (address: string, schoolName: string = ''): Promise<School | null> => {
+    if (!isLoaded) return null;
+    
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+          address
+        )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+      );
+      const data = await response.json();
+      
+      if (data.results && data.results[0]) {
+        // If schoolName is provided via parameter, use it directly
+        // otherwise try to find from storedSchoolData state
+        let school = schoolName;
+        if (!school) {
+          const schoolInfo = storedSchoolData.find(item => item.address === address);
+          school = schoolInfo?.school || 'Unknown School';
+        }
+        
+        // Debug log removed(`Geocoding ${address}, school: ${school}`);
+        
+        // Find the corresponding school info for all additional data
+        const schoolInfo = storedSchoolData.find(item => item.address === address);
+        
+        return {
+          address,
+          school,
+          position: data.results[0].geometry.location,
+          // Include additional fields from the school info
+          county: schoolInfo?.county,
+          state: schoolInfo?.state,
+          head_coach_first: schoolInfo?.head_coach_first,
+          head_coach_last: schoolInfo?.head_coach_last,
+          private_public: schoolInfo?.private_public,
+          league_classification: schoolInfo?.league_classification,
+          score_college_player: schoolInfo?.score_college_player,
+          score_d1_producing: schoolInfo?.score_d1_producing,
+          score_team_quality: schoolInfo?.score_team_quality,
+          score_income: schoolInfo?.score_income,
+          score_academics: schoolInfo?.score_academics,
+          head_coach_email: schoolInfo?.head_coach_email,
+          head_coach_cell: schoolInfo?.head_coach_cell,
+          head_coach_work_phone: schoolInfo?.head_coach_work_phone,
+          head_coach_home_phone: schoolInfo?.head_coach_home_phone,
+          coach_twitter_handle: schoolInfo?.coach_twitter_handle,
+          visit_info: schoolInfo?.visit_info,
+          best_phone: schoolInfo?.best_phone,
+          coach_best_contact: schoolInfo?.coach_best_contact,
+          school_phone: schoolInfo?.school_phone,
+          ad_name_first: schoolInfo?.ad_name_first,
+          ad_name_last: schoolInfo?.ad_name_last,
+          ad_email: schoolInfo?.ad_email,
+          record_2024: schoolInfo?.record_2024,
+          raw_data: schoolInfo?.raw_data
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return null;
+    }
+  };
+
+  const updateRouteInfo = (result: google.maps.DirectionsResult) => {
+    const legs = result.routes[0].legs;
+    const totalTimeSeconds = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
+    const totalDistanceMeters = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+
+    setRouteInfo({
+      totalTime: formatDuration(totalTimeSeconds),
+      totalDistance: formatDistance(totalDistanceMeters),
+      legs: legs.map(leg => ({
+        duration: leg.duration?.text || '',
+        distance: leg.distance?.text || ''
+      }))
+    });
+  };
+
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  const formatDistance = (meters: number): string => {
+    const miles = meters / 1609.34;
+    return `${Math.round(miles)} mi`;
+  };
+
+  const calculateRoute = useCallback(async (locs: School[]) => {
+    if (!locs.length || !isLoaded || !isMapLoaded || !window.google || !window.google.maps) return;
+
+    try {
+      const directionsService = new window.google.maps.DirectionsService();
+
+      if (locs.length >= 2) {
+        const origin = locs[0].position || { lat: 0, lng: 0 };
+        const destination = locs[locs.length - 1].position || { lat: 0, lng: 0 };
+        const waypoints = locs.slice(1, -1).map(loc => ({
+          location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
+          stopover: true
+        }));
+
+        const result = await directionsService.route({
+          origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+          destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+          waypoints: waypoints,
+          optimizeWaypoints: false,
+          travelMode: window.google.maps.TravelMode.DRIVING
+        });
+
+        setDirections(result);
+        updateRouteInfo(result);
+      }
+    } catch (error) {
+      console.error('Error calculating route:', error);
+    }
+  }, [isLoaded, isMapLoaded]);
+
+  const optimizeRoute = async () => {
+    if (locations.length < 2 || !isLoaded || !isMapLoaded || !window.google || !window.google.maps) return;
+    setIsOptimizing(true);
+
+    try {
+      const directionsService = new window.google.maps.DirectionsService();
+
+      const allWaypoints = locations.slice(1).map(loc => ({
+        location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
+        stopover: true
+      }));
+
+      const result = await directionsService.route({
+        origin: new window.google.maps.LatLng(locations[0].position?.lat || 0, locations[0].position?.lng || 0),
+        destination: new window.google.maps.LatLng(locations[0].position?.lat || 0, locations[0].position?.lng || 0),
+        waypoints: allWaypoints,
+        optimizeWaypoints: true,
+        travelMode: window.google.maps.TravelMode.DRIVING
+      });
+
+      if (result.routes[0].waypoint_order) {
+        const waypointOrder = result.routes[0].waypoint_order;
+        
+        const optimizedLocations = [
+          ...waypointOrder.map(index => locations[index + 1]),
+          locations[0]
+        ];
+
+        let shortestDistance = Number.MAX_VALUE;
+        let bestRotation = 0;
+        
+        for (let i = 0; i < optimizedLocations.length; i++) {
+          const rotated = [
+            ...optimizedLocations.slice(i),
+            ...optimizedLocations.slice(0, i)
+          ];
+
+          const routeResult = await directionsService.route({
+            origin: new window.google.maps.LatLng(rotated[0].position?.lat || 0, rotated[0].position?.lng || 0),
+            destination: new window.google.maps.LatLng(rotated[rotated.length - 1].position?.lat || 0, rotated[rotated.length - 1].position?.lng || 0),
+            waypoints: rotated.slice(1, -1).map(loc => ({
+              location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
+              stopover: true
+            })),
+            optimizeWaypoints: false,
+            travelMode: window.google.maps.TravelMode.DRIVING
+          });
+
+          const totalDistance = routeResult.routes[0].legs.reduce(
+            (sum, leg) => sum + (leg.distance?.value || 0),
+            0
+          );
+
+          if (totalDistance < shortestDistance) {
+            shortestDistance = totalDistance;
+            bestRotation = i;
+          }
+        }
+
+        const finalOrder = [
+          ...optimizedLocations.slice(bestRotation),
+          ...optimizedLocations.slice(0, bestRotation)
+        ];
+
+        setLocations(finalOrder);
+        setSelectedAddresses(finalOrder.map(loc => loc.address));
+
+        const finalRoute = await directionsService.route({
+          origin: new window.google.maps.LatLng(finalOrder[0].position?.lat || 0, finalOrder[0].position?.lng || 0),
+          destination: new window.google.maps.LatLng(finalOrder[finalOrder.length - 1].position?.lat || 0, finalOrder[finalOrder.length - 1].position?.lng || 0),
+          waypoints: finalOrder.slice(1, -1).map(loc => ({
+            location: new window.google.maps.LatLng(loc.position?.lat || 0, loc.position?.lng || 0),
+            stopover: true
+          })),
+          optimizeWaypoints: false,
+          travelMode: window.google.maps.TravelMode.DRIVING
+        });
+
+        setDirections(finalRoute);
+      }
+    } catch (error) {
+      console.error('Error optimizing route:', error);
+    }
+    setIsOptimizing(false);
+  };
+
+  const reverseOrder = () => {
+    const reversedLocations = [...locations].reverse();
+    setLocations(reversedLocations);
+    setSelectedAddresses(reversedLocations.map(loc => loc.address));
+    calculateRoute(reversedLocations);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = Number(active.id);
+      const newIndex = Number(over.id);
+
+      const newLocations = arrayMove(locations, oldIndex, newIndex);
+      setLocations(newLocations);
+      
+      // Update selected addresses but maintain the association with schools
+      const newAddresses = newLocations.map(loc => loc.address);
+      setSelectedAddresses(newAddresses);
+      
+      calculateRoute(newLocations);
+    }
+  };
+
+  const handleRemoveLocation = (index: number) => {
+    const newLocations = [...locations];
+    newLocations.splice(index, 1);
+    setLocations(newLocations);
+    
+    // Update selected addresses
+    const newAddresses = newLocations.map(loc => loc.address);
+    setSelectedAddresses(newAddresses);
+    
+    if (newLocations.length >= 2) {
+      calculateRoute(newLocations);
+    } else {
+      setDirections(null);
+      setRouteInfo(null);
+    }
+  };
+
+
+
+  useEffect(() => {
+    const loadAddresses = async () => {
+      try {
+        const addresses = localStorage.getItem('selectedAddresses');
+        const schoolDataStr = localStorage.getItem('schoolData');
+        
+        if (!addresses || !isLoaded || !window.google || !window.google.maps) {
+          setIsLoading(false);
+          return;
+        }
+        
+        const parsedAddresses = JSON.parse(addresses);
+        setSelectedAddresses(parsedAddresses);
+        
+        // Try to load school data from localStorage
+        let schoolData: School[] = [];
+        try {
+          if (schoolDataStr) {
+            schoolData = JSON.parse(schoolDataStr);
+          }
+        } catch (e) {
+          console.error('Error parsing school data:', e);
+        }
+        
+        setStoredSchoolData(schoolData);
+        
+        // Wait for state to update before proceeding
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const geocodedLocations = await Promise.all(
+          parsedAddresses.map(async (address: string) => {
+            // Find matching school info directly
+            const schoolInfo = schoolData.find(s => s.address === address);
+            
+            // Get geocoded location with position data
+            const geocodeResponse = await fetch(
+              `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+                address
+              )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+            );
+            const geocodeData = await geocodeResponse.json();
+            
+            if (!geocodeData.results || !geocodeData.results[0]) {
+              console.error('No geocode results for address:', address);
+              return null;
+            }
+            
+            // Combine the geocode position with all the school metadata
+            return {
+              address,
+              school: schoolInfo?.school || 'Unknown School',
+              position: geocodeData.results[0].geometry.location,
+              // Include additional fields from the school info
+              county: schoolInfo?.county,
+              state: schoolInfo?.state,
+              head_coach_first: schoolInfo?.head_coach_first,
+              head_coach_last: schoolInfo?.head_coach_last,
+              private_public: schoolInfo?.private_public,
+              league_classification: schoolInfo?.league_classification,
+              score_college_player: schoolInfo?.score_college_player,
+              score_d1_producing: schoolInfo?.score_d1_producing,
+              score_team_quality: schoolInfo?.score_team_quality,
+              score_income: schoolInfo?.score_income,
+              score_academics: schoolInfo?.score_academics,
+              head_coach_email: schoolInfo?.head_coach_email,
+              head_coach_cell: schoolInfo?.head_coach_cell,
+              head_coach_work_phone: schoolInfo?.head_coach_work_phone,
+              head_coach_home_phone: schoolInfo?.head_coach_home_phone,
+              coach_twitter_handle: schoolInfo?.coach_twitter_handle,
+              visit_info: schoolInfo?.visit_info,
+              best_phone: schoolInfo?.best_phone,
+              coach_best_contact: schoolInfo?.coach_best_contact,
+              school_phone: schoolInfo?.school_phone,
+              ad_name_first: schoolInfo?.ad_name_first,
+              ad_name_last: schoolInfo?.ad_name_last,
+              ad_email: schoolInfo?.ad_email,
+              record_2024: schoolInfo?.record_2024,
+              raw_data: schoolInfo?.raw_data
+            };
+          })
+        );
+
+        const validLocations = geocodedLocations.filter((loc): loc is School => loc !== null);
+        setLocations(validLocations);
+        calculateRoute(validLocations);
+      } catch (err) {
+        console.error('Error loading addresses:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isLoaded && isMapLoaded) {
+      loadAddresses();
+    }
+  }, [calculateRoute, isLoaded, isMapLoaded]);
+
+  // Update localStorage when locations change
+  useEffect(() => {
+    if (locations.length > 0) {
+      // Update the selected addresses in localStorage
+      const addresses = locations.map(loc => loc.address);
+      localStorage.setItem('selectedAddresses', JSON.stringify(addresses));
+      
+      // Also update the school data to match the current order
+      const schoolData = locations.map(loc => ({
+        school: loc.school,
+        address: loc.address,
+        county: loc.county,
+        state: loc.state,
+        head_coach_first: loc.head_coach_first,
+        head_coach_last: loc.head_coach_last,
+        private_public: loc.private_public,
+        league_classification: loc.league_classification,
+        score_college_player: loc.score_college_player,
+        score_d1_producing: loc.score_d1_producing,
+        score_team_quality: loc.score_team_quality,
+        score_income: loc.score_income,
+        score_academics: loc.score_academics,
+        head_coach_email: loc.head_coach_email,
+        head_coach_cell: loc.head_coach_cell,
+        head_coach_work_phone: loc.head_coach_work_phone,
+        head_coach_home_phone: loc.head_coach_home_phone,
+        coach_twitter_handle: loc.coach_twitter_handle,
+        visit_info: loc.visit_info,
+        best_phone: loc.best_phone,
+        coach_best_contact: loc.coach_best_contact,
+        school_phone: loc.school_phone,
+        ad_name_first: loc.ad_name_first,
+        ad_name_last: loc.ad_name_last,
+        ad_email: loc.ad_email,
+        record_2024: loc.record_2024,
+        raw_data: storedSchoolData.find(s => s.address === loc.address)?.raw_data
+      }));
+      
+      localStorage.setItem('schoolData', JSON.stringify(schoolData));
+    }
+  }, [locations, storedSchoolData]);
+
+  return (
+    <div className="flex flex-col h-screen">
+      {/* Main content with scrolling */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-6xl mx-auto p-4 pb-20"> {/* Added pb-20 for bottom padding */}
+          {/* Controls section - moved from fixed header to scrollable content */}
+          <div className="mb-6 top-0 z-10 pt-2 pb-4 border-b border-gray-100">
+            <div className="flex flex-wrap gap-4 items-start justify-between">
+               {/* Print component - only show if user has football package */}
+               <HighSchoolPrintComponent
+                 locations={locations}
+                 storedSchoolData={storedSchoolData}
+                 pdfContentRef={pdfContentRef}
+                 hasFootballPackage={hasFootballPackage}
+               />
+              
+              <div className="flex flex-wrap gap-4 items-center">
+                <button
+                  disabled={isOptimizing || locations.length < 2}
+                  onClick={optimizeRoute}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-green-600 flex items-center gap-2"
+                >
+                  {isOptimizing ? (
+                    <>
+                      <span className="animate-spin inline-block">⟳</span>
+                      <span className="!text-white">Optimizing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>⟲</span>
+                      <span className="!text-white">Optimize Route</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  disabled={locations.length < 2}
+                  onClick={reverseOrder}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600 flex items-center gap-2"
+                >
+                  <span>↔</span>
+                  <span className="!text-white">Reverse Order</span>
+                </button>
+                <button
+                  onClick={() => router.push('/road-planner')}
+                  className="px-4 py-2 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 border border-gray-200"
+                >
+                  Back to Search
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* PDF content begins here - this is what we'll capture for the PDF */}
+          <div ref={pdfContentRef}>
+            {isLoading || !isLoaded || !isMapLoaded ? (
+              <div className="text-center py-8">Loading map...</div>
+            ) : (
+              <div className="space-y-6">
+                <div className="border rounded-lg overflow-hidden">
+                  <GoogleMap
+                    mapContainerStyle={{ ...mapContainerStyle, height: '500px' }}
+                    zoom={4}
+                    center={center}
+                    options={{
+                      mapTypeControl: true,
+                      streetViewControl: true,
+                      mapTypeId: 'roadmap',
+                      fullscreenControl: true,
+                      zoomControl: true,
+                      gestureHandling: 'greedy'
+                    }}
+                  >
+                    {directions ? (
+                      <DirectionsRenderer
+                        directions={directions}
+                        options={{
+                          suppressMarkers: true,
+                          polylineOptions: {
+                            strokeColor: '#1E40AF',
+                            strokeWeight: 5,
+                            strokeOpacity: 0.7
+                          }
+                        }}
+                      />
+                    ) : null}
+                    {locations.map((location, index) => (
+                      location.position && (
+                        <Fragment key={`marker-${index}`}>
+                          <MarkerF
+                            position={location.position}
+                            label={{
+                              text: `${index + 1}`,
+                              color: 'white',
+                              fontWeight: 'bold'
+                            }}
+                            icon={{
+                              path: window.google.maps.SymbolPath.CIRCLE,
+                              scale: 14,
+                              fillColor: '#1E40AF',
+                              fillOpacity: 1,
+                              strokeColor: 'white',
+                              strokeWeight: 2
+                            }}
+                            title={`${index + 1}. ${location.school}`}
+                          />
+                          
+                          {/* School label */}
+                          <OverlayViewF
+                            position={location.position}
+                            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                            getPixelPositionOffset={(width, height) => ({
+                              x: -width / 2,
+                              y: -height - 30
+                            })}
+                          >
+                            <div 
+                              className="school-label-text bg-white px-2 py-1 rounded shadow-md text-sm font-medium mb-1"
+                              style={{ minWidth: 'max-content' }}
+                            >
+                              {location.school}
+                            </div>
+                          </OverlayViewF>
+                        </Fragment>
+                      )
+                    ))}
+                  </GoogleMap>
+                </div>
+
+                {routeInfo && (
+                  <div className="text-center p-4 bg-gray-50 rounded-lg border">
+                    <div className="text-2xl font-bold text-gray-700">
+                      Total Drive Time: {routeInfo.totalTime}
+                    </div>
+                    <div className="text-gray-600 mt-1">
+                      Total Distance: {routeInfo.totalDistance}
+                    </div>
+                  </div>
+                )}
+
+                 <div className="mt-6">
+                   <DndContext
+                     sensors={sensors}
+                     collisionDetection={closestCenter}
+                     onDragEnd={handleDragEnd}
+                   >
+                     <SortableContext
+                       items={locations.map((_, index) => index)}
+                       strategy={verticalListSortingStrategy}
+                     >
+                       <div className="space-y-2">
+                         {locations.map((location, index) => (
+                           <SortableItem
+                             key={index}
+                             location={location}
+                             index={index}
+                             routeInfo={routeInfo || undefined}
+                             totalLocations={locations.length}
+                             onRemove={handleRemoveLocation}
+                             userDetails={userDetails}
+                             hasFootballPackage={hasFootballPackage}
+                           />
+                         ))}
+                       </div>
+                     </SortableContext>
+                   </DndContext>
+                 </div>
+              </div>
+            )}
+
+            {locations.length === 0 && !isLoading && (
+              <div className="text-center text-gray-500 mt-8">
+                <div className="mx-auto h-10 w-10 mb-2 text-3xl">📍</div>
+                <p className="text-lg font-medium">No stops added yet</p>
+                <p className="mt-2">Return to selection to add schools.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <style jsx global>{`
+        .marker-number {
+          font-weight: bold;
+          font-size: 14px;
+        }
+        .school-label-text {
+          background-color: white !important;
+          padding: 4px 8px !important;
+          border-radius: 4px !important;
+          border: 1px solid #ccc !important;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+          margin-top: 0 !important; 
+          white-space: nowrap !important;
+          z-index: 100 !important;
+          font-size: 12px !important;
+          line-height: 1.2 !important;
+          min-width: 40px !important;
+          text-align: center !important;
+          max-width: 250px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          transform: translateY(-50%) !important;
+        }
+        /* InfoWindow styles */
+        .gm-style .gm-style-iw {
+          padding: 0 !important;
+          max-height: none !important;
+        }
+        .gm-style .gm-style-iw-c {
+          padding: 0 !important;
+          max-height: none !important;
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+        }
+        .gm-style .gm-style-iw-d {
+          overflow: visible !important;
+          max-height: none !important;
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+        }
+        .gm-style .gm-style-iw-tc {
+          display: none !important;
+        }
+        .gm-style button.gm-ui-hover-effect {
+          position: static !important;
+          display: inline-flex !important;
+          margin-left: 4px !important;
+          margin-right: 0 !important;
+          top: auto !important;
+          right: auto !important;
+          width: 10px !important;
+          height: 10px !important;
+          margin-top: 4px !important;
+          padding: 0 !important;
+          border: 1px solid #666 !important;
+          border-radius: 2px !important;
+          align-items: center !important;
+          justify-content: center !important;
+          background-color: rgba(255, 255, 255, 0.9) !important;
+          transform: none !important;
+        }
+        .gm-style .gm-style-iw button img {
+          width: 8px !important;
+          height: 8px !important;
+          margin: 0 !important;
+          opacity: 0.8 !important;
+        }
+        .gm-style .gm-style-iw button:hover {
+          background-color: white !important;
+          border-color: #333 !important;
+        }
+        .gm-style .gm-style-iw button:hover img {
+          opacity: 1 !important;
+        }
+        /* Trash can styles */
+        button svg {
+          fill: #ef4444 !important;
+          width: 24px !important;
+          height: 24px !important;
+        }
+        button:hover svg {
+          fill: #b91c1c !important;
+        }
+        button[title="Remove stop"] {
+          background-color: #fee2e2 !important;
+        }
+        button[title="Remove stop"]:hover {
+          background-color: #fecaca !important;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+const mapContainerStyle = {
+  width: '100%',
+  height: '600px'
+};
+
+const center = {
+  lat: 39.8283, // Center of US
+  lng: -98.5795
+};
+
+const libraries: Libraries = ['places'];

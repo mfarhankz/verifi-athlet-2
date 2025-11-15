@@ -105,7 +105,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 1: Recent winning vs. winning tradition (682) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              The football program&apos;s recent winning and competitiveness vs. the football program&apos;s winning tradition
+              The football program&apos;s recent winning and competitiveness vs. the football program&apos;s winning tradition <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -127,7 +127,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 2: Cost vs. academic reputation (54) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              What the school costs vs. the school&apos;s academic reputation
+              What the school costs vs. the school&apos;s academic reputation <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -149,7 +149,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 3: Winning tradition vs. location (55) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              The football program&apos;s winning tradition vs. the school&apos;s location
+              The football program&apos;s winning tradition vs. the school&apos;s location <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -215,7 +215,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 6: National championship vs. highest level (680) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              Team&apos;s chance to compete for a national championship vs. playing at the highest possible level
+              Team&apos;s chance to compete for a national championship vs. playing at the highest possible level <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -237,7 +237,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 7: Cost vs. campus type (57) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              What the school costs vs. the school&apos;s campus type (city, suburb, rural, etc.)
+              What the school costs vs. the school&apos;s campus type (city, suburb, rural, etc.) <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -259,7 +259,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 8: Facilities vs. national championship (679) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              Quality of the team&apos;s facilities vs. competing for a national championship
+              Quality of the team&apos;s facilities vs. competing for a national championship <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -325,7 +325,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 11: Winning tradition vs. academic reputation (59) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              The football program&apos;s winning tradition vs. the school&apos;s academic reputation
+              The football program&apos;s winning tradition vs. the school&apos;s academic reputation <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -347,7 +347,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 12: National championship vs. location (60) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              Team&apos;s chance to compete for a national championship vs. the school&apos;s location
+              Team&apos;s chance to compete for a national championship vs. the school&apos;s location <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"
@@ -369,7 +369,7 @@ export default function Step5({ surveyData, onComplete, onBack, isSubmitting }: 
           {/* Question 13: NFL talent vs. facilities (681) */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>
-              Team&apos;s history producing NFL talent vs. the quality of the team&apos;s facilities
+              Team&apos;s history producing NFL talent vs. the quality of the team&apos;s facilities <span style={{ color: 'red' }}>*</span>
             </Typography.Title>
             <Select
               className="w-full"

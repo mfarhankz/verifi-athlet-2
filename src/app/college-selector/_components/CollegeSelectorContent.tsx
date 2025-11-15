@@ -28,12 +28,31 @@ export default function CollegeSelectorContent() {
 
   // Function to save data to athlete_fact table
   const saveToAthleteFact = async (stepData: any) => {
-    if (!selectedAthleteId) {
-      console.error('No athlete selected');
+    // Get athleteId from stepData, surveyData, or selectedAthleteId state (in order of preference)
+    const athleteIdToUse = stepData.athleteId || surveyData.athleteId || selectedAthleteId;
+    
+    if (!athleteIdToUse) {
+      console.error('No athleteId available for saving to athlete_fact');
       return false;
     }
 
     try {
+      // Check if user is authenticated before saving
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Error checking session:', sessionError);
+        return false;
+      }
+      
+      if (!sessionData.session) {
+        console.error('No active session - user is not authenticated');
+        alert('Authentication required. Please refresh the page and try again.');
+        return false;
+      }
+      
+      console.log('✅ User authenticated:', sessionData.session.user.id);
+
       const now = new Date().toISOString();
       
       // Convert stepData object to array of athlete_fact entries
@@ -45,7 +64,7 @@ export default function CollegeSelectorContent() {
                  !isNaN(Number(dataTypeId));
         })
         .map(([dataTypeId, value]) => ({
-          athlete_id: selectedAthleteId,
+          athlete_id: athleteIdToUse, // Use the resolved athleteId
           data_type_id: parseInt(dataTypeId),
           value: value as string,
           source: 'college_selector',
@@ -66,6 +85,14 @@ export default function CollegeSelectorContent() {
 
       if (error) {
         console.error('Error saving to athlete_fact:', error);
+        
+        // Check if it's an authentication error
+        if (error.code === 'PGRST301' || error.message?.includes('JWT') || error.message?.includes('401')) {
+          alert('Authentication error. Please refresh the page and try again.');
+        } else {
+          alert('Error saving data. Please try again.');
+        }
+        
         return false;
       }
 
@@ -80,10 +107,15 @@ export default function CollegeSelectorContent() {
   // Function to handle Step0 completion (athlete selection)
   const handleStep0Complete = async (stepData: any) => {
     // For Step0, we don't save to athlete_fact yet, just store the data
-    const updatedData = { ...surveyData, ...stepData };
+    // Ensure athleteId is included in the surveyData so it's available to all subsequent steps
+    const updatedData = { 
+      ...surveyData, 
+      ...stepData,
+      athleteId: stepData.athleteId // Explicitly include athleteId
+    };
     setSurveyData(updatedData);
     
-    // Set the selected athlete info for display
+    // Set the selected athlete info for display and state
     setSelectedAthleteId(stepData.athleteId);
     setSelectedAthleteName(stepData.athleteName);
 
@@ -98,7 +130,16 @@ export default function CollegeSelectorContent() {
 
   // Function to handle survey step completion
   const handleStepComplete = async (stepData: any) => {
-    // Save data to database
+    // Ensure we have athleteId - use from stepData if available, otherwise from state
+    const athleteIdToUse = stepData.athleteId || selectedAthleteId || surveyData.athleteId;
+    
+    if (!athleteIdToUse) {
+      console.error('No athleteId available when saving step data');
+      alert('Error: Athlete information is missing. Please go back to Step 0 and try again.');
+      return;
+    }
+
+    // Save data to database using the athleteId
     const saved = await saveToAthleteFact(stepData);
     
     if (!saved) {
@@ -106,7 +147,8 @@ export default function CollegeSelectorContent() {
       return;
     }
 
-    const updatedData = { ...surveyData, ...stepData, athleteId: selectedAthleteId };
+    // Include athleteId in updated surveyData so it's available to subsequent steps
+    const updatedData = { ...surveyData, ...stepData, athleteId: athleteIdToUse };
     setSurveyData(updatedData);
 
     // Advance to next step
@@ -128,6 +170,15 @@ export default function CollegeSelectorContent() {
     setIsSubmitting(true);
     
     try {
+      // Ensure we have athleteId - use from finalStepData if available, otherwise from state
+      const athleteIdToUse = finalStepData.athleteId || surveyData.athleteId || selectedAthleteId;
+      
+      if (!athleteIdToUse) {
+        alert('Error: Athlete information is missing. Please go back to Step 0 and try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
       // Save final step data to database
       const saved = await saveToAthleteFact(finalStepData);
       
@@ -140,13 +191,13 @@ export default function CollegeSelectorContent() {
       const finalData = { 
         ...surveyData, 
         ...finalStepData, 
-        athleteId: selectedAthleteId 
+        athleteId: athleteIdToUse 
       };
       
       console.log('Final college selector data:', finalData);
       console.log('Selected athlete ID:', selectedAthleteId);
       
-      alert(`College selector survey completed successfully for ${selectedAthleteName}!`);
+      alert(`College Selector submitted!\n\nYour info is now visible to college coaches. We're finalizing integration with our new system and will follow up soon with your account details and results.`);
       
       // Reset the form
       setSurveyData({});

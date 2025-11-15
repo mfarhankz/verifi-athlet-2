@@ -486,6 +486,17 @@ export default function Step1({ surveyData, onComplete, onBack }: Step1Props) {
             />
           </Flex>
 
+          {/* Map Image */}
+          <Flex vertical className="mb-5" style={{ alignItems: 'center' }}>
+            <Image
+              src="/CS regions jpg 3.jpg"
+              alt="College Selector Regions Map"
+              width={800}
+              height={600}
+              style={{ maxWidth: '100%', height: 'auto', borderRadius: '8px' }}
+            />
+          </Flex>
+
           {/* Question 15: Northeast preference */}
           <Flex vertical className="mb-5 survey-textarea">
             <Typography.Title level={4}>

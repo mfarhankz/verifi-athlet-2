@@ -2,18 +2,19 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Typography, Table, message, Card, Tag, Input, Space, Button, Modal, Form, Select, Tabs, Checkbox, Popconfirm } from "antd";
-import { SettingOutlined, UserOutlined, ExclamationCircleOutlined, PlusOutlined, TeamOutlined, DeleteOutlined, AppstoreAddOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons';
+import { SettingOutlined, UserOutlined, ExclamationCircleOutlined, PlusOutlined, TeamOutlined, DeleteOutlined, AppstoreAddOutlined, DownloadOutlined, CopyOutlined, MailOutlined } from '@ant-design/icons';
 import { useCustomer, useUser } from "@/contexts/CustomerContext";
 import { useZoom } from '@/contexts/ZoomContext';
 import { supabase } from "@/lib/supabaseClient";
 import { useDebounce } from '@/hooks/useDebounce';
 import AdminAlertModal from './_components/AdminAlertModal';
+import AdminOfferAlertModal from './_components/AdminOfferAlertModal';
 import PackageSwitchModal from './_components/PackageSwitchModal';
 import EditViewDataTab from './_components/EditViewDataTab';
 import { fetchSchoolsByMultipleDivisions, DivisionType } from '@/utils/schoolUtils';
 import {   getPackageIdsBySport,  fetchUserDetailsByIds,  fetchDataTypesInUse, fetchAthleteFactData,  insertAthleteFact, searchAthletes,  checkUserAthleteAccess,  fetchAllSports, fetchAthletesFromSportView,  
   fetchCustomersForSport,  fetchPackageDataForCustomers,  fetchPackagesByIds, fetchAlertsForCustomers,  createCustomer,  createCustomerPackageMappings,  fetchExistingPackagesForCustomer,  
-  updateCustomerPackageAccess,  updateUserAccess,  updateUserDetails,  createAlert, endAlerts,  loadSportUsersWithData,  fetchAllCustomersWithPackages} from '@/lib/queries';
+  updateCustomerPackageAccess,  updateUserAccess,  updateUserDetails,  createAlert, endAlerts,  fetchOfferAlertsForCustomers, createOfferAlert, endOfferAlerts,  loadSportUsersWithData,  fetchAllCustomersWithPackages} from '@/lib/queries';
 
 const { Title, Text } = Typography;
 
@@ -77,6 +78,7 @@ interface SportUser {
   access_end: string | null;
   customer_id: string;
   last_sign_in_at: string | null;
+  main_contact?: boolean;
 }
 
 interface AlertData {
@@ -87,6 +89,23 @@ interface AlertData {
   recipient: string;
   filter: string;
   rule: string;
+  ended_at: string | null;
+  customer_name: string;
+  package_names: string;
+  created_by_name: string;
+  recipient_names: string;
+}
+
+interface OfferAlertData {
+  id: number;
+  created_at: string;
+  customer_id: string;
+  user_id: string;
+  recipient: string;
+  filter: string;
+  rule: string;
+  alert_frequency: string;
+  weekly_day: string | null;
   ended_at: string | null;
   customer_name: string;
   package_names: string;
@@ -116,6 +135,7 @@ export default function AdminPage() {
   const [selectedUsers, setSelectedUsers] = useState<SportUser[]>([]);
   const [disablingAccess, setDisablingAccess] = useState(false);
   const [reactivatingAccess, setReactivatingAccess] = useState(false);
+  const [resendingInvitations, setResendingInvitations] = useState(false);
   
   // Refresh button state
   const [refreshStatus, setRefreshStatus] = useState<'idle' | 'running' | 'success' | 'failed'>('idle');
@@ -154,6 +174,7 @@ export default function AdminPage() {
   const debouncedCustomerSearch = useDebounce(customerSearchInput, 500);
   const [selectedCustomers, setSelectedCustomers] = useState<any[]>([]);
   const [disablingCustomers, setDisablingCustomers] = useState(false);
+  const [reactivatingCustomers, setReactivatingCustomers] = useState(false);
   
   // Edit User Modal states
   const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
@@ -182,6 +203,18 @@ export default function AdminPage() {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertSearchInput, setAlertSearchInput] = useState<string>('');
   const debouncedAlertSearch = useDebounce(alertSearchInput, 500);
+  
+  // Offer Alerts states
+  const [allOfferAlerts, setAllOfferAlerts] = useState<OfferAlertData[]>([]);
+  const [loadingOfferAlerts, setLoadingOfferAlerts] = useState(false);
+  const [offerAlertSearchInput, setOfferAlertSearchInput] = useState<string>('');
+  const debouncedOfferAlertSearch = useDebounce(offerAlertSearchInput, 500);
+  const [selectedOfferAlertIds, setSelectedOfferAlertIds] = useState<number[]>([]);
+  const [endingOfferAlerts, setEndingOfferAlerts] = useState(false);
+  const [isCreateOfferAlertModalOpen, setIsCreateOfferAlertModalOpen] = useState(false);
+  const [createOfferAlertForm] = Form.useForm();
+  const [submittingOfferAlert, setSubmittingOfferAlert] = useState(false);
+  const [offerAlertRecipientType, setOfferAlertRecipientType] = useState<"staff" | "individual">("individual");
   
   // Shared user details cache
   const [userDetailsCache, setUserDetailsCache] = useState<Map<string, any>>(new Map());
@@ -221,6 +254,10 @@ export default function AdminPage() {
   // Alert modal states
   const [editingAlert, setEditingAlert] = useState<AlertData | null>(null);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  
+  // Offer Alert modal states
+  const [editingOfferAlert, setEditingOfferAlert] = useState<OfferAlertData | null>(null);
+  const [isOfferAlertModalOpen, setIsOfferAlertModalOpen] = useState(false);
   
   // Alert selection states for bulk operations
   const [selectedAlertIds, setSelectedAlertIds] = useState<number[]>([]);
@@ -384,6 +421,14 @@ export default function AdminPage() {
       loadAllAlerts();
     }
   }, [activeTab, selectedSport, debouncedAlertSearch]);
+
+  // Load offer alerts when tab changes to offer-alerts or sport/search changes
+  useEffect(() => {
+    if (activeTab === 'offer-alerts') {
+      setSelectedOfferAlertIds([]); // Clear selection when reloading offer alerts
+      loadAllOfferAlerts();
+    }
+  }, [activeTab, selectedSport, debouncedOfferAlertSearch]);
 
 
   // Load schools for dropdown (limited to D1, D2, D3, and NAIA)
@@ -877,7 +922,104 @@ export default function AdminPage() {
 
       // Get customers for the selected sport with school information
       const customerPackageRows = await fetchAllCustomersWithPackages(sportId);
-      setAllCustomers(customerPackageRows);
+      
+      // Get unique customer IDs
+      const uniqueCustomerIds = [...new Set(customerPackageRows.map((row: any) => row.customer_id))];
+      
+      // Fetch main contacts for each customer
+      const mainContactsMap = new Map<string, { name_first: string; name_last: string; email: string }>();
+      
+      if (uniqueCustomerIds.length > 0) {
+        // Query user-customer mappings with user_detail join, filtering for main_contact = true at DB level
+        // Order by created_at DESC so we can take the first (most recent) main contact per customer
+        const { data: userCustomerMappings, error: mappingError } = await supabase
+          .from('user_customer_map')
+          .select(`
+            user_id,
+            customer_id,
+            created_at,
+            user_detail!inner (
+              id,
+              name_first,
+              name_last,
+              main_contact
+            )
+          `)
+          .in('customer_id', uniqueCustomerIds)
+          .eq('user_detail.main_contact', true)
+          .order('created_at', { ascending: false });
+
+        if (mappingError) {
+          console.error('Error fetching main contacts:', mappingError);
+        } else if (userCustomerMappings && userCustomerMappings.length > 0) {
+          // Group by customer_id and take the most recent (first) one for each customer
+          const mainContactUserIds: string[] = [];
+          const customerIdToUserIdMap = new Map<string, string>();
+          
+          userCustomerMappings.forEach((mapping: any) => {
+            const customerId = mapping.customer_id;
+            if (!mainContactsMap.has(customerId)) {
+              // This is the most recent main contact for this customer (due to descending order)
+              const userDetail = mapping.user_detail;
+              mainContactsMap.set(customerId, {
+                name_first: userDetail.name_first || '',
+                name_last: userDetail.name_last || '',
+                email: '' // Will be filled after fetching emails
+              });
+              mainContactUserIds.push(mapping.user_id);
+              customerIdToUserIdMap.set(customerId, mapping.user_id);
+            }
+          });
+
+          // Fetch emails for main contact users
+          if (mainContactUserIds.length > 0) {
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              if (session) {
+                const emailResponse = await fetch('/api/admin/get-user-emails', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ userIds: mainContactUserIds }),
+                });
+
+                if (emailResponse.ok) {
+                  const emailResult = await emailResponse.json();
+                  if (emailResult.emails) {
+                    // Update main contacts map with emails
+                    customerIdToUserIdMap.forEach((userId, customerId) => {
+                      const email = emailResult.emails[userId] || '';
+                      const contact = mainContactsMap.get(customerId);
+                      if (contact) {
+                        contact.email = email;
+                      }
+                    });
+                  }
+                }
+              }
+            } catch (emailError) {
+              console.error('Error fetching main contact emails:', emailError);
+              // Continue without emails
+            }
+          }
+        }
+      }
+
+      // Add main contact info to each customer row
+      const enrichedRows = customerPackageRows.map((row: any) => {
+        const mainContact = mainContactsMap.get(row.customer_id);
+        return {
+          ...row,
+          main_contact_name: mainContact 
+            ? `${mainContact.name_first || ''} ${mainContact.name_last || ''}`.trim() 
+            : '',
+          main_contact_email: mainContact?.email || '',
+        };
+      });
+
+      setAllCustomers(enrichedRows);
       
     } catch (error) {
       console.error('Error loading customers:', error);
@@ -974,15 +1116,23 @@ export default function AdminPage() {
       }
 
       // Step 4: Get user details for created_by users using cache
-      const creatorUserIds = [...new Set(alertsData.map((alert: any) => alert.user_id))] as string[];
-      const creatorUsers = await getUserDetails(creatorUserIds);
+      const creatorUserIds = [...new Set(
+        alertsData
+          .map((alert: any) => alert.user_id)
+          .filter((id: any) => id && id !== 'null' && id !== 'undefined')
+      )] as string[];
+      
+      let creatorUsers: any[] = [];
+      if (creatorUserIds.length > 0) {
+        creatorUsers = await getUserDetails(creatorUserIds);
+      }
 
       // Step 5: Get user details for recipients using cache
       const allRecipientIds = [...new Set(
         alertsData
           .filter((alert: any) => alert.recipient !== "entire_staff")
           .flatMap((alert: any) => alert.recipient.split(",").map((id: string) => id.trim()))
-          .filter(Boolean)
+          .filter((id: any) => id && id !== 'null' && id !== 'undefined')
       )] as string[];
 
       let recipientUsers: any[] = [];
@@ -1044,12 +1194,145 @@ export default function AdminPage() {
     }
   };
 
+  // Load all offer alerts for the selected sport
+  const loadAllOfferAlerts = async () => {
+    if (!selectedSport) {
+      setAllOfferAlerts([]);
+      return;
+    }
+
+    try {
+      setLoadingOfferAlerts(true);
+      
+      const sportId = SPORT_ID_MAPPING[selectedSport.abbrev];
+      if (!sportId) {
+        console.error('Invalid sport selected');
+        setAllOfferAlerts([]);
+        return;
+      }
+
+      // Step 1: Get customers for the selected sport
+      const customersData = await fetchCustomersForSport(sportId);
+
+      if (!customersData || customersData.length === 0) {
+        setAllOfferAlerts([]);
+        return;
+      }
+
+      const customerIds = customersData.map((customer: any) => customer.id);
+
+      // Step 2: Get offer alerts for these customers
+      const offerAlertsData = await fetchOfferAlertsForCustomers(customerIds);
+
+      if (!offerAlertsData || offerAlertsData.length === 0) {
+        setAllOfferAlerts([]);
+        return;
+      }
+
+      // Step 3: Get package information for each customer
+      const { data: packageData, error: packageError } = await supabase
+        .from('customer_package_map')
+        .select(`
+          customer_id,
+          customer_package!inner (
+            package_name
+          )
+        `)
+        .in('customer_id', customerIds)
+        .is('access_end', null);
+
+      if (packageError) {
+        console.error('Error fetching package data:', packageError);
+        // Continue without package info
+      }
+
+      // Step 4: Get user details for created_by users using cache
+      const creatorUserIds = [...new Set(
+        offerAlertsData
+          .map((alert: any) => alert.user_id)
+          .filter((id: any) => id && id !== 'null' && id !== 'undefined')
+      )] as string[];
+      
+      let creatorUsers: any[] = [];
+      if (creatorUserIds.length > 0) {
+        creatorUsers = await getUserDetails(creatorUserIds);
+      }
+
+      // Step 5: Get user details for recipients using cache
+      const allRecipientIds = [...new Set(
+        offerAlertsData
+          .filter((alert: any) => alert.recipient !== "entire_staff")
+          .flatMap((alert: any) => alert.recipient.split(",").map((id: string) => id.trim()))
+          .filter((id: any) => id && id !== 'null' && id !== 'undefined')
+      )] as string[];
+
+      let recipientUsers: any[] = [];
+      if (allRecipientIds.length > 0) {
+        recipientUsers = await getUserDetails(allRecipientIds);
+      }
+
+      // Step 6: Transform and combine all data
+      const transformedOfferAlerts: OfferAlertData[] = offerAlertsData.map((alert: any) => {
+        // Get customer info
+        const customer = customersData.find((c: any) => c.id === alert.customer_id);
+        const customerName = customer?.school?.name || 'Unknown School';
+
+        // Get package names for this customer
+        const customerPackages = packageData?.filter((pkg: any) => pkg.customer_id === alert.customer_id) || [];
+        const packageNames = customerPackages.map((pkg: any) => pkg.customer_package?.package_name).join(', ') || 'No packages';
+
+        // Get creator name
+        const creator = creatorUsers?.find((user: any) => user.id === alert.user_id);
+        const createdByName = creator ? `${creator.name_first || ''} ${creator.name_last || ''}`.trim() : 'Unknown User';
+
+        // Get recipient names
+        let recipientNames = '';
+        if (alert.recipient === 'entire_staff') {
+          recipientNames = 'Entire Staff';
+        } else {
+          const recipientIds = alert.recipient.split(',').map((id: string) => id.trim());
+          const names = recipientIds.map((id: string) => {
+            const user = recipientUsers.find((u: any) => u.id === id);
+            return user ? `${user.name_first || ''} ${user.name_last || ''}`.trim() : id;
+          });
+          recipientNames = names.join(', ');
+        }
+
+        return {
+          id: alert.id,
+          created_at: alert.created_at,
+          customer_id: alert.customer_id,
+          user_id: alert.user_id,
+          recipient: alert.recipient,
+          filter: alert.filter || '',
+          rule: alert.rule || '',
+          alert_frequency: alert.alert_frequency || '',
+          weekly_day: alert.weekly_day,
+          ended_at: alert.ended_at,
+          customer_name: customerName,
+          package_names: packageNames,
+          created_by_name: createdByName,
+          recipient_names: recipientNames,
+        };
+      });
+
+      setAllOfferAlerts(transformedOfferAlerts);
+      
+    } catch (error) {
+      console.error('Error loading offer alerts:', error);
+      message.error(error instanceof Error ? error.message : 'Failed to load offer alerts');
+      setAllOfferAlerts([]);
+    } finally {
+      setLoadingOfferAlerts(false);
+    }
+  };
+
   // Handle Invite User form submission
   const handleInviteUser = async (values: any) => {
     try {
       setSubmittingInvite(true);
       
-      const { email, firstName, lastName, phone, customerId } = values;
+      const { email, firstName, lastName, phone, customerId, main_contact } = values;
       
       // Get current session for authorization
       const { data: { session } } = await supabase.auth.getSession();
@@ -1070,6 +1353,7 @@ export default function AdminPage() {
           lastName,
           phone,
           customerId,
+          main_contact: main_contact ?? false,
           sendEmail: true,
         }),
       });
@@ -1242,6 +1526,50 @@ export default function AdminPage() {
     }
   };
 
+  // Function to reactivate access for selected customer packages
+  const handleReactivateCustomers = async () => {
+    if (selectedCustomers.length === 0) {
+      message.warning('Please select packages to reactivate access for');
+      return;
+    }
+
+    // Filter out packages that don't have a mapping ID or are already active (e.g., 'No Package' entries or active packages)
+    const inactivePackages = selectedCustomers.filter(
+      item => item.customer_package_map_id && item.access_end
+    );
+    
+    if (inactivePackages.length === 0) {
+      message.warning('No inactive packages selected. Please select packages with disabled access.');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to reactivate access for ${inactivePackages.length} package(s)? This will restore their access.`)) {
+      setReactivatingCustomers(true);
+      try {
+        // Update each selected package mapping to set access_end to null
+        const packageMapIds = inactivePackages.map(item => item.customer_package_map_id);
+        
+        const { error: updateError } = await supabase
+          .from('customer_package_map')
+          .update({ access_end: null })
+          .in('id', packageMapIds);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        message.success(`Successfully reactivated access for ${inactivePackages.length} package(s)`);
+        setSelectedCustomers([]);
+        await loadAllCustomers(); // Reload data to reflect changes
+      } catch (error) {
+        console.error('Error reactivating package access:', error);
+        message.error('Failed to reactivate package access');
+      } finally {
+        setReactivatingCustomers(false);
+      }
+    }
+  };
+
   // Function to disable access for selected users
   const handleDisableAccess = async () => {
     // Debug log removed('Disable access button clicked');
@@ -1320,6 +1648,69 @@ export default function AdminPage() {
         message.error('Failed to reactivate user access');
       } finally {
         setReactivatingAccess(false);
+      }
+    }
+  };
+
+  // Function to resend invitation emails to selected users
+  const handleResendInvitations = async () => {
+    if (selectedUsers.length === 0) {
+      message.warning('Please select users to resend invitations to');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to resend invitation emails to ${selectedUsers.length} user(s)?`)) {
+      setResendingInvitations(true);
+      try {
+        // Get current session for authorization
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          message.error('You must be logged in to resend invitations');
+          return;
+        }
+
+        let successCount = 0;
+        let failCount = 0;
+
+        // Resend invitation for each selected user
+        for (const user of selectedUsers) {
+          try {
+            const response = await fetch('/api/admin/resend-invitation', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                email: user.email,
+              }),
+            });
+
+            if (response.ok) {
+              successCount++;
+            } else {
+              failCount++;
+              const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+              console.error(`Failed to resend invitation to ${user.email}:`, errorData);
+            }
+          } catch (error) {
+            failCount++;
+            console.error(`Error resending invitation to ${user.email}:`, error);
+          }
+        }
+
+        if (successCount > 0) {
+          message.success(`Successfully resent invitations to ${successCount} user(s)${failCount > 0 ? ` (${failCount} failed)` : ''}`);
+        } else {
+          message.error('Failed to resend invitations');
+        }
+        
+        setSelectedUsers([]);
+      } catch (error) {
+        console.error('Error resending invitations:', error);
+        message.error('Failed to resend invitations');
+      } finally {
+        setResendingInvitations(false);
       }
     }
   };
@@ -1403,6 +1794,59 @@ export default function AdminPage() {
     message.success(`Exported ${filteredUsers.length} users to CSV`);
   };
 
+  // CSV Export function for customers
+  const exportCustomersToCSV = () => {
+    if (filteredCustomers.length === 0) {
+      message.warning('No data to export');
+      return;
+    }
+
+    // Define CSV headers
+    const headers = [
+      'School Name',
+      'Main Contact',
+      'Email',
+      'Package Name',
+      'Status',
+      'Access Start',
+      'Access End',
+      'Customer ID'
+    ];
+
+    // Convert data to CSV format
+    const csvContent = [
+      headers.join(','),
+      ...filteredCustomers.map(customer => [
+        `"${customer.school_name || ''}"`,
+        `"${customer.main_contact_name || ''}"`,
+        `"${customer.main_contact_email || ''}"`,
+        `"${customer.package_name || ''}"`,
+        `"${customer.status || ''}"`,
+        `"${customer.access_start || ''}"`,
+        `"${customer.access_end || ''}"`,
+        `"${customer.customer_id || ''}"`
+      ].join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    
+    const fileName = selectedSport 
+      ? `${selectedSport.name}_customers_${new Date().toISOString().split('T')[0]}.csv`
+      : `customers_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    message.success(`Exported ${filteredCustomers.length} customers to CSV`);
+  };
+
   // Filter customer packages based on search query
   const filteredCustomers = useMemo(() => {
     if (!debouncedCustomerSearch) {
@@ -1442,14 +1886,47 @@ export default function AdminPage() {
     });
   }, [allAlerts, debouncedAlertSearch]);
 
+  // Filter offer alerts based on search query
+  const filteredOfferAlerts = useMemo(() => {
+    if (!debouncedOfferAlertSearch) {
+      return allOfferAlerts;
+    }
+    
+    const query = debouncedOfferAlertSearch.toLowerCase();
+    return allOfferAlerts.filter(alert => {
+      const customerName = alert.customer_name?.toLowerCase() || '';
+      const packageNames = alert.package_names?.toLowerCase() || '';
+      const createdByName = alert.created_by_name?.toLowerCase() || '';
+      const recipientNames = alert.recipient_names?.toLowerCase() || '';
+      const filter = alert.filter?.toLowerCase() || '';
+      const rule = alert.rule?.toLowerCase() || '';
+      const alertFrequency = alert.alert_frequency?.toLowerCase() || '';
+      const weeklyDay = alert.weekly_day?.toLowerCase() || '';
+      
+      return customerName.includes(query) ||
+             packageNames.includes(query) ||
+             createdByName.includes(query) ||
+             recipientNames.includes(query) ||
+             filter.includes(query) ||
+             rule.includes(query) ||
+             alertFrequency.includes(query) ||
+             weeklyDay.includes(query);
+    });
+  }, [allOfferAlerts, debouncedOfferAlertSearch]);
+
 
   // Handle opening Edit User modal
   const handleOpenEditUserModal = (user: SportUser) => {
     setEditingUser(user);
+    // Get main_contact from cached user details
+    const cachedUserDetails = userDetailsCache.get(user.id);
+    const main_contact = cachedUserDetails?.main_contact ?? false;
+    
     editUserForm.setFieldsValue({
       name_first: user.name_first,
       name_last: user.name_last,
       phone: user.phone,
+      main_contact: main_contact,
     });
     setIsEditUserModalOpen(true);
   };
@@ -1468,12 +1945,17 @@ export default function AdminPage() {
     try {
       setSubmittingUserEdit(true);
       
-      const { name_first, name_last, phone } = values;
+      const { name_first, name_last, phone, main_contact } = values;
+      
+      // Normalize phone number: remove all non-digit characters
+      // Store as digits only (e.g., "701-425-2821" becomes "7014252821")
+      const normalizedPhone = phone ? phone.replace(/\D/g, '') : null;
       
       await updateUserDetails(editingUser.id, {
         name_first,
         name_last,
-        phone
+        phone: normalizedPhone,
+        main_contact
       });
 
       message.success(`User details updated successfully!`);
@@ -1507,12 +1989,28 @@ export default function AdminPage() {
       dataIndex: 'name_first',
       key: 'name_first',
       sorter: (a: SportUser, b: SportUser) => a.name_first.localeCompare(b.name_first),
+      render: (name_first: string, record: SportUser) => {
+        const isMainContact = record.main_contact === true;
+        return (
+          <span style={{ color: isMainContact ? '#52c41a' : 'inherit' }}>
+            {name_first}
+          </span>
+        );
+      },
     },
     {
       title: 'Last Name',
       dataIndex: 'name_last',
       key: 'name_last',
       sorter: (a: SportUser, b: SportUser) => a.name_last.localeCompare(b.name_last),
+      render: (name_last: string, record: SportUser) => {
+        const isMainContact = record.main_contact === true;
+        return (
+          <span style={{ color: isMainContact ? '#52c41a' : 'inherit' }}>
+            {name_last}
+          </span>
+        );
+      },
     },
     {
       title: 'Phone',
@@ -1597,6 +2095,24 @@ export default function AdminPage() {
       dataIndex: 'school_name',
       key: 'school_name',
       sorter: (a: any, b: any) => a.school_name.localeCompare(b.school_name),
+    },
+    {
+      title: 'Main Contact',
+      dataIndex: 'main_contact_name',
+      key: 'main_contact_name',
+      render: (name: string) => (
+        <span style={{ color: name ? '#52c41a' : 'inherit' }}>
+          {name || 'N/A'}
+        </span>
+      ),
+      sorter: (a: any, b: any) => (a.main_contact_name || '').localeCompare(b.main_contact_name || ''),
+    },
+    {
+      title: 'Email',
+      dataIndex: 'main_contact_email',
+      key: 'main_contact_email',
+      render: (email: string) => email || 'N/A',
+      sorter: (a: any, b: any) => (a.main_contact_email || '').localeCompare(b.main_contact_email || ''),
     },
     {
       title: 'Package',
@@ -1739,6 +2255,27 @@ export default function AdminPage() {
     // Reload alerts data
     if (selectedSport) {
       await loadAllAlerts();
+    }
+  };
+
+  // Offer Alert modal handlers
+  const handleEditOfferAlert = (alert: OfferAlertData) => {
+    setEditingOfferAlert(alert);
+    setIsOfferAlertModalOpen(true);
+  };
+
+  const handleCloseOfferAlertModal = () => {
+    setEditingOfferAlert(null);
+    setIsOfferAlertModalOpen(false);
+  };
+
+  const handleSaveOfferAlert = async () => {
+    setIsOfferAlertModalOpen(false);
+    setEditingOfferAlert(null);
+    
+    // Reload offer alerts data
+    if (selectedSport) {
+      await loadAllOfferAlerts();
     }
   };
 
@@ -1938,6 +2475,7 @@ export default function AdminPage() {
         : selectedIds.join(",");
 
       // Create the alert
+      const createdAt = new Date().toISOString();
       await createAlert({
         customer_id: customerId,
         user_id: user_id,
@@ -1945,6 +2483,43 @@ export default function AdminPage() {
         rule: rule,
         filter: filter,
       });
+
+      // Send notification email to administrators
+      try {
+        // Determine if this should be a survey alert
+        const filterLower = (filter || '').toLowerCase();
+        const isSurveyAlert = filterLower.includes('survey completed') || 
+          ['cell', 'when_transfer', 'help_decision', 'help_decision_contact', 'leaving_other', 
+           'important', 'major_importance', 'games_eval', 'walk_on_t25', 'gpa', 
+           'academic_major_imp', 'highlight', 'hs_highlight', 'honors_other'].some(
+            term => filterLower.includes(term.toLowerCase())
+          );
+
+        const emailResponse = await fetch('/api/alert-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            rule: rule,
+            filter: filter || '',
+            recipient: recipient,
+            customerId: customerId,
+            userId: user_id,
+            surveyAlert: isSurveyAlert,
+            createdAt: createdAt,
+          }),
+        });
+
+        if (!emailResponse.ok) {
+          const errorData = await emailResponse.json();
+          console.error('Failed to send alert notification email:', errorData);
+          // Don't show error to user, just log it
+        }
+      } catch (emailError) {
+        console.error('Error sending alert notification email:', emailError);
+        // Don't show error to user, just log it
+      }
 
       const selectedCustomer = availableCustomersForAlert.find(c => c.id === customerId);
       const customerInfo = selectedCustomer ? ` for ${selectedCustomer.school_name}` : '';
@@ -2021,6 +2596,152 @@ export default function AdminPage() {
   ).length;
   const isAllSelected = activeAlerts.length > 0 && selectedActiveCount === activeAlerts.length;
   const isIndeterminate = selectedActiveCount > 0 && selectedActiveCount < activeAlerts.length;
+
+  // Offer Alert handlers
+  // Handle opening Create Offer Alert modal
+  const handleOpenCreateOfferAlertModal = () => {
+    setIsCreateOfferAlertModalOpen(true);
+    setSelectedCustomerForAlert(null);
+    setTeamUsersForAlert([]);
+    setOfferAlertRecipientType("individual");
+    createOfferAlertForm.resetFields();
+    if (selectedSport) {
+      loadCustomersForAlert();
+    }
+  };
+
+  // Handle closing Create Offer Alert modal
+  const handleCloseCreateOfferAlertModal = () => {
+    setIsCreateOfferAlertModalOpen(false);
+    setSelectedCustomerForAlert(null);
+    setTeamUsersForAlert([]);
+    setOfferAlertRecipientType("individual");
+    createOfferAlertForm.resetFields();
+  };
+
+  // Handle offer alert recipient type change
+  const handleOfferAlertRecipientTypeChange = (value: "staff" | "individual") => {
+    setOfferAlertRecipientType(value);
+    if (value === "staff") {
+      createOfferAlertForm.setFieldValue("selectedIds", []);
+    }
+  };
+
+  // Handle Create Offer Alert form submission
+  const handleCreateOfferAlert = async (values: any) => {
+    try {
+      setSubmittingOfferAlert(true);
+      
+      const { customerId, rule, filter, alert_frequency, weekly_day, recipientType, selectedIds } = values;
+      
+      if (!selectedSport) {
+        message.error('Please select a sport first');
+        return;
+      }
+
+      if (recipientType === "individual" && (!selectedIds || selectedIds.length === 0)) {
+        message.error("Please select at least one recipient");
+        return;
+      }
+
+      // Get current user ID from session
+      const { data: { session } } = await supabase.auth.getSession();
+      const user_id = session?.user?.id;
+      
+      if (!user_id) {
+        message.error('You must be logged in to create offer alerts');
+        return;
+      }
+
+      // Prepare recipient data
+      const recipient = recipientType === "staff" 
+        ? "entire_staff" 
+        : selectedIds.join(",");
+
+      // Create the offer alert
+      await createOfferAlert({
+        customer_id: customerId,
+        user_id: user_id,
+        recipient: recipient,
+        rule: rule,
+        filter: filter,
+        alert_frequency: alert_frequency,
+        weekly_day: alert_frequency === 'weekly' ? weekly_day : undefined,
+      });
+
+      const selectedCustomer = availableCustomersForAlert.find(c => c.id === customerId);
+      const customerInfo = selectedCustomer ? ` for ${selectedCustomer.school_name}` : '';
+      message.success(`Offer alert created successfully${customerInfo}`);
+      handleCloseCreateOfferAlertModal();
+      
+      // Reload offer alerts data
+      if (selectedSport) {
+        await loadAllOfferAlerts();
+      }
+      
+    } catch (error) {
+      console.error('Error creating offer alert:', error);
+      message.error(error instanceof Error ? error.message : 'Failed to create offer alert');
+    } finally {
+      setSubmittingOfferAlert(false);
+    }
+  };
+
+  // Handle bulk ending of selected offer alerts
+  const handleEndSelectedOfferAlerts = async () => {
+    if (selectedOfferAlertIds.length === 0) {
+      message.warning('Please select offer alerts to end');
+      return;
+    }
+
+    setEndingOfferAlerts(true);
+    try {
+      await endOfferAlerts(selectedOfferAlertIds.map(id => id.toString()));
+
+      message.success(`Successfully ended ${selectedOfferAlertIds.length} offer alert(s)`);
+      setSelectedOfferAlertIds([]);
+      
+      // Reload offer alerts data
+      if (selectedSport) {
+        await loadAllOfferAlerts();
+      }
+    } catch (err) {
+      console.error('Error ending offer alerts:', err);
+      message.error('Failed to end offer alerts');
+    } finally {
+      setEndingOfferAlerts(false);
+    }
+  };
+
+  // Handle selecting/deselecting all offer alerts
+  const handleSelectAllOfferAlerts = (checked: boolean) => {
+    if (checked) {
+      // Select all active offer alerts (those without ended_at)
+      const activeOfferAlertIds = filteredOfferAlerts
+        .filter(alert => !alert.ended_at)
+        .map(alert => alert.id);
+      setSelectedOfferAlertIds(activeOfferAlertIds);
+    } else {
+      setSelectedOfferAlertIds([]);
+    }
+  };
+
+  // Handle individual offer alert selection
+  const handleOfferAlertSelection = (alertId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedOfferAlertIds(prev => [...prev, alertId]);
+    } else {
+      setSelectedOfferAlertIds(prev => prev.filter(id => id !== alertId));
+    }
+  };
+
+  // Calculate offer alert selection states
+  const activeOfferAlerts = filteredOfferAlerts.filter(alert => !alert.ended_at);
+  const selectedOfferActiveCount = selectedOfferAlertIds.filter(id => 
+    activeOfferAlerts.some(alert => alert.id === id)
+  ).length;
+  const isAllOfferAlertsSelected = activeOfferAlerts.length > 0 && selectedOfferActiveCount === activeOfferAlerts.length;
+  const isOfferAlertsIndeterminate = selectedOfferActiveCount > 0 && selectedOfferActiveCount < activeOfferAlerts.length;
 
 
   // Alerts table columns
@@ -2157,6 +2878,166 @@ export default function AdminPage() {
         </div>
       ),
       sorter: (a: AlertData, b: AlertData) => {
+        if (!a.ended_at && !b.ended_at) return 0;
+        if (!a.ended_at) return -1; // Active alerts first
+        if (!b.ended_at) return 1;
+        return new Date(a.ended_at).getTime() - new Date(b.ended_at).getTime();
+      },
+    },
+  ];
+
+  // Offer Alerts table columns
+  const offerAlertColumns = [
+    {
+      title: (
+        <Checkbox
+          checked={isAllOfferAlertsSelected}
+          indeterminate={isOfferAlertsIndeterminate}
+          onChange={(e) => handleSelectAllOfferAlerts(e.target.checked)}
+          disabled={activeOfferAlerts.length === 0}
+        >
+          Select
+        </Checkbox>
+      ),
+      dataIndex: 'select',
+      key: 'select',
+      width: 80,
+      render: (_: any, record: OfferAlertData) => (
+        <Checkbox
+          checked={selectedOfferAlertIds.includes(record.id)}
+          onChange={(e) => handleOfferAlertSelection(record.id, e.target.checked)}
+          disabled={!!record.ended_at} // Disable checkbox for already ended alerts
+        />
+      ),
+    },
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+      sorter: (a: OfferAlertData, b: OfferAlertData) => a.id - b.id,
+      render: (id: number, record: OfferAlertData) => (
+        <Button 
+          type="link" 
+          onClick={() => handleEditOfferAlert(record)}
+          style={{ padding: 0, height: 'auto', fontWeight: 'bold' }}
+        >
+          {id}
+        </Button>
+      ),
+    },
+    {
+      title: 'Created',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      width: 120,
+      render: (date: string) => new Date(date).toLocaleDateString(),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    },
+    {
+      title: 'Customer',
+      dataIndex: 'customer_name',
+      key: 'customer_name',
+      width: 200,
+      render: (customerName: string, record: OfferAlertData) => (
+        <div>
+          <div style={{ fontWeight: 'bold' }}>{customerName}</div>
+          <div style={{ fontSize: '12px', color: '#666' }}>
+            {record.package_names}
+          </div>
+        </div>
+      ),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => a.customer_name.localeCompare(b.customer_name),
+    },
+    {
+      title: 'Created By',
+      dataIndex: 'created_by_name',
+      key: 'created_by_name',
+      width: 150,
+      sorter: (a: OfferAlertData, b: OfferAlertData) => a.created_by_name.localeCompare(b.created_by_name),
+    },
+    {
+      title: 'Recipients',
+      dataIndex: 'recipient_names',
+      key: 'recipient_names',
+      width: 200,
+      render: (recipientNames: string) => (
+        <div style={{ 
+          maxWidth: '200px',
+          whiteSpace: 'normal',
+          wordWrap: 'break-word'
+        }}>
+          {recipientNames}
+        </div>
+      ),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => a.recipient_names.localeCompare(b.recipient_names),
+    },
+    {
+      title: 'Rule',
+      dataIndex: 'rule',
+      key: 'rule',
+      width: 150,
+      render: (rule: string) => (
+        <div style={{ 
+          maxWidth: '150px',
+          whiteSpace: 'normal',
+          wordWrap: 'break-word'
+        }}>
+          {rule}
+        </div>
+      ),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => a.rule.localeCompare(b.rule),
+    },
+    {
+      title: 'Frequency',
+      dataIndex: 'alert_frequency',
+      key: 'alert_frequency',
+      width: 120,
+      render: (frequency: string) => (
+        <Tag color="blue">{frequency}</Tag>
+      ),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => a.alert_frequency.localeCompare(b.alert_frequency),
+    },
+    {
+      title: 'Weekly Day',
+      dataIndex: 'weekly_day',
+      key: 'weekly_day',
+      width: 120,
+      render: (weeklyDay: string | null) => weeklyDay || 'N/A',
+      sorter: (a: OfferAlertData, b: OfferAlertData) => (a.weekly_day || '').localeCompare(b.weekly_day || ''),
+    },
+    {
+      title: 'Filter',
+      dataIndex: 'filter',
+      key: 'filter',
+      width: 250,
+      render: (filter: string) => (
+        <div style={{ 
+          maxWidth: '250px',
+          whiteSpace: 'normal',
+          wordWrap: 'break-word',
+          fontSize: '12px',
+          color: '#666'
+        }}>
+          {filter || 'No filter'}
+        </div>
+      ),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => (a.filter || '').localeCompare(b.filter || ''),
+    },
+    {
+      title: 'Ended At',
+      dataIndex: 'ended_at',
+      key: 'ended_at',
+      width: 120,
+      render: (endedAt: string | null) => (
+        <div style={{ 
+          color: endedAt ? '#ff4d4f' : '#52c41a',
+          fontWeight: endedAt ? 'normal' : 'bold'
+        }}>
+          {endedAt ? new Date(endedAt).toLocaleDateString() : 'Active'}
+        </div>
+      ),
+      sorter: (a: OfferAlertData, b: OfferAlertData) => {
         if (!a.ended_at && !b.ended_at) return 0;
         if (!a.ended_at) return -1; // Active alerts first
         if (!b.ended_at) return 1;
@@ -2359,6 +3240,15 @@ export default function AdminPage() {
                               Export CSV
                             </Button>
                             <Button
+                              type="default"
+                              icon={<MailOutlined />}
+                              disabled={selectedUsers.length === 0}
+                              loading={resendingInvitations}
+                              onClick={handleResendInvitations}
+                            >
+                              Resend Invitation ({selectedUsers.length})
+                            </Button>
+                            <Button
                               type="primary"
                               style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
                               disabled={selectedUsers.length === 0 || selectedUsers.every(user => !user.access_end)}
@@ -2480,6 +3370,22 @@ export default function AdminPage() {
                               onSearch={(value) => setCustomerSearchInput(value)}
                             />
                             <Button
+                              icon={<DownloadOutlined />}
+                              onClick={exportCustomersToCSV}
+                              disabled={filteredCustomers.length === 0}
+                            >
+                              Export CSV
+                            </Button>
+                            <Button
+                              type="primary"
+                              style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                              disabled={selectedCustomers.filter(item => item.customer_package_map_id && item.access_end).length === 0}
+                              loading={reactivatingCustomers}
+                              onClick={handleReactivateCustomers}
+                            >
+                              Reactivate Access ({selectedCustomers.filter(item => item.customer_package_map_id && item.access_end).length})
+                            </Button>
+                            <Button
                               type="primary"
                               danger
                               disabled={selectedCustomers.length === 0}
@@ -2504,7 +3410,7 @@ export default function AdminPage() {
                             setSelectedCustomers(selectedRows);
                           },
                           getCheckboxProps: (record: any) => ({
-                            disabled: record.status === 'inactive' || !record.customer_package_map_id, // Disable checkbox for inactive packages or 'No Package' entries
+                            disabled: !record.customer_package_map_id, // Disable checkbox only for 'No Package' entries
                             name: `${record.school_name} - ${record.package_name}`,
                           }),
                         }}
@@ -2700,6 +3606,137 @@ export default function AdminPage() {
               //   ),
               // },
               {
+                key: 'offer-alerts',
+                label: (
+                  <span>
+                    <ExclamationCircleOutlined />
+                    Offer Alerts
+                  </span>
+                ),
+                children: (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                      <Text strong>Sport:</Text>
+                      <Select
+                        style={{ width: 200 }}
+                        placeholder="Select a sport"
+                        loading={loadingSports}
+                        value={selectedSport?.id}
+                        onChange={(value) => {
+                          const sport = allSports.find(s => s.id === value);
+                          setSelectedSport(sport || null);
+                        }}
+                        showSearch
+                        filterOption={(input, option) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                        options={allSports.map(sport => ({
+                          value: sport.id,
+                          label: `${sport.name} (${sport.abbrev.toUpperCase()})`
+                        }))}
+                      />
+                    </div>
+                    <Card 
+                      title={
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <ExclamationCircleOutlined style={{ marginRight: 8 }} />
+                            {selectedSport ? `${selectedSport.name} Offer Alerts` : 'Offer Alert Management'}
+                            {selectedSport && (
+                              <Tag color="orange" style={{ marginLeft: 8 }}>
+                                {selectedSport.abbrev.toUpperCase()}
+                              </Tag>
+                            )}
+                          </div>
+                          <Space>
+                            <Button
+                              type="primary"
+                              icon={<PlusOutlined />}
+                              onClick={handleOpenCreateOfferAlertModal}
+                              disabled={!selectedSport}
+                            >
+                              Create New Offer Alert
+                            </Button>
+                            <Input.Search
+                              style={{ width: 300 }}
+                              placeholder="Search offer alerts..."
+                              allowClear
+                              value={offerAlertSearchInput}
+                              onChange={(e) => setOfferAlertSearchInput(e.target.value)}
+                              onSearch={(value) => setOfferAlertSearchInput(value)}
+                            />
+                          </Space>
+                        </div>
+                      }
+                    >
+                      {/* Bulk Action Controls */}
+                      {selectedOfferAlertIds.length > 0 && (
+                        <div style={{ 
+                          marginBottom: 16, 
+                          padding: '12px 16px', 
+                          background: '#fff7e6', 
+                          border: '1px solid #ffa940',
+                          borderRadius: 6,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between'
+                        }}>
+                          <div>
+                            <Text strong>{selectedOfferAlertIds.length}</Text>
+                            <Text> offer alert(s) selected</Text>
+                          </div>
+                          <Space>
+                            <Button 
+                              size="small" 
+                              onClick={() => setSelectedOfferAlertIds([])}
+                            >
+                              Clear Selection
+                            </Button>
+                            <Popconfirm
+                              title="End Selected Offer Alerts"
+                              description={`Are you sure you want to end ${selectedOfferAlertIds.length} selected offer alert(s)? This action cannot be undone.`}
+                              onConfirm={handleEndSelectedOfferAlerts}
+                              okText="Yes, End Alerts"
+                              cancelText="Cancel"
+                              okButtonProps={{ danger: true }}
+                            >
+                              <Button 
+                                type="primary" 
+                                danger 
+                                size="small"
+                                loading={endingOfferAlerts}
+                                icon={<DeleteOutlined />}
+                              >
+                                End Selected Alerts
+                              </Button>
+                            </Popconfirm>
+                          </Space>
+                        </div>
+                      )}
+                      
+                      <Table
+                        columns={offerAlertColumns}
+                        dataSource={filteredOfferAlerts}
+                        rowKey="id"
+                        loading={loadingOfferAlerts}
+                        pagination={{
+                          pageSize: 20,
+                          showSizeChanger: true,
+                          showQuickJumper: true,
+                          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} offer alerts`,
+                        }}
+                        scroll={{ x: 'max-content' }}
+                        locale={{
+                          emptyText: selectedSport 
+                            ? `No offer alerts found for ${selectedSport.name}`
+                            : 'Select a sport from the dropdown to view offer alerts'
+                        }}
+                      />
+                    </Card>
+                  </div>
+                ),
+              },
+              {
                 key: 'edit-view-data',
                 label: (
                   <span>
@@ -2772,6 +3809,13 @@ export default function AdminPage() {
                 name="phone"
               >
                 <Input placeholder="+1 (555) 123-4567" />
+              </Form.Item>
+
+              <Form.Item
+                name="main_contact"
+                valuePropName="checked"
+              >
+                <Checkbox>Main Contact</Checkbox>
               </Form.Item>
 
               <Form.Item
@@ -2982,7 +4026,14 @@ export default function AdminPage() {
                 label="Phone Number"
                 name="phone"
               >
-                <Input placeholder="Enter phone number (e.g., +1 555-123-4567)" />
+                <Input placeholder="Enter phone number (e.g., 5551234567)" />
+              </Form.Item>
+
+              <Form.Item
+                name="main_contact"
+                valuePropName="checked"
+              >
+                <Checkbox>Main Contact</Checkbox>
               </Form.Item>
 
               <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
@@ -3008,6 +4059,15 @@ export default function AdminPage() {
             onCancel={handleCloseAlertModal}
             onSave={handleSaveAlert}
             alertData={editingAlert}
+            loading={false}
+          />
+
+          {/* Admin Offer Alert Modal */}
+          <AdminOfferAlertModal
+            open={isOfferAlertModalOpen}
+            onCancel={handleCloseOfferAlertModal}
+            onSave={handleSaveOfferAlert}
+            alertData={editingOfferAlert}
             loading={false}
           />
 
@@ -3145,6 +4205,199 @@ export default function AdminPage() {
                     loading={submittingAlert}
                   >
                     Create Alert
+                  </Button>
+                </Space>
+              </Form.Item>
+            </Form>
+          </Modal>
+
+          {/* Create Offer Alert Modal */}
+          <Modal
+            title={`Create New Offer Alert${selectedSport ? ` - ${selectedSport.name}` : ''}`}
+            open={isCreateOfferAlertModalOpen}
+            onCancel={handleCloseCreateOfferAlertModal}
+            footer={null}
+            width={600}
+            destroyOnClose
+          >
+            <Form
+              form={createOfferAlertForm}
+              layout="vertical"
+              onFinish={handleCreateOfferAlert}
+            >
+              <Form.Item
+                label="Customer"
+                name="customerId"
+                rules={[
+                  { required: true, message: 'Please select a customer' },
+                ]}
+              >
+                <Select
+                  placeholder="Select a customer"
+                  loading={loadingCustomersForAlert}
+                  showSearch
+                  value={selectedCustomerForAlert}
+                  onChange={handleCustomerSelectionForAlert}
+                  filterOption={(input, option) =>
+                    (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                  }
+                  options={availableCustomersForAlert.map(customer => ({
+                    value: customer.id,
+                    label: `${customer.school_name} (${customer.packages.join(', ')})`
+                  }))}
+                  notFoundContent={!selectedSport ? 'Please select a sport first' : loadingCustomersForAlert ? 'Loading customers...' : 'No customers found for this sport'}
+                  disabled={!selectedSport || loadingCustomersForAlert}
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Rule Name"
+                name="rule"
+                rules={[
+                  { required: true, message: 'Please enter a rule name' },
+                ]}
+              >
+                <Input
+                  placeholder="Enter a name for this offer alert"
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Filter"
+                name="filter"
+                rules={[
+                  { required: true, message: 'Please enter filter criteria' },
+                ]}
+              >
+                <Input.TextArea
+                  placeholder="Enter filter criteria"
+                  rows={3}
+                  showCount
+                />
+              </Form.Item>
+
+              <Form.Item
+                label="Alert Frequency"
+                name="alert_frequency"
+                rules={[
+                  { required: true, message: 'Please select alert frequency' },
+                ]}
+              >
+                <Select
+                  placeholder="Select frequency"
+                  options={[
+                    { value: 'daily', label: 'Daily' },
+                    { value: 'weekly', label: 'Weekly' },
+                  ]}
+                  onChange={(value) => {
+                    if (value !== 'weekly') {
+                      createOfferAlertForm.setFieldValue('weekly_day', undefined);
+                    }
+                  }}
+                />
+              </Form.Item>
+
+              <Form.Item
+                noStyle
+                shouldUpdate={(prevValues, currentValues) => 
+                  prevValues.alert_frequency !== currentValues.alert_frequency
+                }
+              >
+                {({ getFieldValue }) => 
+                  getFieldValue('alert_frequency') === 'weekly' ? (
+                    <Form.Item
+                      label="Weekly Day"
+                      name="weekly_day"
+                      rules={[
+                        { required: true, message: 'Please select a day of the week' },
+                      ]}
+                    >
+                      <Select
+                        placeholder="Select day of the week"
+                        options={[
+                          { value: 'Monday', label: 'Monday' },
+                          { value: 'Tuesday', label: 'Tuesday' },
+                          { value: 'Wednesday', label: 'Wednesday' },
+                          { value: 'Thursday', label: 'Thursday' },
+                          { value: 'Friday', label: 'Friday' },
+                          { value: 'Saturday', label: 'Saturday' },
+                          { value: 'Sunday', label: 'Sunday' },
+                        ]}
+                      />
+                    </Form.Item>
+                  ) : null
+                }
+              </Form.Item>
+
+              <Form.Item
+                label="Recipients"
+                name="recipientType"
+                rules={[
+                  { required: true, message: 'Please select recipient type' },
+                ]}
+              >
+                <Select
+                  value={offerAlertRecipientType}
+                  onChange={handleOfferAlertRecipientTypeChange}
+                  options={[
+                    { value: "individual", label: "Select Individuals" },
+                    { value: "staff", label: "Entire Staff" },
+                  ]}
+                />
+              </Form.Item>
+
+              {offerAlertRecipientType === "individual" && (
+                <Form.Item
+                  name="selectedIds"
+                  rules={[
+                    {
+                      required: true,
+                      validator: (_, value) => {
+                        if (!value || value.length === 0) {
+                          return Promise.reject('Please select at least one recipient');
+                        }
+                        return Promise.resolve();
+                      }
+                    }
+                  ]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="Select team members"
+                    loading={loadingTeamUsers}
+                    disabled={!selectedCustomerForAlert}
+                    notFoundContent={
+                      !selectedCustomerForAlert 
+                        ? 'Please select a customer first' 
+                        : loadingTeamUsers 
+                          ? 'Loading...' 
+                          : 'No team members found'
+                    }
+                    options={teamUsersForAlert.map(user => ({
+                      value: user.id,
+                      label: `${user.name_first} ${user.name_last}`,
+                    }))}
+                  />
+                </Form.Item>
+              )}
+
+              {offerAlertRecipientType === "staff" && (
+                <div style={{ marginTop: 8, marginBottom: 16, color: "#666", fontStyle: 'italic' }}>
+                  Offer alert will be sent to all staff members for this customer.
+                </div>
+              )}
+
+              <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+                <Space>
+                  <Button onClick={handleCloseCreateOfferAlertModal}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="primary"
+                    htmlType="submit"
+                    loading={submittingOfferAlert}
+                  >
+                    Create Offer Alert
                   </Button>
                 </Space>
               </Form.Item>

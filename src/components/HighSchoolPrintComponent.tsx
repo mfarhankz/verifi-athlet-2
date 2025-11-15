@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { supabase } from '@/lib/supabaseClient';
@@ -13,27 +13,58 @@ interface HighSchoolPrintComponentProps {
   storedSchoolData: any[];
   pdfContentRef: React.RefObject<HTMLDivElement>;
   hasFootballPackage: boolean;
+  minAthleticLevel?: string;
+  minGradYear?: string;
+  hideUI?: boolean;
 }
 
-export default function HighSchoolPrintComponent({ 
+export interface HighSchoolPrintComponentRef {
+  handlePrint: () => Promise<void>;
+  isPrinting: boolean;
+}
+
+const HighSchoolPrintComponent = forwardRef<HighSchoolPrintComponentRef, HighSchoolPrintComponentProps>(({ 
   locations, 
   storedSchoolData, 
   pdfContentRef, 
-  hasFootballPackage 
-}: HighSchoolPrintComponentProps) {
+  hasFootballPackage,
+  minAthleticLevel: propMinAthleticLevel = 'D3',
+  minGradYear: propMinGradYear = '2025',
+  hideUI = false
+}, ref) => {
   const [isPrinting, setIsPrinting] = useState(false);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
   const [pdfFilename, setPdfFilename] = useState<string>('');
-  const [minAthleticLevel, setMinAthleticLevel] = useState('D3');
-  const [minGradYear, setMinGradYear] = useState('2025');
+  const [minAthleticLevel, setMinAthleticLevel] = useState(propMinAthleticLevel);
+  const [minGradYear, setMinGradYear] = useState(propMinGradYear);
   
   const userDetails = useUser();
+
+  // Update local state when props change
+  React.useEffect(() => {
+    setMinAthleticLevel(propMinAthleticLevel);
+  }, [propMinAthleticLevel]);
+
+  React.useEffect(() => {
+    setMinGradYear(propMinGradYear);
+  }, [propMinGradYear]);
+
+  // Expose handlePrint via ref
+  useImperativeHandle(ref, () => ({
+    handlePrint,
+    isPrinting
+  }));
 
   const handlePrint = async () => {
     if (locations.length === 0) {
       alert("Please select at least one school to print.");
       return;
     }
+
+    // Use current state values (synced from props via useEffect)
+    // These will be up-to-date when handlePrint is called
+    const currentMinAthleticLevel = minAthleticLevel;
+    const currentMinGradYear = minGradYear;
 
     setIsPrinting(true);
     let lastCreatedPdfBlob: Blob | null = null;
@@ -317,8 +348,8 @@ export default function HighSchoolPrintComponent({
             userDetails,
             coachEmail,
             {
-              min_print_level: minAthleticLevel,
-              min_grad_year: minGradYear,
+              min_print_level: currentMinAthleticLevel,
+              min_grad_year: currentMinGradYear,
               cover_page: coverPageFileName
             }
           );
@@ -476,6 +507,11 @@ export default function HighSchoolPrintComponent({
     return null;
   }
 
+  // Don't render UI if hideUI is true (when using via ref)
+  if (hideUI) {
+    return null;
+  }
+
   return (
     <div className="flex items-center flex-wrap gap-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
       <button
@@ -561,4 +597,8 @@ export default function HighSchoolPrintComponent({
       </div>
     </div>
   );
-}
+});
+
+HighSchoolPrintComponent.displayName = 'HighSchoolPrintComponent';
+
+export default HighSchoolPrintComponent;

@@ -18,7 +18,8 @@ import PlayerInformation from "./PlayerInformation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { fetchCustomerRatings, type CustomerRating } from "@/utils/utils";
-import { convertCountyIdsToNames } from "@/lib/queries";
+import { convertCountyIdsToNames, getDefaultBoardForAdding, getPackageIdsByType } from "@/lib/queries";
+import { hasPackageAccess } from "@/utils/navigationUtils";
 import {
   useUser,
   useCustomer,
@@ -350,8 +351,9 @@ export default function HSAthleteProfileContent({
   const handleClose = () => {
     if (onClose) {
       onClose();
-    } else {
-      // Remove player query param and navigate back to the base route
+    } else if (!isInModal) {
+      // Only navigate if not in a modal and no onClose provided
+      // When in a modal, the parent modal handles closing
       const params = new URLSearchParams(searchParams?.toString() || '');
       params.delete('player');
       params.delete('use_main_tp_page_id');
@@ -360,6 +362,7 @@ export default function HSAthleteProfileContent({
       const queryString = params.toString();
       router.push(queryString ? `/hs-athlete?${queryString}` : '/hs-athlete');
     }
+    // If isInModal is true and no onClose, do nothing - parent handles it
   };
 
   // Set userTeamId when userDetails becomes available
@@ -1007,24 +1010,10 @@ export default function HSAthleteProfileContent({
       const boardName = boardNameOverride || selectedBoardName;
       
       if (!boardId) {
-        // Get or create the Main board as fallback
-        const { data: boardData, error: boardError } = await supabase
-          .from('recruiting_board_board')
-          .select('id')
-          .eq('customer_id', activeCustomerId)
-          .eq('name', 'Main')
-          .is('recruiting_board_column_id', null)
-          .is('ended_at', null)
-          .single();
-
-      if (boardError && boardError.code !== 'PGRST116') {
-        alert(`Error finding recruiting board: ${boardError.message}`);
-        return;
-      }
-
-        boardId = boardData?.id;
+        // Get the default board (Main if exists, or single board if only one exists)
+        boardId = await getDefaultBoardForAdding(activeCustomerId);
         
-        // Create Main board if it doesn't exist
+        // Create Main board if no boards exist
         if (!boardId) {
           const { data: newBoard, error: createError} = await supabase
             .from('recruiting_board_board')
@@ -1113,7 +1102,8 @@ export default function HSAthleteProfileContent({
         athlete_id: athlete.id,
         user_id: userId,
         rank: nextRank, // Assign unique incremental rank
-        source: 'high_school'
+        source: 'high_school',
+        customer_position: athlete.primary_position || athlete.position || null
       };
 
       // Insert the data into the recruiting_board_athlete table
@@ -1126,6 +1116,56 @@ export default function HSAthleteProfileContent({
         console.error("Error adding athlete to recruiting board:", insertError);
         alert(`Error adding athlete to recruiting board: ${insertError.message || 'Unknown error'}`);
         return;
+      }
+
+      // If this is a pre-transfer athlete, add to player_tracking table (only for ultra, gold, or platinum packages)
+      if (dataSource === 'all_athletes') {
+        // Check if user has ultra, gold, or platinum packages
+        const userPackageNumbers = (userDetails?.packages || []).map(pkg => parseInt(pkg, 10));
+        const ultraPackageIds = getPackageIdsByType('ultra');
+        const goldPackageIds = getPackageIdsByType('gold');
+        const platinumPackageIds = getPackageIdsByType('platinum');
+        const allowedPackageIds = [...ultraPackageIds, ...goldPackageIds, ...platinumPackageIds];
+        
+        const hasAllowedPackage = hasPackageAccess(userPackageNumbers, allowedPackageIds);
+        
+        if (hasAllowedPackage) {
+          try {
+            // Fetch text_alert_default from user_detail table
+            const { data: userDetailData, error: userDetailError } = await supabase
+              .from('user_detail')
+              .select('text_alert_default')
+              .eq('id', userId)
+              .single();
+
+            if (userDetailError) {
+              console.error("Error fetching user detail for text_alert_default:", userDetailError);
+              // Continue even if we can't get text_alert_default
+            }
+
+            // text_alert should be a boolean based on text_alert_default (default to false if not found)
+            const textAlert = userDetailData?.text_alert_default ?? false;
+
+            // Insert into player_tracking table
+            const { error: trackingError } = await supabase
+              .from('player_tracking')
+              .insert({
+                athlete_id: athlete.id,
+                user_id: userId,
+                customer_id: activeCustomerId,
+                recipient: userId,
+                text_alert: textAlert
+              });
+
+            if (trackingError) {
+              console.error("Error adding athlete to player_tracking:", trackingError);
+              // Don't fail the whole operation if player_tracking insert fails
+            }
+          } catch (trackingErr) {
+            console.error("Error in player_tracking insert:", trackingErr);
+            // Don't fail the whole operation if player_tracking insert fails
+          }
+        }
       }
 
       // Show success message with board name
@@ -1374,35 +1414,19 @@ export default function HSAthleteProfileContent({
     },
   ];
 
-  return isMobile ? (
-    <MobileAthleteProfileContent
-      athleteId={athleteId}
-      mainTpPageId={mainTpPageId}
-      onAddToBoard={onAddToBoard}
-      dataSource={dataSource}
-    />
-  ) : (
-    <div>
-      <Modal
-        title={null}
-        open={true}
-        onCancel={handleClose}
-        footer={null}
-        width="95vw"
-        style={{ top: 20 }}
-        className="new-modal-ui"
-        destroyOnHidden={true}
-        closable={true}
-        maskClosable={true}
-      >
+  // Extract the main content to reuse in both modal and non-modal cases
+  const mainContent = (
+    <>
+      {!isInModal && (
         <button
           className="close"
           onClick={handleClose}
         ></button>
+      )}
 
-        <Flex>
-          <div className="main-container-ui">
-            <div className="grid grid-cols-[215px_minmax(0,1fr)] gap-2">
+      <Flex>
+        <div className={`main-container-ui ${isInModal ? 'no-scroll' : ''}`}>
+          <div className="grid grid-cols-[215px_minmax(0,1fr)] gap-2">
               <div className="flex flex-col gap-2">
                 <div className="card">
                   <div className="player-img">
@@ -1917,6 +1941,67 @@ export default function HSAthleteProfileContent({
             </div>
           </div>
         </Flex>
+    </>
+  );
+
+  return isMobile ? (
+    <MobileAthleteProfileContent
+      athleteId={athleteId}
+      mainTpPageId={mainTpPageId}
+      onAddToBoard={onAddToBoard}
+      dataSource={dataSource}
+    />
+  ) : isInModal ? (
+    // When in a modal, just return the content without wrapping in another modal
+    <div className="w-full h-full">
+      <button
+        className="close"
+        onClick={handleClose}
+      ></button>
+      {mainContent}
+      
+      <Modal
+        title="Rate Athlete"
+        open={isRatingModalOpen}
+        onOk={handleRatingSubmit}
+        onCancel={() => setIsRatingModalOpen(false)}
+      >
+        <Select
+          style={{ width: "100%" }}
+          placeholder="Select a rating"
+          value={selectedRatingId}
+          onChange={(value) => setSelectedRatingId(value)}
+          options={ratings.map((rating) => ({
+            value: rating.id,
+            label: (
+              <div className="flex items-center">
+                <div
+                  className="mr-2 w-4 h-4"
+                  style={{ backgroundColor: rating.color }}
+                />
+                <span>{rating.name}</span>
+              </div>
+            ),
+          }))}
+        />
+      </Modal>
+    </div>
+  ) : (
+    // When not in a modal, wrap content in Modal
+    <div>
+      <Modal
+        title={null}
+        open={true}
+        onCancel={handleClose}
+        footer={null}
+        width="95vw"
+        style={{ top: 20 }}
+        className="new-modal-ui"
+        destroyOnHidden={true}
+        closable={true}
+        maskClosable={true}
+      >
+        {mainContent}
       </Modal>
 
       <Modal

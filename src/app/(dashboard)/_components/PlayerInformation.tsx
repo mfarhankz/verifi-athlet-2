@@ -2658,6 +2658,11 @@ const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: a
       'visit': 'Visit',
       'official_visit': 'Official Visit',
       'unofficial_visit': 'Unofficial Visit',
+      'coach note': 'Coach Note',
+      'coach call': 'Coach Call',
+      'coach message': 'Coach Message',
+      'coach multiple visit': 'Coach Multiple Visit',
+      'coach visit': 'Coach Visit',
     };
     
     return typeMap[typeStr] || type.charAt(0).toUpperCase() + type.slice(1);
@@ -2679,6 +2684,11 @@ const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: a
       'visit': `${name} visited ${school}`,
       'official_visit': `${name} officially visited ${school}`,
       'unofficial_visit': `${name} unofficially visited ${school}`,
+      'coach note': 'Coach note',
+      'coach call': 'Coach call',
+      'coach message': 'Coach message',
+      'coach multiple visit': 'Coach multiple visit',
+      'coach visit': 'Coach visit',
     };
     
     return actionMap[typeStr] || `${name} ${typeStr} ${school}`;
@@ -2699,7 +2709,12 @@ const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: a
       'unofficial_visit': { icon: 'icon-location', color: '#8c8c8c' },
       'visit': { icon: 'icon-location', color: '#8c8c8c' },
       'camp': { icon: 'icon-tent', color: '#8c8c8c' },
-    };
+      'coach note': { icon: 'icon-file', color: '#1890ff' },
+      'coach call': { icon: 'icon-call', color: '#1890ff' },
+      'coach message': { icon: 'icon-message', color: '#1890ff' },
+      'coach multiple visit': { icon: 'icon-location', color: '#8c8c8c' },
+      'coach visit': { icon: 'icon-location', color: '#8c8c8c' },
+        };
     
     return iconMap[typeStr] || null;
   };
@@ -4309,12 +4324,34 @@ const HSSurvey = ({ athleteFacts }: { athleteFacts?: { data_type_id: number; val
     </div>
     <div>
       {(() => {
-        const byType = (id: number, src?: string) =>
-          athleteFacts?.find((f: any) => f?.data_type_id === id && (!src || f?.source === src))?.value || null;
+        // Helper to find fact by type, preferring specific source but falling back to any
+        const byType = (id: number, src?: string) => {
+          if (!athleteFacts) return null;
+          // Helper to check if value is valid
+          const isValidValue = (val: any) => val != null && String(val).trim() !== '';
+          // Helper to compare data_type_id (handle both number and string)
+          const matchesType = (f: any, targetId: number) => 
+            Number(f?.data_type_id) === targetId;
+          // If source specified, try to find exact match first
+          if (src) {
+            const exactMatch = athleteFacts.find((f: any) => 
+              matchesType(f, id) && 
+              f?.source === src && 
+              isValidValue(f?.value)
+            );
+            if (exactMatch?.value) return exactMatch.value;
+          }
+          // Fallback: find any match for this data_type_id (including null/empty source)
+          const anyMatch = athleteFacts.find((f: any) => 
+            matchesType(f, id) && 
+            isValidValue(f?.value)
+          );
+          return anyMatch?.value || null;
+        };
 
         const athleticInfo = byType(114) as string | null;
 
-        // Coach-provided values (filter source === 'hs_coach')
+        // Coach-provided values (prefer source === 'hs_coach', but fallback to any)
         const coachWeight = byType(6, 'hs_coach');
         const coachHeightFeet = byType(4, 'hs_coach');
         const coachHeightInch = byType(5, 'hs_coach');
@@ -4354,7 +4391,28 @@ const HSSurvey = ({ athleteFacts }: { athleteFacts?: { data_type_id: number; val
     </div>
     <div>
       {(() => {
-        const get = (id: number) => (athleteFacts || []).find((f: any) => f?.data_type_id === id && (f?.source || '').toString().toLowerCase() === 'college_selector')?.value || null;
+        // Helper to get fact by type, preferring college_selector source but falling back to any
+        const get = (id: number) => {
+          if (!athleteFacts) return null;
+          // Helper to check if value is valid
+          const isValidValue = (val: any) => val != null && String(val).trim() !== '';
+          // Helper to compare data_type_id (handle both number and string)
+          const matchesType = (f: any, targetId: number) => 
+            Number(f?.data_type_id) === targetId;
+          // First try to find exact match with college_selector source
+          const exactMatch = athleteFacts.find((f: any) => 
+            matchesType(f, id) && 
+            (f?.source || '').toString().toLowerCase() === 'college_selector' &&
+            isValidValue(f?.value)
+          );
+          if (exactMatch?.value) return exactMatch.value;
+          // Fallback: find any match for this data_type_id (including null/empty source)
+          const anyMatch = athleteFacts.find((f: any) => 
+            matchesType(f, id) && 
+            isValidValue(f?.value)
+          );
+          return anyMatch?.value || null;
+        };
 
         // Campus Information (Step 1)
         const campusItems: { q: string; a: string }[] = [];

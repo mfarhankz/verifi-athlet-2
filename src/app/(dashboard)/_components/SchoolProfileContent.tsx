@@ -24,7 +24,9 @@ import { useUser } from "@/contexts/CustomerContext";
 import { preparePrintRequestData, sendPrintRequest, convertSchoolId } from "@/utils/printUtils";
 import AddPlayerModal from "./AddPlayerModal";
 import EditSchoolModal from "./EditSchoolModal";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import HSAthleteProfileContent from "./HSAthleteProfileContent";
+import AthleteProfileContent from "./AthleteProfileContent";
 interface NewModalProps {
   isVisible: boolean;
   onClose: () => void;
@@ -40,6 +42,7 @@ const { Title, Text } = Typography;
 
 export default function SchoolProfileContent({ schoolId, dataSource, isInModal = false }: SchoolProfileContentProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [schoolName, setSchoolName] = useState<string>('ABERNATHY HS');
   const userDetails = useUser();
   const [prospectsData, setProspectsData] = useState<any[]>([]);
@@ -56,6 +59,11 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
   const [tableSorting, setTableSorting] = useState<{ field: string; order: 'ascend' | 'descend' | null }>({ field: 'gradYear', order: 'ascend' });
   const [currentFilters, setCurrentFilters] = useState<Record<string, any>>({});
   const [isPrinting, setIsPrinting] = useState(false);
+  
+  // Modal state for athlete profile
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
+  const [isAthleteModalVisible, setIsAthleteModalVisible] = useState<boolean>(false);
+  const [selectedAthleteDataSource, setSelectedAthleteDataSource] = useState<'transfer_portal' | 'hs_athletes'>('hs_athletes');
 
   // Column configuration for the prospects table
   const columns = [
@@ -76,7 +84,15 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
       render: (text: string, record: any) => {
         const handleAthleteClick = () => {
           if (record.athlete_id) {
-            router.push(`/hs-athlete?player=${record.athlete_id}&dataSource=hs_athletes`);
+            if (isInModal) {
+              // When in modal, open athlete profile modal instead of navigating
+              setSelectedAthleteId(record.athlete_id);
+              setSelectedAthleteDataSource('hs_athletes');
+              setIsAthleteModalVisible(true);
+            } else {
+              // When not in modal, navigate normally
+              router.push(`/hs-athlete?player=${record.athlete_id}&dataSource=hs_athletes`);
+            }
           }
         };
 
@@ -1311,13 +1327,17 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
                     </p>
                       {(() => {
                         const maxPrepsLink = schoolFacts.find(fact => fact.data_type?.name === 'max_preps_link')?.value;
-                        return maxPrepsLink ? (
+                        if (!maxPrepsLink) return '';
+                        const formattedLink = maxPrepsLink.startsWith('http://') || maxPrepsLink.startsWith('https://') 
+                          ? maxPrepsLink 
+                          : `https://${maxPrepsLink}`;
+                        return (
                           <p className="text-size">
-                            <a href={maxPrepsLink} target="_blank" rel="noopener noreferrer" className="text-[#126DB8] !font-medium cursor-pointer">
+                            <a href={formattedLink} target="_blank" rel="noopener noreferrer" className="text-[#126DB8] !font-medium cursor-pointer">
                               Link
                             </a>
                           </p>
-                        ) : '';
+                        );
                       })()}
                   </div>
                 </div>
@@ -1597,6 +1617,12 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
       </div>
   );
 
+  // Handle athlete modal close
+  const handleCloseAthleteModal = () => {
+    setIsAthleteModalVisible(false);
+    setSelectedAthleteId(null);
+  };
+
   // If in modal, return just the content
   if (isInModal) {
     return (
@@ -1616,6 +1642,56 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
           schoolId={schoolId}
           onSave={handleSchoolDataSaved}
         />
+        
+        {/* Athlete Profile Modal */}
+        <Modal
+          title={null}
+          open={isAthleteModalVisible}
+          onCancel={handleCloseAthleteModal}
+          footer={null}
+          width="95vw"
+          style={{ top: 20 }}
+          className="new-modal-ui"
+          styles={{ 
+            body: {
+              height: 'calc(100vh - 100px)',
+              overflow: 'hidden'
+            }
+          }}
+          destroyOnHidden={true}
+          closable={true}
+          maskClosable={true}
+        >
+          {selectedAthleteId ? (
+            <div style={{ height: '100%', overflow: 'auto' }}>
+              {selectedAthleteDataSource === 'hs_athletes' ? (
+                <HSAthleteProfileContent
+                  athleteId={selectedAthleteId}
+                  onAddToBoard={() => {}}
+                  isInModal={true}
+                  dataSource={'hs_athletes'}
+                  onClose={handleCloseAthleteModal}
+                />
+              ) : (
+                <AthleteProfileContent
+                  athleteId={selectedAthleteId}
+                  onAddToBoard={() => {}}
+                  isInModal={true}
+                  dataSource={selectedAthleteDataSource}
+                />
+              )}
+            </div>
+          ) : (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              height: '50vh' 
+            }}>
+              <div>Player not found</div>
+            </div>
+          )}
+        </Modal>
       </>
     );
   }
