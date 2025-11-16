@@ -300,7 +300,7 @@ export default function SchoolCard({
         </div>
       </div>
       {routeInfo && index !== undefined && index < routeInfo.legs.length && (
-        <div className="absolute right-0 left-0 bottom-[-35px] m-auto flex flex-col items-center justify-center">
+        <div className="absolute right-0 left-0 bottom-[-60px] m-auto flex flex-col items-center justify-center">
           <div className="relative flex items-center">
             <span className="mile-car-left"></span>
             <div className="bg-[#1C1D4D] text-white pl-3 pr-10 py-0.5 !text-lg font-medium italic m-0">
