@@ -4478,7 +4478,7 @@ export function TableSearchContent({
                   style={{
                     position: "relative",
                     width: "100%",
-                    height: "820px",
+                    height: "545px",
                     border: "1px solid #eee",
                   }}
                 >
@@ -4849,7 +4849,7 @@ export function TableSearchContent({
                 >
                   <GoogleMap
                     mapContainerStyle={{ width: "100%", height: "100%" }}
-                    zoom={8}
+                    zoom={4}
                     center={mapCenter}
                     onLoad={(map) => {
                       mapRef.current = map;

@@ -1175,6 +1175,9 @@ function getColumnsToSelect(filters?: FilterState, displayColumns?: string[], da
     columns.add('offer_count_naia');
     columns.add('offer_count_juco');
     columns.add('offer_count_other');
+    // Always include location fields for map view
+    columns.add('address_latitude');
+    columns.add('address_longitude');
   }
   
   // Add stat columns needed for true score calculation
