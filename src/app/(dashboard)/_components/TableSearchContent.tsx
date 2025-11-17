@@ -7,6 +7,7 @@ import React, {
   useMemo,
   useRef,
   Suspense,
+  Fragment,
 } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
@@ -25,7 +26,17 @@ import {
   Tooltip,
   Dropdown,
   MenuProps,
+  Popover,
 } from "antd";
+import {
+  GoogleMap,
+  useJsApiLoader,
+  MarkerF,
+  DirectionsRenderer,
+  Libraries,
+  OverlayView,
+  OverlayViewF,
+} from "@react-google-maps/api";
 import type { TableProps } from "antd";
 import type { TableColumnsType } from "antd";
 import Image from "next/image";
@@ -46,6 +57,7 @@ import {
   fetchHighSchoolColumnConfig,
   fetchAthleteRatings,
   fetchRecruitingAreasForCoach,
+  fetchHighSchoolAthletes,
   convertStateIdsToAbbrevs,
   convertCountyIdsToNames,
   getDefaultBoardForAdding,
@@ -66,6 +78,7 @@ import {
   fetchCustomerRatings,
   type CustomerRating,
   formatStatDecimal,
+  formatPhoneNumber,
 } from "@/utils/utils";
 import { Alert } from "antd";
 import AddAlert from "../_components/AddAlert";
@@ -90,7 +103,6 @@ import CSVExport from "./CSVExport";
 const boxStyle: React.CSSProperties = {
   width: "100%",
   height: "100%",
-  padding: "20px 0 20px 20px",
   flexDirection: "column",
   display: "flex",
 };
@@ -162,6 +174,21 @@ export function TableSearchContent({
   dataSource = "transfer_portal",
   baseRoute = "/transfers",
 }: TableSearchContentProps) {
+  const libraries: Libraries = ["places"];
+  const { isLoaded: isMapApiLoaded, loadError: mapLoadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "",
+    libraries,
+  });
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [mapDirections, setMapDirections] = useState<google.maps.DirectionsResult | null>(null);
+  const [mapRouteInfo, setMapRouteInfo] = useState<{ totalTime: string; totalDistance: string } | null>(null);
+  const mapCenter = { lat:  32.3441812, lng: -86.3384809 }; // Center of US
+
+  useEffect(() => {
+    if (isMapApiLoaded && !mapLoadError) {
+      setIsMapLoaded(true);
+    }
+  }, [isMapApiLoaded, mapLoadError]);
   const searchParams = useSearchParams();
   const router = useRouter();
   const [selectionType] = useState<"checkbox" | "radio">("checkbox");
@@ -211,9 +238,24 @@ export function TableSearchContent({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [displayedData, setDisplayedData] = useState<AthleteData[]>([]);
+  // Map helpers for high schools: route calc when schools selected
+  const updateMapRouteInfo = (result: google.maps.DirectionsResult) => {
+    const legs = result.routes[0].legs;
+    const totalTimeSeconds = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
+    const totalDistanceMeters = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+    const hours = Math.floor(totalTimeSeconds / 3600);
+    const minutes = Math.floor((totalTimeSeconds % 3600) / 60);
+    const totalTime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    const miles = totalDistanceMeters / 1609.34;
+    const totalDistance = `${Math.round(miles)} mi`;
+    setMapRouteInfo({ totalTime, totalDistance });
+  };
+  const [hsPopoverOpen, setHsPopoverOpen] = useState<Record<number, boolean>>({});
+  const [hsAthletes, setHsAthletes] = useState<Record<number, any[]>>({});
   const [extensionInactive, setExtensionInactive] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [maintenanceTimer, setMaintenanceTimer] = useState(120); // 2 minutes in seconds
+  const [highSchoolViewMode, setHighSchoolViewMode] = useState<"map" | "list">("list");
 
   // Function to handle maintenance mode countdown
   const startMaintenanceTimer = useCallback(() => {
@@ -418,6 +460,8 @@ export function TableSearchContent({
 
   // Add ref to track maintenance timer
   const maintenanceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Add ref to access map instance for bounds fitting
+  const mapRef = useRef<google.maps.Map | null>(null);
 
   // Get the active customer and sport abbreviation from context
   const activeCustomer = customers.find(
@@ -1406,6 +1450,10 @@ export function TableSearchContent({
       const baseSelect = [
         "school_id",
         "school_name",
+        "address_latitude",
+        "address_longitude",
+        "school_state",
+        "hs_county",
         ...selectColumns,
         ...Array.from(filterColumns),
       ];
@@ -2249,6 +2297,90 @@ export function TableSearchContent({
       }
     };
   }, [loading, hasMore, data, page, loadMoreData]);
+
+  // Build map route when HS selection changes
+  useEffect(() => {
+    const buildRoute = async () => {
+      if (!isMapLoaded || !isMapApiLoaded) return;
+      const points = selectedHighSchools
+        .map((hs) => {
+          const lat = (hs as any).address_latitude as number | null | undefined;
+          const lng = (hs as any).address_longitude as number | null | undefined;
+          if (!lat || !lng) return null;
+          return { lat, lng };
+        })
+        .filter(Boolean) as { lat: number; lng: number }[];
+
+    if (points.length < 2) {
+      setMapDirections(null);
+      setMapRouteInfo(null);
+      return;
+    }
+
+    try {
+      const directionsService = new window.google.maps.DirectionsService();
+      const origin = points[0];
+      const destination = points[points.length - 1];
+      const waypoints =
+        points.length > 2
+          ? points.slice(1, -1).map((p) => ({
+              location: new window.google.maps.LatLng(p.lat, p.lng),
+              stopover: true,
+            }))
+          : [];
+
+      const result = await directionsService.route({
+        origin: new window.google.maps.LatLng(origin.lat, origin.lng),
+        destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+        waypoints,
+        optimizeWaypoints: false,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      });
+
+      setMapDirections(result);
+      updateMapRouteInfo(result);
+    } catch (err) {
+      // swallow
+    }
+    };
+
+    buildRoute();
+  }, [selectedHighSchools, isMapLoaded, isMapApiLoaded]);
+
+  // Fit map bounds to show all schools when in map view
+  useEffect(() => {
+    if (!isMapLoaded || !isMapApiLoaded || !mapRef.current || highSchoolViewMode !== "map" || dataSource !== "high_schools") {
+      return;
+    }
+
+    const schools = displayedData as any[];
+    const validSchools = schools.filter((hs) => {
+      const lat = hs.address_latitude as number | null | undefined;
+      const lng = hs.address_longitude as number | null | undefined;
+      return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+    });
+
+    if (validSchools.length === 0) {
+      return;
+    }
+
+    const bounds = new window.google.maps.LatLngBounds();
+    validSchools.forEach((hs) => {
+      const lat = hs.address_latitude as number;
+      const lng = hs.address_longitude as number;
+      bounds.extend(new window.google.maps.LatLng(lat, lng));
+    });
+
+    // Fit bounds with padding
+    if (mapRef.current) {
+      mapRef.current.fitBounds(bounds, {
+        top: 50,
+        right: 50,
+        bottom: 50,
+        left: 50,
+      });
+    }
+  }, [displayedData, isMapLoaded, isMapApiLoaded, highSchoolViewMode, dataSource]);
 
   const applyFilters = (filters: FilterState) => {
     setActiveFilters(filters);
@@ -3420,11 +3552,147 @@ export function TableSearchContent({
         }}
       >
         <Flex style={boxStyle}>
+         
           <Flex style={headerBox} justify="space-between" align="center">
             <Typography.Text type="secondary" style={{ fontSize: 14 }}>
               Showing {filteredRecords} of {totalRecords} records
               {isAnyFilterActive && ` (filtered)`}
             </Typography.Text>
+            
+          </Flex>
+          <div
+            className="mb-3 search-row"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+            }}
+          >
+            <Space>
+              <Input.Search
+                style={{ width: 300 }}
+                placeholder="Search here..."
+                allowClear
+                value={localSearchInput}
+                onChange={(e) => handleSearch(e.target.value)}
+                onSearch={handleSearch}
+              />
+              {dataSource !== "high_schools" && (
+                <div style={{ position: "relative" }}>
+                  <SuccessPopover
+                    trigger="top"
+                    content={successMessage}
+                    visible={showSuccessMessage}
+                    onClose={() => setShowSuccessMessage(false)}
+                  >
+                    <Button
+                      onClick={() => {
+                        if (selectedAthletes.length === 0) return;
+
+                        // If multiple boards, show dropdown to select
+                        if (availableBoards.length > 1) {
+                          setIsBoardModalVisible(!isBoardModalVisible);
+                        } else {
+                          // If single board, add directly
+                          if (userDetails && activeCustomerId) {
+                            handleAddToRecruitingBoard();
+                          }
+                        }
+                      }}
+                      type="primary"
+                      loading={isAddingToRecruitingBoard}
+                      disabled={selectedAthletes.length === 0}
+                    >
+                      Add to Recruiting Board ({selectedAthletes.length})
+                    </Button>
+                  </SuccessPopover>
+
+                  {/* Board dropdown appears below button when multiple boards */}
+                  {availableBoards.length > 1 && isBoardModalVisible && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        right: 0,
+                        marginTop: "8px",
+                        zIndex: 1000,
+                      }}
+                    >
+                      <ChooseBoardDropdownWithStatus
+                        isVisible={isBoardModalVisible}
+                        onClose={() => setIsBoardModalVisible(false)}
+                        onSelect={(boardId, boardName) => {
+                          handleBoardSelected(boardId, boardName);
+                          setIsBoardModalVisible(false);
+                          // Automatically add after selection, passing board info directly
+                          handleAddToRecruitingBoard(boardId, boardName);
+                        }}
+                        customerId={activeCustomerId || ""}
+                        athleteIds={selectedAthletes.map((a) => a.id)}
+                        placement="bottomRight"
+                        simpleMode={true}
+                                  />
+                                </div>
+                  )}
+                    </div>
+                  )}
+              {dataSource === "high_schools" && (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handlePrintHighSchools}
+                    type="primary"
+                    loading={isPrintingHighSchools}
+                    disabled={selectedHighSchools.length === 0}
+                    icon={<i className="icon-printer"></i>}
+                  >
+                    Print School Packets ({selectedHighSchools.length})
+                  </Button>
+
+                  <Button 
+                    type={highSchoolViewMode === "map" ? "primary" : "text"} 
+                    onClick={() => setHighSchoolViewMode("map")}
+                  >
+                    Map View
+                  </Button>
+
+                  <Button 
+                    type={highSchoolViewMode === "list" ? "primary" : "text"} 
+                    onClick={() => setHighSchoolViewMode("list")}
+                  >
+                    List View
+                  </Button>
+                </div>
+              )}
+            </Space>
+            {(dataSource === "transfer_portal" || dataSource === "all_athletes" || dataSource === "juco" || dataSource === "high_schools") && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                {seasonData && (
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      fontStyle: "italic",
+                      color: "#666",
+                    }}
+                  >
+                    Stats on Display from the {seasonData} season
+            </div>
+          )}
+                <Button
+                  onClick={loadMoreData}
+                  disabled={loading || !hasMore}
+                  loading={loading}
+                  size="small"
+                  type="default"
+                >
+                  Load More (25)
+                </Button>
+
             <Space>
               <div
                 className="selectbox-ui"
@@ -3455,11 +3723,13 @@ export function TableSearchContent({
                     renderActiveFilters={renderActiveFilters}
                   />
                 )}
-                {(dataSource === "transfer_portal" ||
+                {(
+                  dataSource === "transfer_portal" ||
                   dataSource === "all_athletes" ||
-                  dataSource === "hs_athletes" ||
                   dataSource === "high_schools" ||
-                  dataSource === "juco") && (
+                  dataSource === "juco" ||
+                  dataSource === "hs_athletes"
+                ) && (
                   <CSVExport<any>
                     fetchData={async (page: number, pageSize: number) => {
                       // Handle high schools separately
@@ -3590,12 +3860,13 @@ export function TableSearchContent({
 
                       // Handle athlete data sources
                       const athlete = item as AthleteData;
+                      const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "hs_athletes";
 
                       // Separate Name column fields into individual columns
                       row.push(athlete.athlete_name || ""); // Name
 
                       // For hs_athletes, skip Year and Division
-                      if (dataSource !== "hs_athletes") {
+                      if (currentDataSource !== "hs_athletes") {
                         row.push(athlete.year || ""); // Year
                         row.push(athlete.division || ""); // Division
                       }
@@ -3615,7 +3886,7 @@ export function TableSearchContent({
                           : ""
                       ); // Commit Date
 
-                      const config = DATA_SOURCE_COLUMN_CONFIG[dataSource];
+                      const config = DATA_SOURCE_COLUMN_CONFIG[currentDataSource];
                       if (config.date) row.push(athlete.date || "");
                       if (config.athletic_aid)
                         row.push(athlete.athletic_aid || "");
@@ -3623,8 +3894,8 @@ export function TableSearchContent({
 
                       // For hs_athletes and juco, skip High School column
                       if (
-                        dataSource !== "hs_athletes" &&
-                        dataSource !== "juco" &&
+                        currentDataSource !== "hs_athletes" &&
+                        currentDataSource !== "juco" &&
                         config.high_name
                       ) {
                         row.push(athlete.high_name || ""); // High School
@@ -3678,7 +3949,8 @@ export function TableSearchContent({
                         }
 
                         // For hs_athletes, add Number of Offers after the Offer column
-                        if (isOfferColumn && dataSource === "hs_athletes") {
+                        const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "hs_athletes";
+                        if (isOfferColumn && currentDataSource === "hs_athletes") {
                           row.push(athlete.offer_count_all ?? 0); // Number of Offers
                         }
                       });
@@ -3693,35 +3965,37 @@ export function TableSearchContent({
                               (col) => col.display_name || col.dataIndex
                             ),
                           ]
-                        : [
+                        : (() => {
+                            const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "hs_athletes";
+                            return [
                             "Name", // Separated from Name column
                             // For hs_athletes, skip Year and Division
-                            ...(dataSource !== "hs_athletes"
+                              ...(currentDataSource !== "hs_athletes"
                               ? ["Year", "Division"]
                               : []),
                             "Current School", // Separated from Name column
                             "Commit School", // Separated from Name column
                             "Commit Date", // Separated from Name column
-                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].date
+                              ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource].date
                               ? ["Date"]
                               : []),
-                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                              ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
                               .athletic_aid
                               ? ["Athletic Aid"]
                               : []),
-                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].position
+                              ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource].position
                               ? ["Position"]
                               : []),
                             // For hs_athletes and juco, skip High School column
-                            ...(dataSource !== "hs_athletes" &&
-                            dataSource !== "juco" &&
-                            DATA_SOURCE_COLUMN_CONFIG[dataSource].high_name
+                              ...(currentDataSource !== "hs_athletes" &&
+                              currentDataSource !== "juco" &&
+                              DATA_SOURCE_COLUMN_CONFIG[currentDataSource].high_name
                               ? ["High School"]
                               : []),
-                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].state
+                            ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource].state
                               ? ["State"]
                               : []),
-                            ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                            ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
                               .college_state
                               ? ["College State"]
                               : []),
@@ -3754,36 +4028,39 @@ export function TableSearchContent({
                                 // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
                                 if (
                                   isOfferColumn &&
-                                  dataSource === "hs_athletes"
+                                  currentDataSource === "hs_athletes"
                                 ) {
                                   return ["Best Offer", "Number of Offers"];
                                 }
                                 return [displayName];
                               }),
-                          ]
+                          ];
+                        })()
                     }
                     filename={
-                      dataSource === "transfer_portal"
+                      dataSource === "high_schools"
+                        ? "high-schools"
+                        : dataSource === "transfer_portal"
                         ? "transfers"
                         : dataSource === "all_athletes"
                         ? "pre-portal"
-                        : dataSource === "hs_athletes"
-                        ? "hs-athletes"
                         : dataSource === "juco"
                         ? "juco"
+                        : (dataSource as "hs_athletes") === "hs_athletes"
+                        ? "hs-athletes"
                         : "high-schools"
                     }
                     maxRows={
-                      dataSource === "transfer_portal"
+                      dataSource === "high_schools"
+                        ? 500
+                        : dataSource === "transfer_portal"
                         ? 50
                         : dataSource === "all_athletes"
                         ? 50
-                        : dataSource === "hs_athletes"
-                        ? 1000
-                        : dataSource === "high_schools"
-                        ? 500
                         : dataSource === "juco"
                         ? 50
+                        : (dataSource as "hs_athletes") === "hs_athletes"
+                        ? 1000
                         : 50
                     }
                     disabled={
@@ -3794,16 +4071,16 @@ export function TableSearchContent({
                     userId={userDetails?.id}
                     customerId={activeCustomerId || undefined}
                     tableName={
-                      dataSource === "transfer_portal"
+                      dataSource === "high_schools"
+                        ? "high-schools"
+                        : dataSource === "transfer_portal"
                         ? "transfers"
                         : dataSource === "all_athletes"
                         ? "pre-portal"
-                        : dataSource === "hs_athletes"
-                        ? "hs-athletes"
-                        : dataSource === "high_schools"
-                        ? "high-schools"
                         : dataSource === "juco"
                         ? "juco"
+                        : (dataSource as "hs_athletes") === "hs_athletes"
+                        ? "hs-athletes"
                         : "unknown"
                     }
                     filterDetails={activeFilters}
@@ -3832,128 +4109,7 @@ export function TableSearchContent({
                   dataSource={dataSource}
                 />
               </div>
-
-              {/* <div className="selectbox-ui">
-                <TableView />
-              </div> */}
             </Space>
-          </Flex>
-          <div
-            className="mb-3 search-row"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-            }}
-          >
-            <Space>
-              <Input.Search
-                style={{ width: 300 }}
-                placeholder="Search here..."
-                allowClear
-                value={localSearchInput}
-                onChange={(e) => handleSearch(e.target.value)}
-                onSearch={handleSearch}
-              />
-              {dataSource !== "high_schools" && (
-                <div style={{ position: "relative" }}>
-                  <SuccessPopover
-                    trigger="top"
-                    content={successMessage}
-                    visible={showSuccessMessage}
-                    onClose={() => setShowSuccessMessage(false)}
-                  >
-                    <Button
-                      onClick={() => {
-                        if (selectedAthletes.length === 0) return;
-
-                        // If multiple boards, show dropdown to select
-                        if (availableBoards.length > 1) {
-                          setIsBoardModalVisible(!isBoardModalVisible);
-                        } else {
-                          // If single board, add directly
-                          if (userDetails && activeCustomerId) {
-                            handleAddToRecruitingBoard();
-                          }
-                        }
-                      }}
-                      type="primary"
-                      loading={isAddingToRecruitingBoard}
-                      disabled={selectedAthletes.length === 0}
-                    >
-                      Add to Recruiting Board ({selectedAthletes.length})
-                    </Button>
-                  </SuccessPopover>
-
-                  {/* Board dropdown appears below button when multiple boards */}
-                  {availableBoards.length > 1 && isBoardModalVisible && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        top: "100%",
-                        right: 0,
-                        marginTop: "8px",
-                        zIndex: 1000,
-                      }}
-                    >
-                      <ChooseBoardDropdownWithStatus
-                        isVisible={isBoardModalVisible}
-                        onClose={() => setIsBoardModalVisible(false)}
-                        onSelect={(boardId, boardName) => {
-                          handleBoardSelected(boardId, boardName);
-                          setIsBoardModalVisible(false);
-                          // Automatically add after selection, passing board info directly
-                          handleAddToRecruitingBoard(boardId, boardName);
-                        }}
-                        customerId={activeCustomerId || ""}
-                        athleteIds={selectedAthletes.map((a) => a.id)}
-                        placement="bottomRight"
-                        simpleMode={true}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-              {dataSource === "high_schools" && (
-                <Button
-                  onClick={handlePrintHighSchools}
-                  type="primary"
-                  loading={isPrintingHighSchools}
-                  disabled={selectedHighSchools.length === 0}
-                  icon={<i className="icon-printer"></i>}
-                >
-                  Print School Packets ({selectedHighSchools.length})
-                </Button>
-              )}
-            </Space>
-            {dataSource !== "hs_athletes" && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
-                {seasonData && (
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      fontStyle: "italic",
-                      color: "#666",
-                    }}
-                  >
-                    Stats on Display from the {seasonData} season
-                  </div>
-                )}
-                <Button
-                  onClick={loadMoreData}
-                  disabled={loading || !hasMore}
-                  loading={loading}
-                  size="small"
-                  type="default"
-                >
-                  Load More (25)
-                </Button>
               </div>
             )}
           </div>
@@ -4013,6 +4169,7 @@ export function TableSearchContent({
                 style={{ marginBottom: "16px" }}
               />
             )}
+          {(dataSource !== "high_schools" || highSchoolViewMode === "list") && (
           <div
             style={{
               flex: "1 1 auto",
@@ -4061,6 +4218,249 @@ export function TableSearchContent({
               }}
             />
           </div>
+          )}
+           {dataSource === "high_schools" && highSchoolViewMode === "map" && (
+            <div className="">
+              {(!isMapLoaded) ? (
+                <div className="text-center py-4">Loading map...</div>
+              ) : (
+                <div style={{ position: "relative", width: "100%", height: "820px", border: "1px solid #eee" }}>
+                  <GoogleMap
+                    mapContainerStyle={{ width: "100%", height: "100%" }}
+                    zoom={8}
+                    center={mapCenter}
+                    onLoad={(map) => {
+                      mapRef.current = map;
+                    }}
+                    onUnmount={() => {
+                      mapRef.current = null;
+                    }}
+                    options={{
+                      mapTypeControl: true,
+                      streetViewControl: true,
+                      mapTypeId: "roadmap",
+                      fullscreenControl: true,
+                      zoomControl: true,
+                      gestureHandling: "greedy",
+                    }}
+                  >
+                    {mapDirections ? (
+                      <DirectionsRenderer
+                        directions={mapDirections}
+                        options={{
+                          suppressMarkers: true,
+                          polylineOptions: {
+                            strokeColor: "#1C1D4D",
+                            strokeWeight: 4,
+                            strokeOpacity: 1,
+                          },
+                        }}
+                      />
+                    ) : null}
+                    {(dataSource === "high_schools" ? displayedData : selectedHighSchools).map((hs, index) => {
+                      const lat = (hs as any).address_latitude as number | null | undefined;
+                      const lng = (hs as any).address_longitude as number | null | undefined;
+                      if (!lat || !lng) return null;
+                      const schoolId = (hs as any).id || (hs as any).school_id || `school-${index}`;
+                      return (
+                        <Fragment key={`marker-${schoolId}-${index}`}>
+                          <MarkerF
+                            position={{ lat, lng }}
+                            label={{
+                              text: `${index + 1}`,
+                              color: "#1C1D4D",
+                              fontWeight: "bold",
+                            }}
+                            icon={{
+                              url: "/svgicons/map-dot.svg",
+                              scaledSize:
+                                window.google && window.google.maps
+                                  ? new window.google.maps.Size(28, 28)
+                                  : undefined,
+                              anchor:
+                                window.google && window.google.maps
+                                  ? new window.google.maps.Point(14, 14)
+                                  : undefined,
+                            }}
+                            title={`${index + 1}. ${(hs as any).school || ""}`}
+                          />
+                          <OverlayViewF
+                            position={{ lat, lng }}
+                            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                            getPixelPositionOffset={(width, height) => ({
+                              x: -width / 2,
+                              y: -height - 30,
+                            })}
+                          >
+                            <Popover
+                              content={
+                                <div className="space-y-2 min-w-[400px]">
+                                    <div className="mb-4">
+                                    <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
+                                      {(hs as any).school || ""}
+                                    </h4>
+                                    <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                      {/* No address string available in HS view; show county/state */}
+                                      {(((hs as any).hs_county) || ((hs as any).school_state)) && (
+                                        <span>
+                                          {(hs as any).hs_county && (
+                                            <span>{(hs as any).hs_county}</span>
+                                          )}
+                                          {(hs as any).hs_county && (hs as any).school_state && <span> | </span>}
+                                          {(hs as any).school_state && (
+                                            <span>{(hs as any).school_state}</span>
+                                          )}
+                                        </span>
+                                      )}
+                                      {(hs as any).ad_email && (
+                                        <>
+                                          <br />
+                                          <a href={`mailto:${(hs as any).ad_email}`} className="text-[14px] text-blue-600">{(hs as any).ad_email}</a>
+                                        </>
+                                      )}
+                                      {(hs as any).school_phone && (
+                                        <>
+                                          <br />
+                                          <a href={`tel:${String((hs as any).school_phone).replace(/\D/g, '')}`} className="text-[14px] text-blue-600">{formatPhoneNumber(String((hs as any).school_phone))}</a>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Athletes (if loaded) */}
+                                  <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
+                                    {hsAthletes[index] && hsAthletes[index].length > 0 ? (
+                                      hsAthletes[index].map((athlete: any, athleteIndex: number) => (
+                                        <div key={athleteIndex} className="text-xs flex items-center justify-start gap-2">
+                                          <img
+                                            src={athlete.image_url || "/blank-user.svg"}
+                                            alt={athlete.name || "Athlete"}
+                                            height={50}
+                                            width={50}
+                                            className="rounded-full object-cover"
+                                          />
+                                          <div>
+                                            <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
+                                              {athlete.name || '-'}
+                                            </h6>
+                                            <span className="!text-[14px] !leading-[16px] mb-0">
+                                              {athlete.athleticProjection || '-'} <br />
+                                              {athlete.gradYear || '-'}
+                                            </span>
+                                          </div>
+                                        </div>
+                                      ))
+                                    ) : hsAthletes[index] !== undefined ? (
+                                      <div className="text-gray-400 text-[12px]">No athletes found</div>
+                                    ) : (
+                                      <div className="text-gray-400 text-[12px]">Loading athletes...</div>
+                                    )}
+                                  </div>
+                                </div>
+                              }
+                              title={null}
+                              trigger="click"
+                              open={!!hsPopoverOpen[index]}
+                              onOpenChange={async (open: boolean) => {
+                                setHsPopoverOpen({
+                                  ...hsPopoverOpen,
+                                  [index]: open,
+                                });
+                                if (open && activeCustomerId) {
+                                  try {
+                                    const schoolId = String((hs as any).id);
+                                    if (schoolId) {
+                                      const result = await fetchHighSchoolAthletes(
+                                        schoolId,
+                                        'fb',
+                                        activeCustomerId,
+                                        { page: 1, limit: 100 }
+                                      );
+                                      if (result.data) {
+                                        const projectionOrder = [
+                                          'FBS P4 - Top half',
+                                          'FBS P4',
+                                          'FBS G5 - Top half',
+                                          'FBS G5',
+                                          'FCS - Full Scholarship',
+                                          'FCS',
+                                          'D2 - Top half',
+                                          'D2',
+                                          'D3 - Top half',
+                                          'D3',
+                                          'D3 Walk-on'
+                                        ];
+                                        const sortedAthletes = result.data.sort((a: any, b: any) => {
+                                          const indexA = projectionOrder.indexOf(a.athleticProjection || '');
+                                          const indexB = projectionOrder.indexOf(b.athleticProjection || '');
+                                          if (indexA !== -1 && indexB !== -1) {
+                                            if (indexA !== indexB) return indexA - indexB;
+                                          } else if (indexA !== -1) {
+                                            return -1;
+                                          } else if (indexB !== -1) {
+                                            return 1;
+                                          } else if (a.athleticProjection && b.athleticProjection) {
+                                            const cmp = a.athleticProjection.localeCompare(b.athleticProjection);
+                                            if (cmp !== 0) return cmp;
+                                          }
+                                          const yearA = parseInt(a.gradYear) || 0;
+                                          const yearB = parseInt(b.gradYear) || 0;
+                                          return yearA - yearB;
+                                        });
+                                        setHsAthletes({
+                                          ...hsAthletes,
+                                          [index]: sortedAthletes.slice(0, 2)
+                                        });
+                                      }
+                                    }
+                                  } catch (e) {
+                                    // ignore
+                                  }
+                                }
+                              }}
+                            >
+                              <div
+                                className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
+                                style={{ minWidth: "max-content" }}
+                              >
+                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                  <img
+                                    src="/blank-hs.svg"
+                                    alt="School"
+                                    className="w-full h-full object-contain p-1"
+                                  />
+                                </div>
+                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
+                                  <span className="truncate block w-full">
+                                    {(hs as any).school || ""}
+                                  </span>
+                                </h6>
+                              </div>
+                            </Popover>
+                          </OverlayViewF>
+                        </Fragment>
+                      );
+                    })}
+                  </GoogleMap>
+                  {mapRouteInfo && (
+                    <div style={{ position: "absolute", left: 16, bottom: 16 }} className="text-left p-1.5 bg-white/60 w-[180px] border-2 border-[#1C1D4D] border-solid">
+                      <div className="text-base font-bold text-gray-700 flex items-center justify-center">
+                        <img src="/svgicons/big-flag.svg" alt="Route" height={50} className="mr-1.5" />
+                        <div className="text-gray-600 mt-0.5 text-right">
+                          <h5 className="font-semibold !text-[14px] italic mb-0.5">Total Drive Time</h5>
+                          <h3 className="!text-[18px] font-bold italic mb-1">{mapRouteInfo.totalTime}</h3>
+                          <h6 className="font-semibold !text-[14px] italic flex items-center justify-end">
+                            <img src="/svgicons/mile-car.svg" alt="Miles" height={16} className="mr-1.5" />
+                            {mapRouteInfo.totalDistance}
+                          </h6>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <Modal
             title={
               <Flex align="center" gap={8}>
