@@ -146,8 +146,8 @@ function SidebarContent() {
       newSelectedKey = '4';
     } else if (pathname === '/athlete-compare') {
       newSelectedKey = '5';
-    } else if (pathname === '/road-planner') {
-      newSelectedKey = '6';
+    // } else if (pathname === '/road-planner') {
+    //   newSelectedKey = '6';
     } else if (pathname === '/admin') {
       newSelectedKey = '13';
     }  else if (pathname === '/activity-feed') {
@@ -346,11 +346,11 @@ function SidebarContent() {
       icon: <i className="icon-ranking-1" />,
       label: <StyledLink href="/athlete-compare">Athlete Compare</StyledLink>,
     },
-    {
-      key: "6",
-      icon: <i className="icon-map" />,
-      label: <StyledLink href="/road-planner">Road Planner</StyledLink>,
-    },
+    // {
+    //   key: "6",
+    //   icon: <i className="icon-map" />,
+    //   label: <StyledLink href="/road-planner">Road Planner</StyledLink>,
+    // },
     {
       key: "7",
       icon: <i className="icon-dollar-square" />,
