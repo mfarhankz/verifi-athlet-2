@@ -2996,6 +2996,73 @@ export function TableSearchContent({
   };
 
   // Handle printing selected high schools
+  // Road map functions for high schools
+  const handleRemoveSchool = (schoolId: string) => {
+    setSelectedHighSchools((prev) => 
+      prev.filter((school) => String(school.id) !== schoolId)
+    );
+  };
+
+  const handleSubmitToMap = () => {
+    if (selectedHighSchools.length === 0) return;
+    
+    // Convert selectedHighSchools to the format expected by road planner
+    const selectedAddresses: string[] = [];
+    const selectedSchoolData: any[] = [];
+    
+    selectedHighSchools.forEach((school) => {
+      const schoolAny = school as any;
+      // Create an address string from available data
+      const addressParts: string[] = [];
+      if (schoolAny.address_street1) addressParts.push(schoolAny.address_street1);
+      if (schoolAny.address_city) addressParts.push(schoolAny.address_city);
+      if (schoolAny.address_state) addressParts.push(schoolAny.address_state);
+      if (schoolAny.address_zip) addressParts.push(schoolAny.address_zip);
+      
+      const address = addressParts.join(", ") || `${school.school || ""}, ${schoolAny.school_state || ""}`;
+      
+      selectedAddresses.push(address);
+      selectedSchoolData.push({
+        school: school.school || "",
+        address: address,
+        county: schoolAny.hs_county || "",
+        state: schoolAny.school_state || "",
+        school_id: school.id,
+        high_school_id: school.high_school_id || school.id,
+        address_latitude: schoolAny.address_latitude,
+        address_longitude: schoolAny.address_longitude,
+        raw_data: {
+          address_street1: schoolAny.address_street1 || "",
+          address_city: schoolAny.address_city || "",
+          address_state: schoolAny.address_state || schoolAny.school_state || "",
+          address_zip: schoolAny.address_zip || "",
+          high_school_id: String(school.high_school_id || school.id || ""),
+        },
+      });
+    });
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem("selectedAddresses", JSON.stringify(selectedAddresses));
+      localStorage.setItem("schoolData", JSON.stringify(selectedSchoolData));
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+    }
+    
+    // Navigate to road planner map
+    router.push("/road-planner/map");
+  };
+
+  const clearAllSelections = () => {
+    setSelectedHighSchools([]);
+    try {
+      localStorage.removeItem("selectedAddresses");
+      localStorage.removeItem("schoolData");
+    } catch (error) {
+      console.error("Error clearing localStorage:", error);
+    }
+  };
+
   const handlePrintHighSchools = async () => {
     if (selectedHighSchools.length === 0) {
       alert("Please select at least one high school to print.");
@@ -4298,6 +4365,25 @@ export function TableSearchContent({
                                     <div className="mb-4">
                                     <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
                                       {(hs as any).school || ""}
+
+                                      <a 
+                                        href="#" 
+                                        className="text-[14px] text-blue-600 hover:underline"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          // Add school to selection if not already selected
+                                          const schoolId = String((hs as any).id);
+                                          const isAlreadySelected = selectedHighSchools.some(
+                                            (selected) => String(selected.id) === schoolId
+                                          );
+                                          if (!isAlreadySelected) {
+                                            setSelectedHighSchools((prev) => [...prev, hs as HighSchoolData]);
+                                          }
+                                        }}
+                                      >
+                                        Add
+                                      </a>
                                     </h4>
                                     <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
                                       {/* No address string available in HS view; show county/state */}
@@ -4457,6 +4543,90 @@ export function TableSearchContent({
                       </div>
                     </div>
                   )}
+
+{dataSource === "high_schools" && (
+            <div className="absolute bottom-[42px] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
+              <div className="flex flex-row justify-between items-center max-w-full">
+                <div className="flex-1 flex flex-col items-start overflow-hidden">
+                  <h4>Road Map</h4>
+                  <div className="flex-1 flex flex-wrap gap-2 min-h-[36px] overflow-x-auto">
+                    {selectedHighSchools.length === 0 ? (
+                      <span className="text-gray-400 italic">
+                        No schools selected
+                      </span>
+                    ) : (
+                      selectedHighSchools.map((school, index) => {
+                        const schoolId = String((school as any).id || index);
+                        return (
+                          <div key={schoolId} className="">
+                            <div
+                              className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
+                              style={{ minWidth: "max-content" }}
+                            >
+                              <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                <img
+                                  src="/blank-hs.svg"
+                                  alt="School"
+                                  className="w-full h-full object-contain p-1"
+                                />
+                              </div>
+                              <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
+                                <span className="block w-full truncate max-w-[150px]">
+                                  {school.school || ""}
+                                </span>
+                              </h6>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveSchool(schoolId);
+                                }}
+                                className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                title="Remove from road plan"
+                                aria-label="Remove school from road plan"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  className="w-5 h-5"
+                                  style={{ fill: 'white', stroke: 'white', strokeWidth: 0 }}
+                                >
+                                  <path
+                                    d="M6 18L18 6M6 6l12 12"
+                                    stroke="white"
+                                    strokeWidth="3.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    fill="none"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end mr-10">
+                  <Button
+                    type="primary"
+                    onClick={() => router.push("/road-planner")}
+                    disabled={selectedHighSchools.length === 0}
+                  >
+                    Map{" "}
+                    {selectedHighSchools.length > 0 &&
+                      `(${selectedHighSchools.length})`}
+                  </Button>
+
+                  {selectedHighSchools.length > 0 && (
+                    <Button type="link" className="text-[16px] italic underline !text-[#126DB8] font-medium" onClick={clearAllSelections}>
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
                 </div>
               )}
             </div>
