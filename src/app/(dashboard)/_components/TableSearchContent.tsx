@@ -180,9 +180,13 @@ export function TableSearchContent({
     libraries,
   });
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [mapDirections, setMapDirections] = useState<google.maps.DirectionsResult | null>(null);
-  const [mapRouteInfo, setMapRouteInfo] = useState<{ totalTime: string; totalDistance: string } | null>(null);
-  const mapCenter = { lat:  32.3441812, lng: -86.3384809 }; // Center of US
+  const [mapDirections, setMapDirections] =
+    useState<google.maps.DirectionsResult | null>(null);
+  const [mapRouteInfo, setMapRouteInfo] = useState<{
+    totalTime: string;
+    totalDistance: string;
+  } | null>(null);
+  const mapCenter = { lat: 32.3441812, lng: -86.3384809 }; // Center of US
 
   useEffect(() => {
     if (isMapApiLoaded && !mapLoadError) {
@@ -241,8 +245,14 @@ export function TableSearchContent({
   // Map helpers for high schools: route calc when schools selected
   const updateMapRouteInfo = (result: google.maps.DirectionsResult) => {
     const legs = result.routes[0].legs;
-    const totalTimeSeconds = legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
-    const totalDistanceMeters = legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0);
+    const totalTimeSeconds = legs.reduce(
+      (sum, leg) => sum + (leg.duration?.value || 0),
+      0
+    );
+    const totalDistanceMeters = legs.reduce(
+      (sum, leg) => sum + (leg.distance?.value || 0),
+      0
+    );
     const hours = Math.floor(totalTimeSeconds / 3600);
     const minutes = Math.floor((totalTimeSeconds % 3600) / 60);
     const totalTime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
@@ -250,12 +260,19 @@ export function TableSearchContent({
     const totalDistance = `${Math.round(miles)} mi`;
     setMapRouteInfo({ totalTime, totalDistance });
   };
-  const [hsPopoverOpen, setHsPopoverOpen] = useState<Record<number, boolean>>({});
+  const [hsPopoverOpen, setHsPopoverOpen] = useState<Record<number, boolean>>(
+    {}
+  );
   const [hsAthletes, setHsAthletes] = useState<Record<number, any[]>>({});
   const [extensionInactive, setExtensionInactive] = useState(false);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [maintenanceTimer, setMaintenanceTimer] = useState(120); // 2 minutes in seconds
-  const [highSchoolViewMode, setHighSchoolViewMode] = useState<"map" | "list">("list");
+  const [highSchoolViewMode, setHighSchoolViewMode] = useState<"map" | "list">(
+    "list"
+  );
+  const [hsAthleteViewMode, setHsAthleteViewMode] = useState<"map" | "list">(
+    "list"
+  );
 
   // Function to handle maintenance mode countdown
   const startMaintenanceTimer = useCallback(() => {
@@ -2305,7 +2322,10 @@ export function TableSearchContent({
       const points = selectedHighSchools
         .map((hs) => {
           const lat = (hs as any).address_latitude as number | null | undefined;
-          const lng = (hs as any).address_longitude as number | null | undefined;
+          const lng = (hs as any).address_longitude as
+            | number
+            | null
+            | undefined;
           if (!lat || !lng) return null;
           return { lat, lng };
         })
@@ -2331,7 +2351,10 @@ export function TableSearchContent({
 
       const result = await directionsService.route({
         origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-        destination: new window.google.maps.LatLng(destination.lat, destination.lng),
+          destination: new window.google.maps.LatLng(
+            destination.lat,
+            destination.lng
+          ),
         waypoints,
         optimizeWaypoints: false,
         travelMode: window.google.maps.TravelMode.DRIVING,
@@ -2349,25 +2372,34 @@ export function TableSearchContent({
 
   // Fit map bounds to show all schools when in map view
   useEffect(() => {
-    if (!isMapLoaded || !isMapApiLoaded || !mapRef.current || highSchoolViewMode !== "map" || dataSource !== "high_schools") {
+    if (!isMapLoaded || !isMapApiLoaded || !mapRef.current) {
       return;
     }
 
-    const schools = displayedData as any[];
-    const validSchools = schools.filter((hs) => {
-      const lat = hs.address_latitude as number | null | undefined;
-      const lng = hs.address_longitude as number | null | undefined;
+    const isHighSchoolMap =
+      highSchoolViewMode === "map" && dataSource === "high_schools";
+    const isHsAthleteMap =
+      hsAthleteViewMode === "map" && dataSource === "hs_athletes";
+
+    if (!isHighSchoolMap && !isHsAthleteMap) {
+      return;
+    }
+
+    const items = displayedData as any[];
+    const validItems = items.filter((item) => {
+      const lat = item.address_latitude as number | null | undefined;
+      const lng = item.address_longitude as number | null | undefined;
       return lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
     });
 
-    if (validSchools.length === 0) {
+    if (validItems.length === 0) {
       return;
     }
 
     const bounds = new window.google.maps.LatLngBounds();
-    validSchools.forEach((hs) => {
-      const lat = hs.address_latitude as number;
-      const lng = hs.address_longitude as number;
+    validItems.forEach((item) => {
+      const lat = item.address_latitude as number;
+      const lng = item.address_longitude as number;
       bounds.extend(new window.google.maps.LatLng(lat, lng));
     });
 
@@ -2380,7 +2412,14 @@ export function TableSearchContent({
         left: 50,
       });
     }
-  }, [displayedData, isMapLoaded, isMapApiLoaded, highSchoolViewMode, dataSource]);
+  }, [
+    displayedData,
+    isMapLoaded,
+    isMapApiLoaded,
+    highSchoolViewMode,
+    hsAthleteViewMode,
+    dataSource,
+  ]);
 
   const applyFilters = (filters: FilterState) => {
     setActiveFilters(filters);
@@ -2998,29 +3037,32 @@ export function TableSearchContent({
   // Handle printing selected high schools
   // Road map functions for high schools
   const handleRemoveSchool = (schoolId: string) => {
-    setSelectedHighSchools((prev) => 
+    setSelectedHighSchools((prev) =>
       prev.filter((school) => String(school.id) !== schoolId)
     );
   };
 
   const handleSubmitToMap = () => {
     if (selectedHighSchools.length === 0) return;
-    
+
     // Convert selectedHighSchools to the format expected by road planner
     const selectedAddresses: string[] = [];
     const selectedSchoolData: any[] = [];
-    
+
     selectedHighSchools.forEach((school) => {
       const schoolAny = school as any;
       // Create an address string from available data
       const addressParts: string[] = [];
-      if (schoolAny.address_street1) addressParts.push(schoolAny.address_street1);
+      if (schoolAny.address_street1)
+        addressParts.push(schoolAny.address_street1);
       if (schoolAny.address_city) addressParts.push(schoolAny.address_city);
       if (schoolAny.address_state) addressParts.push(schoolAny.address_state);
       if (schoolAny.address_zip) addressParts.push(schoolAny.address_zip);
-      
-      const address = addressParts.join(", ") || `${school.school || ""}, ${schoolAny.school_state || ""}`;
-      
+
+      const address =
+        addressParts.join(", ") ||
+        `${school.school || ""}, ${schoolAny.school_state || ""}`;
+
       selectedAddresses.push(address);
       selectedSchoolData.push({
         school: school.school || "",
@@ -3034,27 +3076,104 @@ export function TableSearchContent({
         raw_data: {
           address_street1: schoolAny.address_street1 || "",
           address_city: schoolAny.address_city || "",
-          address_state: schoolAny.address_state || schoolAny.school_state || "",
+          address_state:
+            schoolAny.address_state || schoolAny.school_state || "",
           address_zip: schoolAny.address_zip || "",
           high_school_id: String(school.high_school_id || school.id || ""),
         },
       });
     });
-    
+
     // Save to localStorage
     try {
-      localStorage.setItem("selectedAddresses", JSON.stringify(selectedAddresses));
+      localStorage.setItem(
+        "selectedAddresses",
+        JSON.stringify(selectedAddresses)
+      );
       localStorage.setItem("schoolData", JSON.stringify(selectedSchoolData));
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
-    
+
     // Navigate to road planner map
     router.push("/road-planner/map");
   };
 
   const clearAllSelections = () => {
     setSelectedHighSchools([]);
+    try {
+      localStorage.removeItem("selectedAddresses");
+      localStorage.removeItem("schoolData");
+    } catch (error) {
+      console.error("Error clearing localStorage:", error);
+    }
+  };
+
+  // Road map functions for hs_athletes
+  const handleRemoveAthlete = (athleteId: string) => {
+    setSelectedAthletes((prev) =>
+      prev.filter((athlete) => String(athlete.id) !== athleteId)
+    );
+  };
+
+  const handleSubmitAthletesToMap = () => {
+    if (selectedAthletes.length === 0) return;
+
+    // Convert selectedAthletes to the format expected by road planner
+    const selectedAddresses: string[] = [];
+    const selectedSchoolData: any[] = [];
+
+    selectedAthletes.forEach((athlete) => {
+      const athleteAny = athlete as any;
+      // Create an address string from available data
+      const addressParts: string[] = [];
+      if (athleteAny.hometown_street)
+        addressParts.push(athleteAny.hometown_street);
+      if (athlete.hometown) addressParts.push(athlete.hometown);
+      if (athlete.hometown_state) addressParts.push(athlete.hometown_state);
+      if (athleteAny.hometown_zip) addressParts.push(athleteAny.hometown_zip);
+
+      const address =
+        addressParts.join(", ") ||
+        `${athlete.hometown || ""}, ${athlete.hometown_state || ""}`;
+
+      selectedAddresses.push(address);
+      selectedSchoolData.push({
+        school: athlete.high_name || athlete.athlete_name || "",
+        address: address,
+        county: athleteAny.hs_county || "",
+        state: athlete.hometown_state || "",
+        school_id: athlete.school_id || "",
+        high_school_id: athlete.school_id || "",
+        address_latitude: athleteAny.address_latitude,
+        address_longitude: athleteAny.address_longitude,
+        raw_data: {
+          address_street1: athleteAny.hometown_street || "",
+          address_city: athlete.hometown || "",
+          address_state: athlete.hometown_state || "",
+          address_zip: athleteAny.hometown_zip || "",
+          high_school_id: String(athlete.school_id || ""),
+        },
+      });
+    });
+
+    // Save to localStorage
+    try {
+      localStorage.setItem(
+        "selectedAddresses",
+        JSON.stringify(selectedAddresses)
+      );
+      localStorage.setItem("schoolData", JSON.stringify(selectedSchoolData));
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+    }
+
+    // Navigate to road planner map
+    router.push("/road-planner/map");
+  };
+
+  const clearAllAthleteSelections = () => {
+    setSelectedAthletes([]);
     try {
       localStorage.removeItem("selectedAddresses");
       localStorage.removeItem("schoolData");
@@ -3619,13 +3738,11 @@ export function TableSearchContent({
         }}
       >
         <Flex style={boxStyle}>
-         
           <Flex style={headerBox} justify="space-between" align="center">
             <Typography.Text type="secondary" style={{ fontSize: 14 }}>
               Showing {filteredRecords} of {totalRecords} records
               {isAnyFilterActive && ` (filtered)`}
             </Typography.Text>
-            
           </Flex>
           <div
             className="mb-3 search-row"
@@ -3701,8 +3818,8 @@ export function TableSearchContent({
                                   />
                                 </div>
                   )}
-                    </div>
-                  )}
+                              </div>
+              )}
               {dataSource === "high_schools" && (
                 <div className="flex gap-2">
                   <Button
@@ -3715,23 +3832,43 @@ export function TableSearchContent({
                     Print School Packets ({selectedHighSchools.length})
                   </Button>
 
-                  <Button 
-                    type={highSchoolViewMode === "map" ? "primary" : "text"} 
+                  <Button
+                    type={highSchoolViewMode === "map" ? "primary" : "text"}
                     onClick={() => setHighSchoolViewMode("map")}
                   >
                     Map View
                   </Button>
 
-                  <Button 
-                    type={highSchoolViewMode === "list" ? "primary" : "text"} 
+                  <Button
+                    type={highSchoolViewMode === "list" ? "primary" : "text"}
                     onClick={() => setHighSchoolViewMode("list")}
+                  >
+                    List View
+                  </Button>
+                    </div>
+                  )}
+              {dataSource === "hs_athletes" && (
+                <div className="flex gap-2">
+                  <Button
+                    type={hsAthleteViewMode === "map" ? "primary" : "text"}
+                    onClick={() => setHsAthleteViewMode("map")}
+                  >
+                    Map View
+                  </Button>
+
+                  <Button
+                    type={hsAthleteViewMode === "list" ? "primary" : "text"}
+                    onClick={() => setHsAthleteViewMode("list")}
                   >
                     List View
                   </Button>
                 </div>
               )}
             </Space>
-            {(dataSource === "transfer_portal" || dataSource === "all_athletes" || dataSource === "juco" || dataSource === "high_schools") && (
+            {(dataSource === "transfer_portal" ||
+              dataSource === "all_athletes" ||
+              dataSource === "juco" ||
+              dataSource === "high_schools") && (
               <div
                 style={{
                   display: "flex",
@@ -3790,24 +3927,24 @@ export function TableSearchContent({
                     renderActiveFilters={renderActiveFilters}
                   />
                 )}
-                {(
-                  dataSource === "transfer_portal" ||
+                {(dataSource === "transfer_portal" ||
                   dataSource === "all_athletes" ||
                   dataSource === "high_schools" ||
-                  dataSource === "juco" ||
-                  dataSource === "hs_athletes"
-                ) && (
+                      dataSource === "juco" ||
+                      dataSource === "hs_athletes") && (
                   <CSVExport<any>
                     fetchData={async (page: number, pageSize: number) => {
                       // Handle high schools separately
                       if (dataSource === "high_schools") {
                         let currentColumns = hsColumns;
                         if (hsColumns.length === 0) {
-                          const configs = await fetchHighSchoolColumnConfig();
+                              const configs =
+                                await fetchHighSchoolColumnConfig();
                           let cols = configs.map((cfg) => ({
                             dataIndex: cfg.sanitized_column_name,
                             display_name: cfg.display_name,
-                            search_column_display: cfg.search_column_display,
+                                search_column_display:
+                                  cfg.search_column_display,
                             data_type_id: cfg.data_type_id,
                           }));
                           cols = cols.filter(
@@ -3815,7 +3952,8 @@ export function TableSearchContent({
                           );
                           cols.sort(
                             (a, b) =>
-                              a.search_column_display - b.search_column_display
+                                  a.search_column_display -
+                                  b.search_column_display
                           );
                           currentColumns = cols;
                         }
@@ -3824,7 +3962,9 @@ export function TableSearchContent({
                           page,
                           limit: pageSize,
                           search: localSearchInput,
-                          selectColumns: currentColumns.map((c) => c.dataIndex),
+                              selectColumns: currentColumns.map(
+                                (c) => c.dataIndex
+                              ),
                           filters: activeFilters,
                           sortField,
                           sortOrder,
@@ -3852,13 +3992,15 @@ export function TableSearchContent({
                           ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].date
                             ? ["date"]
                             : []),
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].athletic_aid
+                              ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                .athletic_aid
                             ? ["athletic_aid"]
                             : []),
                           ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].position
                             ? ["position"]
                             : []),
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].high_name
+                              ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                .high_name
                             ? ["high_name"]
                             : []),
                           ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].state
@@ -3868,7 +4010,8 @@ export function TableSearchContent({
                             .college_state
                             ? ["school_state"]
                             : []),
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].true_score
+                              ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                .true_score
                             ? ["true_score"]
                             : []),
                           ...dynamicColumns.map(
@@ -3890,7 +4033,8 @@ export function TableSearchContent({
                           filters: activeFilters,
                           search: localSearchInput,
                         }),
-                        ...(sortField && sortOrder && { sortField, sortOrder }),
+                            ...(sortField &&
+                              sortOrder && { sortField, sortOrder }),
                       };
 
                       const result = await fetchAthleteData(
@@ -3916,7 +4060,9 @@ export function TableSearchContent({
                             item[col.dataIndex as keyof typeof item];
                           if (value !== null && value !== undefined) {
                             row.push(
-                              typeof value === "number" ? value : String(value)
+                                  typeof value === "number"
+                                    ? value
+                                    : String(value)
                             );
                           } else {
                             row.push("");
@@ -3927,13 +4073,17 @@ export function TableSearchContent({
 
                       // Handle athlete data sources
                       const athlete = item as AthleteData;
-                      const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "hs_athletes";
+                          const currentDataSource = dataSource as
+                            | "transfer_portal"
+                            | "all_athletes"
+                            | "juco"
+                            | "hs_athletes";
 
                       // Separate Name column fields into individual columns
                       row.push(athlete.athlete_name || ""); // Name
 
                       // For hs_athletes, skip Year and Division
-                      if (currentDataSource !== "hs_athletes") {
+                          if (currentDataSource !== "hs_athletes") {
                         row.push(athlete.year || ""); // Year
                         row.push(athlete.division || ""); // Division
                       }
@@ -3942,18 +4092,18 @@ export function TableSearchContent({
                       row.push(athlete.commit_school_name || ""); // Commit School
                       row.push(
                         athlete.commit_date
-                          ? new Date(athlete.commit_date).toLocaleDateString(
-                              "en-US",
-                              {
+                              ? new Date(
+                                  athlete.commit_date
+                                ).toLocaleDateString("en-US", {
                                 month: "numeric",
                                 day: "numeric",
                                 year: "2-digit",
-                              }
-                            )
+                                })
                           : ""
                       ); // Commit Date
 
-                      const config = DATA_SOURCE_COLUMN_CONFIG[currentDataSource];
+                          const config =
+                            DATA_SOURCE_COLUMN_CONFIG[currentDataSource];
                       if (config.date) row.push(athlete.date || "");
                       if (config.athletic_aid)
                         row.push(athlete.athletic_aid || "");
@@ -3961,8 +4111,8 @@ export function TableSearchContent({
 
                       // For hs_athletes and juco, skip High School column
                       if (
-                        currentDataSource !== "hs_athletes" &&
-                        currentDataSource !== "juco" &&
+                            currentDataSource !== "hs_athletes" &&
+                            currentDataSource !== "juco" &&
                         config.high_name
                       ) {
                         row.push(athlete.high_name || ""); // High School
@@ -3981,7 +4131,9 @@ export function TableSearchContent({
                           col.data_type_name
                             ?.toLowerCase()
                             .replace(/\s+/g, "_") ||
-                          col.display_name.toLowerCase().replace(/\s+/g, "_");
+                              col.display_name
+                                .toLowerCase()
+                                .replace(/\s+/g, "_");
                         if (
                           colName === "high_name" ||
                           colName === "high_school"
@@ -4009,15 +4161,24 @@ export function TableSearchContent({
                         const value = athlete[colName as keyof AthleteData];
                         if (value !== null && value !== undefined) {
                           row.push(
-                            typeof value === "number" ? value : String(value)
+                                typeof value === "number"
+                                  ? value
+                                  : String(value)
                           );
                         } else {
                           row.push("");
                         }
 
                         // For hs_athletes, add Number of Offers after the Offer column
-                        const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "hs_athletes";
-                        if (isOfferColumn && currentDataSource === "hs_athletes") {
+                            const currentDataSource = dataSource as
+                              | "transfer_portal"
+                              | "all_athletes"
+                              | "juco"
+                              | "hs_athletes";
+                            if (
+                              isOfferColumn &&
+                              currentDataSource === "hs_athletes"
+                            ) {
                           row.push(athlete.offer_count_all ?? 0); // Number of Offers
                         }
                       });
@@ -4032,38 +4193,51 @@ export function TableSearchContent({
                               (col) => col.display_name || col.dataIndex
                             ),
                           ]
-                        : (() => {
-                            const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "hs_athletes";
-                            return [
+                            : (() => {
+                                const currentDataSource = dataSource as
+                                  | "transfer_portal"
+                                  | "all_athletes"
+                                  | "juco"
+                                  | "hs_athletes";
+                                return [
                             "Name", // Separated from Name column
                             // For hs_athletes, skip Year and Division
-                              ...(currentDataSource !== "hs_athletes"
+                                  ...(currentDataSource !== "hs_athletes"
                               ? ["Year", "Division"]
                               : []),
                             "Current School", // Separated from Name column
                             "Commit School", // Separated from Name column
                             "Commit Date", // Separated from Name column
-                              ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource].date
+                                  ...(DATA_SOURCE_COLUMN_CONFIG[
+                                    currentDataSource
+                                  ].date
                               ? ["Date"]
                               : []),
-                              ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
-                              .athletic_aid
+                                  ...(DATA_SOURCE_COLUMN_CONFIG[
+                                    currentDataSource
+                                  ].athletic_aid
                               ? ["Athletic Aid"]
                               : []),
-                              ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource].position
+                                  ...(DATA_SOURCE_COLUMN_CONFIG[
+                                    currentDataSource
+                                  ].position
                               ? ["Position"]
                               : []),
                             // For hs_athletes and juco, skip High School column
-                              ...(currentDataSource !== "hs_athletes" &&
-                              currentDataSource !== "juco" &&
-                              DATA_SOURCE_COLUMN_CONFIG[currentDataSource].high_name
+                                  ...(currentDataSource !== "hs_athletes" &&
+                                  currentDataSource !== "juco" &&
+                                  DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
+                                    .high_name
                               ? ["High School"]
                               : []),
-                            ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource].state
+                                  ...(DATA_SOURCE_COLUMN_CONFIG[
+                                    currentDataSource
+                                  ].state
                               ? ["State"]
                               : []),
-                            ...(DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
-                              .college_state
+                                  ...(DATA_SOURCE_COLUMN_CONFIG[
+                                    currentDataSource
+                                  ].college_state
                               ? ["College State"]
                               : []),
                             // Removed True Score
@@ -4085,7 +4259,8 @@ export function TableSearchContent({
                               })
                               .flatMap((col) => {
                                 const isOfferColumn =
-                                  col.display_name?.toLowerCase() === "offer";
+                                        col.display_name?.toLowerCase() ===
+                                        "offer";
                                 const displayName =
                                   col.display_name ||
                                   col.data_type_name ||
@@ -4095,39 +4270,42 @@ export function TableSearchContent({
                                 // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
                                 if (
                                   isOfferColumn &&
-                                  currentDataSource === "hs_athletes"
+                                        currentDataSource === "hs_athletes"
                                 ) {
-                                  return ["Best Offer", "Number of Offers"];
+                                        return [
+                                          "Best Offer",
+                                          "Number of Offers",
+                                        ];
                                 }
                                 return [displayName];
                               }),
-                          ];
-                        })()
+                                ];
+                              })()
                     }
                     filename={
-                      dataSource === "high_schools"
-                        ? "high-schools"
-                        : dataSource === "transfer_portal"
+                          dataSource === "high_schools"
+                            ? "high-schools"
+                            : dataSource === "transfer_portal"
                         ? "transfers"
                         : dataSource === "all_athletes"
                         ? "pre-portal"
                         : dataSource === "juco"
                         ? "juco"
-                        : (dataSource as "hs_athletes") === "hs_athletes"
-                        ? "hs-athletes"
+                            : (dataSource as "hs_athletes") === "hs_athletes"
+                            ? "hs-athletes"
                         : "high-schools"
                     }
                     maxRows={
-                      dataSource === "high_schools"
-                        ? 500
-                        : dataSource === "transfer_portal"
+                          dataSource === "high_schools"
+                            ? 500
+                            : dataSource === "transfer_portal"
                         ? 50
                         : dataSource === "all_athletes"
                         ? 50
                         : dataSource === "juco"
                         ? 50
-                        : (dataSource as "hs_athletes") === "hs_athletes"
-                        ? 1000
+                            : (dataSource as "hs_athletes") === "hs_athletes"
+                            ? 1000
                         : 50
                     }
                     disabled={
@@ -4138,16 +4316,16 @@ export function TableSearchContent({
                     userId={userDetails?.id}
                     customerId={activeCustomerId || undefined}
                     tableName={
-                      dataSource === "high_schools"
-                        ? "high-schools"
-                        : dataSource === "transfer_portal"
+                          dataSource === "high_schools"
+                            ? "high-schools"
+                            : dataSource === "transfer_portal"
                         ? "transfers"
                         : dataSource === "all_athletes"
                         ? "pre-portal"
                         : dataSource === "juco"
                         ? "juco"
-                        : (dataSource as "hs_athletes") === "hs_athletes"
-                        ? "hs-athletes"
+                            : (dataSource as "hs_athletes") === "hs_athletes"
+                            ? "hs-athletes"
                         : "unknown"
                     }
                     filterDetails={activeFilters}
@@ -4160,7 +4338,9 @@ export function TableSearchContent({
                                 col.display_name
                                   ?.toLowerCase()
                                   .includes("email") ||
-                                col.dataIndex?.toLowerCase().includes("email")
+                                    col.dataIndex
+                                      ?.toLowerCase()
+                                      .includes("email")
                             );
                             return emailColumn?.dataIndex;
                           })()
@@ -4236,7 +4416,8 @@ export function TableSearchContent({
                 style={{ marginBottom: "16px" }}
               />
             )}
-          {(dataSource !== "high_schools" || highSchoolViewMode === "list") && (
+          {(dataSource !== "high_schools" || highSchoolViewMode === "list") &&
+            (dataSource !== "hs_athletes" || hsAthleteViewMode === "list") && (
           <div
             style={{
               flex: "1 1 auto",
@@ -4274,7 +4455,9 @@ export function TableSearchContent({
               }}
               onChange={handleTableChange}
               onRow={(record) => {
-                const isOnBoard = recruitingBoardAthletes.includes(record.id);
+                    const isOnBoard = recruitingBoardAthletes.includes(
+                      record.id
+                    );
                 return {
                   style: isOnBoard
                     ? {
@@ -4285,13 +4468,20 @@ export function TableSearchContent({
               }}
             />
           </div>
-          )}
-           {dataSource === "high_schools" && highSchoolViewMode === "map" && (
+            )}
+          {dataSource === "high_schools" && highSchoolViewMode === "map" && (
             <div className="">
-              {(!isMapLoaded) ? (
+              {!isMapLoaded ? (
                 <div className="text-center py-4">Loading map...</div>
               ) : (
-                <div style={{ position: "relative", width: "100%", height: "820px", border: "1px solid #eee" }}>
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "820px",
+                    border: "1px solid #eee",
+                  }}
+                >
                   <GoogleMap
                     mapContainerStyle={{ width: "100%", height: "100%" }}
                     zoom={8}
@@ -4324,11 +4514,23 @@ export function TableSearchContent({
                         }}
                       />
                     ) : null}
-                    {(dataSource === "high_schools" ? displayedData : selectedHighSchools).map((hs, index) => {
-                      const lat = (hs as any).address_latitude as number | null | undefined;
-                      const lng = (hs as any).address_longitude as number | null | undefined;
+                    {(dataSource === "high_schools"
+                      ? displayedData
+                      : selectedHighSchools
+                    ).map((hs, index) => {
+                      const lat = (hs as any).address_latitude as
+                        | number
+                        | null
+                        | undefined;
+                      const lng = (hs as any).address_longitude as
+                        | number
+                        | null
+                        | undefined;
                       if (!lat || !lng) return null;
-                      const schoolId = (hs as any).id || (hs as any).school_id || `school-${index}`;
+                      const schoolId =
+                        (hs as any).id ||
+                        (hs as any).school_id ||
+                        `school-${index}`;
                       return (
                         <Fragment key={`marker-${schoolId}-${index}`}>
                           <MarkerF
@@ -4362,23 +4564,30 @@ export function TableSearchContent({
                             <Popover
                               content={
                                 <div className="space-y-2 min-w-[400px]">
-                                    <div className="mb-4">
+                                  <div className="mb-4">
                                     <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
                                       {(hs as any).school || ""}
 
-                                      <a 
-                                        href="#" 
+                                      <a
+                                        href="#"
                                         className="text-[14px] text-blue-600 hover:underline"
                                         onClick={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
                                           // Add school to selection if not already selected
-                                          const schoolId = String((hs as any).id);
-                                          const isAlreadySelected = selectedHighSchools.some(
-                                            (selected) => String(selected.id) === schoolId
+                                          const schoolId = String(
+                                            (hs as any).id
                                           );
+                                          const isAlreadySelected =
+                                            selectedHighSchools.some(
+                                              (selected) =>
+                                                String(selected.id) === schoolId
+                                            );
                                           if (!isAlreadySelected) {
-                                            setSelectedHighSchools((prev) => [...prev, hs as HighSchoolData]);
+                                            setSelectedHighSchools((prev) => [
+                                              ...prev,
+                                              hs as HighSchoolData,
+                                            ]);
                                           }
                                         }}
                                       >
@@ -4387,27 +4596,49 @@ export function TableSearchContent({
                                     </h4>
                                     <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
                                       {/* No address string available in HS view; show county/state */}
-                                      {(((hs as any).hs_county) || ((hs as any).school_state)) && (
+                                      {((hs as any).hs_county ||
+                                        (hs as any).school_state) && (
                                         <span>
                                           {(hs as any).hs_county && (
                                             <span>{(hs as any).hs_county}</span>
                                           )}
-                                          {(hs as any).hs_county && (hs as any).school_state && <span> | </span>}
+                                          {(hs as any).hs_county &&
+                                            (hs as any).school_state && (
+                                              <span> | </span>
+                                            )}
                                           {(hs as any).school_state && (
-                                            <span>{(hs as any).school_state}</span>
+                                            <span>
+                                              {(hs as any).school_state}
+                                            </span>
                                           )}
                                         </span>
                                       )}
                                       {(hs as any).ad_email && (
                                         <>
                                           <br />
-                                          <a href={`mailto:${(hs as any).ad_email}`} className="text-[14px] text-blue-600">{(hs as any).ad_email}</a>
+                                          <a
+                                            href={`mailto:${
+                                              (hs as any).ad_email
+                                            }`}
+                                            className="text-[14px] text-blue-600"
+                                          >
+                                            {(hs as any).ad_email}
+                                          </a>
                                         </>
                                       )}
                                       {(hs as any).school_phone && (
                                         <>
                                           <br />
-                                          <a href={`tel:${String((hs as any).school_phone).replace(/\D/g, '')}`} className="text-[14px] text-blue-600">{formatPhoneNumber(String((hs as any).school_phone))}</a>
+                                          <a
+                                            href={`tel:${String(
+                                              (hs as any).school_phone
+                                            ).replace(/\D/g, "")}`}
+                                            className="text-[14px] text-blue-600"
+                                          >
+                                            {formatPhoneNumber(
+                                              String((hs as any).school_phone)
+                                            )}
+                                          </a>
                                         </>
                                       )}
                                     </div>
@@ -4415,31 +4646,49 @@ export function TableSearchContent({
 
                                   {/* Athletes (if loaded) */}
                                   <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
-                                    {hsAthletes[index] && hsAthletes[index].length > 0 ? (
-                                      hsAthletes[index].map((athlete: any, athleteIndex: number) => (
-                                        <div key={athleteIndex} className="text-xs flex items-center justify-start gap-2">
-                                          <img
-                                            src={athlete.image_url || "/blank-user.svg"}
-                                            alt={athlete.name || "Athlete"}
-                                            height={50}
-                                            width={50}
-                                            className="rounded-full object-cover"
-                                          />
-                                          <div>
-                                            <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
-                                              {athlete.name || '-'}
-                                            </h6>
-                                            <span className="!text-[14px] !leading-[16px] mb-0">
-                                              {athlete.athleticProjection || '-'} <br />
-                                              {athlete.gradYear || '-'}
-                                            </span>
+                                    {hsAthletes[index] &&
+                                    hsAthletes[index].length > 0 ? (
+                                      hsAthletes[index].map(
+                                        (
+                                          athlete: any,
+                                          athleteIndex: number
+                                        ) => (
+                                          <div
+                                            key={athleteIndex}
+                                            className="text-xs flex items-center justify-start gap-2"
+                                          >
+                                            <img
+                                              src={
+                                                athlete.image_url ||
+                                                "/blank-user.svg"
+                                              }
+                                              alt={athlete.name || "Athlete"}
+                                              height={50}
+                                              width={50}
+                                              className="rounded-full object-cover"
+                                            />
+                                            <div>
+                                              <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
+                                                {athlete.name || "-"}
+                                              </h6>
+                                              <span className="!text-[14px] !leading-[16px] mb-0">
+                                                {athlete.athleticProjection ||
+                                                  "-"}{" "}
+                                                <br />
+                                                {athlete.gradYear || "-"}
+                                              </span>
+                                            </div>
                                           </div>
-                                        </div>
-                                      ))
+                                        )
+                                      )
                                     ) : hsAthletes[index] !== undefined ? (
-                                      <div className="text-gray-400 text-[12px]">No athletes found</div>
+                                      <div className="text-gray-400 text-[12px]">
+                                        No athletes found
+                                      </div>
                                     ) : (
-                                      <div className="text-gray-400 text-[12px]">Loading athletes...</div>
+                                      <div className="text-gray-400 text-[12px]">
+                                        Loading athletes...
+                                      </div>
                                     )}
                                   </div>
                                 </div>
@@ -4456,46 +4705,67 @@ export function TableSearchContent({
                                   try {
                                     const schoolId = String((hs as any).id);
                                     if (schoolId) {
-                                      const result = await fetchHighSchoolAthletes(
-                                        schoolId,
-                                        'fb',
-                                        activeCustomerId,
-                                        { page: 1, limit: 100 }
-                                      );
+                                      const result =
+                                        await fetchHighSchoolAthletes(
+                                          schoolId,
+                                          "fb",
+                                          activeCustomerId,
+                                          { page: 1, limit: 100 }
+                                        );
                                       if (result.data) {
                                         const projectionOrder = [
-                                          'FBS P4 - Top half',
-                                          'FBS P4',
-                                          'FBS G5 - Top half',
-                                          'FBS G5',
-                                          'FCS - Full Scholarship',
-                                          'FCS',
-                                          'D2 - Top half',
-                                          'D2',
-                                          'D3 - Top half',
-                                          'D3',
-                                          'D3 Walk-on'
+                                          "FBS P4 - Top half",
+                                          "FBS P4",
+                                          "FBS G5 - Top half",
+                                          "FBS G5",
+                                          "FCS - Full Scholarship",
+                                          "FCS",
+                                          "D2 - Top half",
+                                          "D2",
+                                          "D3 - Top half",
+                                          "D3",
+                                          "D3 Walk-on",
                                         ];
-                                        const sortedAthletes = result.data.sort((a: any, b: any) => {
-                                          const indexA = projectionOrder.indexOf(a.athleticProjection || '');
-                                          const indexB = projectionOrder.indexOf(b.athleticProjection || '');
-                                          if (indexA !== -1 && indexB !== -1) {
-                                            if (indexA !== indexB) return indexA - indexB;
-                                          } else if (indexA !== -1) {
-                                            return -1;
-                                          } else if (indexB !== -1) {
-                                            return 1;
-                                          } else if (a.athleticProjection && b.athleticProjection) {
-                                            const cmp = a.athleticProjection.localeCompare(b.athleticProjection);
-                                            if (cmp !== 0) return cmp;
+                                        const sortedAthletes = result.data.sort(
+                                          (a: any, b: any) => {
+                                            const indexA =
+                                              projectionOrder.indexOf(
+                                                a.athleticProjection || ""
+                                              );
+                                            const indexB =
+                                              projectionOrder.indexOf(
+                                                b.athleticProjection || ""
+                                              );
+                                            if (
+                                              indexA !== -1 &&
+                                              indexB !== -1
+                                            ) {
+                                              if (indexA !== indexB)
+                                                return indexA - indexB;
+                                            } else if (indexA !== -1) {
+                                              return -1;
+                                            } else if (indexB !== -1) {
+                                              return 1;
+                                            } else if (
+                                              a.athleticProjection &&
+                                              b.athleticProjection
+                                            ) {
+                                              const cmp =
+                                                a.athleticProjection.localeCompare(
+                                                  b.athleticProjection
+                                                );
+                                              if (cmp !== 0) return cmp;
+                                            }
+                                            const yearA =
+                                              parseInt(a.gradYear) || 0;
+                                            const yearB =
+                                              parseInt(b.gradYear) || 0;
+                                            return yearA - yearB;
                                           }
-                                          const yearA = parseInt(a.gradYear) || 0;
-                                          const yearB = parseInt(b.gradYear) || 0;
-                                          return yearA - yearB;
-                                        });
+                                        );
                                         setHsAthletes({
                                           ...hsAthletes,
-                                          [index]: sortedAthletes.slice(0, 2)
+                                          [index]: sortedAthletes.slice(0, 2),
                                         });
                                       }
                                     }
@@ -4529,23 +4799,213 @@ export function TableSearchContent({
                     })}
                   </GoogleMap>
                   {mapRouteInfo && (
-                    <div style={{ position: "absolute", left: 16, bottom: 16 }} className="text-left p-1.5 bg-white/60 w-[180px] border-2 border-[#1C1D4D] border-solid">
+                    <div
+                      style={{ position: "absolute", left: 16, bottom: 16 }}
+                      className="text-left p-1.5 bg-white/60 w-[180px] border-2 border-[#1C1D4D] border-solid"
+                    >
                       <div className="text-base font-bold text-gray-700 flex items-center justify-center">
-                        <img src="/svgicons/big-flag.svg" alt="Route" height={50} className="mr-1.5" />
+                        <img
+                          src="/svgicons/big-flag.svg"
+                          alt="Route"
+                          height={50}
+                          className="mr-1.5"
+                        />
                         <div className="text-gray-600 mt-0.5 text-right">
-                          <h5 className="font-semibold !text-[14px] italic mb-0.5">Total Drive Time</h5>
-                          <h3 className="!text-[18px] font-bold italic mb-1">{mapRouteInfo.totalTime}</h3>
+                          <h5 className="font-semibold !text-[14px] italic mb-0.5">
+                            Total Drive Time
+                          </h5>
+                          <h3 className="!text-[18px] font-bold italic mb-1">
+                            {mapRouteInfo.totalTime}
+                          </h3>
                           <h6 className="font-semibold !text-[14px] italic flex items-center justify-end">
-                            <img src="/svgicons/mile-car.svg" alt="Miles" height={16} className="mr-1.5" />
+                            <img
+                              src="/svgicons/mile-car.svg"
+                              alt="Miles"
+                              height={16}
+                              className="mr-1.5"
+                            />
                             {mapRouteInfo.totalDistance}
                           </h6>
                         </div>
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+          {dataSource === "hs_athletes" && hsAthleteViewMode === "map" && (
+            <div className="">
+              {!isMapLoaded ? (
+                <div className="text-center py-4">Loading map...</div>
+              ) : (
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "820px",
+                    border: "1px solid #eee",
+                  }}
+                >
+                  <GoogleMap
+                    mapContainerStyle={{ width: "100%", height: "100%" }}
+                    zoom={8}
+                    center={mapCenter}
+                    onLoad={(map) => {
+                      mapRef.current = map;
+                    }}
+                    onUnmount={() => {
+                      mapRef.current = null;
+                    }}
+                    options={{
+                      mapTypeControl: true,
+                      streetViewControl: true,
+                      mapTypeId: "roadmap",
+                      fullscreenControl: true,
+                      zoomControl: true,
+                      gestureHandling: "greedy",
+                    }}
+                  >
+                    {displayedData.map((athlete, index) => {
+                      const lat = (athlete as any).address_latitude as
+                        | number
+                        | null
+                        | undefined;
+                      const lng = (athlete as any).address_longitude as
+                        | number
+                        | null
+                        | undefined;
+                      if (!lat || !lng) return null;
+                      const athleteId = String(athlete.id || index);
+                      return (
+                        <Fragment key={`marker-${athleteId}-${index}`}>
+                          <MarkerF
+                            position={{ lat, lng }}
+                            label={{
+                              text: `${index + 1}`,
+                              color: "#1C1D4D",
+                              fontWeight: "bold",
+                            }}
+                            icon={{
+                              url: "/svgicons/map-dot.svg",
+                              scaledSize:
+                                window.google && window.google.maps
+                                  ? new window.google.maps.Size(28, 28)
+                                  : undefined,
+                              anchor:
+                                window.google && window.google.maps
+                                  ? new window.google.maps.Point(14, 14)
+                                  : undefined,
+                            }}
+                            title={`${index + 1}. ${
+                              athlete.athlete_name || ""
+                            }`}
+                          />
+                          <OverlayViewF
+                            position={{ lat, lng }}
+                            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                            getPixelPositionOffset={(width, height) => ({
+                              x: -width / 2,
+                              y: -height - 30,
+                            })}
+                          >
+                            <Popover
+                              content={
+                                <div className="space-y-2 min-w-[400px]">
+                                  <div className="mb-4">
+                                    <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
+                                      {athlete.athlete_name || ""}
+                                      <a
+                                        href="#"
+                                        className="text-[14px] text-blue-600 hover:underline"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          // Add athlete to selection if not already selected
+                                          const isAlreadySelected =
+                                            selectedAthletes.some(
+                                              (selected) =>
+                                                selected.id === athlete.id
+                                            );
+                                          if (!isAlreadySelected) {
+                                            setSelectedAthletes((prev) => [
+                                              ...prev,
+                                              athlete,
+                                            ]);
+                                          }
+                                        }}
+                                      >
+                                        Add
+                                      </a>
+                                    </h4>
+                                    <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                      {athlete.high_name && (
+                                        <span>{athlete.high_name}</span>
+                                      )}
+                                      {athlete.hometown && (
+                                        <>
+                                          {athlete.high_name && <br />}
+                                          <span>{athlete.hometown}</span>
+                                        </>
+                                      )}
+                                      {athlete.hometown_state && (
+                                        <>
+                                          {athlete.hometown && <span>, </span>}
+                                          <span>{athlete.hometown_state}</span>
+                                        </>
+                                      )}
+                                      {athlete.cell_phone && (
+                                        <>
+                                          <br />
+                                          <a
+                                            href={`tel:${String(
+                                              athlete.cell_phone
+                                            ).replace(/\D/g, "")}`}
+                                            className="text-[14px] text-blue-600"
+                                          >
+                                            {formatPhoneNumber(
+                                              String(athlete.cell_phone)
+                                            )}
+                                          </a>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              }
+                              title={null}
+                              trigger="click"
+                            >
+                              <div
+                                className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
+                                style={{ minWidth: "max-content" }}
+                              >
+                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                  <img
+                                    src={athlete.image_url || "/blank-user.svg"}
+                                    alt="Athlete"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
+                                  <span className="truncate block w-full">
+                                    {athlete.athlete_name || ""}
+                                  </span>
+                                </h6>
+                              </div>
+                            </Popover>
+                          </OverlayViewF>
+                        </Fragment>
+                      );
+                    })}
+                  </GoogleMap>
+                </div>
+              )}
+            </div>
+          )}
 
-{dataSource === "high_schools" && (
-            <div className="absolute bottom-[42px] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
+          {dataSource === "high_schools" && highSchoolViewMode === "map" && (
+            <div className="absolute bottom-[0] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
               <div className="flex flex-row justify-between items-center max-w-full">
                 <div className="flex-1 flex flex-col items-start overflow-hidden">
                   <h4>Road Map</h4>
@@ -4588,7 +5048,11 @@ export function TableSearchContent({
                                   xmlns="http://www.w3.org/2000/svg"
                                   viewBox="0 0 24 24"
                                   className="w-5 h-5"
-                                  style={{ fill: 'white', stroke: 'white', strokeWidth: 0 }}
+                                  style={{
+                                    fill: "white",
+                                    stroke: "white",
+                                    strokeWidth: 0,
+                                  }}
                                 >
                                   <path
                                     d="M6 18L18 6M6 6l12 12"
@@ -4619,7 +5083,11 @@ export function TableSearchContent({
                   </Button>
 
                   {selectedHighSchools.length > 0 && (
-                    <Button type="link" className="text-[16px] italic underline !text-[#126DB8] font-medium" onClick={clearAllSelections}>
+                    <Button
+                      type="link"
+                      className="text-[16px] italic underline !text-[#126DB8] font-medium"
+                      onClick={clearAllSelections}
+                    >
                       Clear All
                     </Button>
                   )}
@@ -4627,8 +5095,88 @@ export function TableSearchContent({
               </div>
             </div>
           )}
+          {dataSource === "hs_athletes" && hsAthleteViewMode === "map" && (
+            <div className="absolute bottom-[0] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
+              <div className="flex flex-row justify-between items-center max-w-full">
+                <div className="flex-1 flex flex-col items-start overflow-hidden">
+                  <h4>Road Map</h4>
+                  <div className="flex-1 flex flex-wrap gap-2 min-h-[36px] overflow-x-auto">
+                    {selectedAthletes.length === 0 ? (
+                      <span className="text-gray-400 italic">
+                        No athletes selected
+                      </span>
+                    ) : (
+                      selectedAthletes.map((athlete, index) => {
+                        const athleteId = String(athlete.id || index);
+                        return (
+                          <div key={athleteId} className="">
+                            <div
+                              className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
+                              style={{ minWidth: "max-content" }}
+                            >
+                              <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                <img
+                                  src={athlete.image_url || "/blank-user.svg"}
+                                  alt="Athlete"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
+                                <span className="block w-full truncate max-w-[150px]">
+                                  {athlete.athlete_name || ""}
+                                </span>
+                              </h6>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveAthlete(athleteId);
+                                }}
+                                className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                title="Remove from road plan"
+                                aria-label="Remove athlete from road plan"
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  className="w-5 h-5"
+                                  style={{
+                                    fill: "white",
+                                    stroke: "white",
+                                    strokeWidth: 0,
+                                  }}
+                                >
+                                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              )}
+                <div className="flex flex-col items-end mr-10">
+                  <Button
+                    type="primary"
+                    onClick={() => router.push("/road-planner")}
+                    disabled={selectedAthletes.length === 0}
+                  >
+                    Map{" "}
+                    {selectedAthletes.length > 0 &&
+                      `(${selectedAthletes.length})`}
+                  </Button>
+
+                  {selectedAthletes.length > 0 && (
+                    <Button
+                      type="link"
+                      className="text-[16px] italic underline !text-[#126DB8] font-medium"
+                      onClick={clearAllAthleteSelections}
+                    >
+                      Clear All
+                    </Button>
+                  )}
+                </div>
+              </div>
             </div>
           )}
           <Modal
