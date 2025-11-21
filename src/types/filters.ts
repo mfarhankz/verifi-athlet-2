@@ -93,6 +93,7 @@ export interface FilterState {
   hsAthleteIncomeScore?: { minValue?: number; maxValue?: number }; // Athlete Income Score (data_type_id 959)
   hsAcademicsScore?: { minValue?: number; maxValue?: number }; // Academics Score (data_type_id 960)
   transfer_odds?: { comparison: 'min' | 'max' | 'between'; value?: number; minValue?: number; maxValue?: number }; // Transfer odds filter
+  verified_rating?: { comparison: 'min' | 'max' | 'between'; value?: number; minValue?: number; maxValue?: number }; // Verified Rating filter
   grad_year?: { comparison: 'min' | 'max' | 'between'; value?: number; minValue?: number; maxValue?: number }; // Graduation year filter
   weight?: { comparison: 'min' | 'max' | 'between'; value?: number; minValue?: number; maxValue?: number }; // Weight filter
   athletic_projection?: string[]; // Athletic projection filter for high school athletes
@@ -126,6 +127,8 @@ export interface FilterState {
   espn_stars?: string[]; // ESPN Stars filter: None, 2, 3, 4, 5
   // Camp filter for high school athletes
   camp?: Array<{ source: string; year?: number; display_name?: string }>; // Camp filter: array of selected camp events (consolidated format)
+  // Commit School filter for high school athletes
+  commit_school?: string[]; // Commit School filter - contains school UUIDs
 }
 
 export interface SavedFilter {

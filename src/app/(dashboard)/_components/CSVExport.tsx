@@ -14,7 +14,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 interface CSVExportProps<T> {
   /** Function to fetch data for export */
-  fetchData: (page: number, pageSize: number) => Promise<{ data: T[]; hasMore: boolean; totalCount: number }>;
+  fetchData: (page: number, pageSize: number, sortField?: string | null, sortOrder?: 'ascend' | 'descend' | null) => Promise<{ data: T[]; hasMore: boolean; totalCount: number }>;
   /** Function to transform data row into CSV row array */
   transformRow: (item: T) => (string | number)[];
   /** CSV column headers */
@@ -45,6 +45,12 @@ interface CSVExportProps<T> {
   filterDetails?: any;
   /** Email column name for high school exports (to inject coded email) */
   emailColumnName?: string;
+  /** Current sort field */
+  sortField?: string | null;
+  /** Current sort order */
+  sortOrder?: 'ascend' | 'descend' | null;
+  /** User packages to check for admin access (packages 3 or 4) */
+  userPackages?: (string | number)[];
 }
 
 /**
@@ -53,8 +59,8 @@ interface CSVExportProps<T> {
  * @example
  * ```tsx
  * <CSVExport
- *   fetchData={async (page, pageSize) => {
- *     return await fetchMyData(page, pageSize);
+ *   fetchData={async (page, pageSize, sortField, sortOrder) => {
+ *     return await fetchMyData(page, pageSize, sortField, sortOrder);
  *   }}
  *   transformRow={(item) => [
  *     item.name,
@@ -64,6 +70,8 @@ interface CSVExportProps<T> {
  *   headers={['Name', 'Email', 'Phone']}
  *   filename="contacts"
  *   maxRows={500}
+ *   sortField={sortField}
+ *   sortOrder={sortOrder}
  * />
  * ```
  */
@@ -82,6 +90,9 @@ export default function CSVExport<T>({
   tableName,
   filterDetails,
   emailColumnName,
+  sortField,
+  sortOrder,
+  userPackages,
 }: CSVExportProps<T>) {
   // Default warning message if not provided
   const defaultWarningMessage = `Only ${maxRows} rows can be downloaded at once. The first ${maxRows} will download now, but adjust your filters to get less than ${maxRows} to download the full list. For larger exports reach out to our team.`;
@@ -125,9 +136,12 @@ export default function CSVExport<T>({
 
   // Generate and download CSV
   const generateCSV = (data: T[]) => {
-    // For high school exports, inject coded email if email column exists
+    // For high school and athlete exports, inject coded email if email column exists
     let processedData = data;
-    if (tableName === 'high-schools' && emailColumnName && userId && customerId) {
+    const isHighSchoolExport = tableName === 'high-schools' && emailColumnName;
+    const isAthleteExport = (tableName === 'transfers' || tableName === 'hs-athletes');
+    
+    if ((isHighSchoolExport || isAthleteExport) && userId && customerId) {
       processedData = [...data];
       const totalRows = processedData.length;
       
@@ -139,7 +153,16 @@ export default function CSVExport<T>({
         // Find empty email cells in bottom half
         const emptyEmailIndices: number[] = [];
         bottomHalf.forEach((row, index) => {
-          const emailValue = (row as any)[emailColumnName];
+          let emailValue: any = null;
+          
+          if (isHighSchoolExport && emailColumnName) {
+            // For high schools, use the provided emailColumnName
+            emailValue = (row as any)[emailColumnName];
+          } else if (isAthleteExport) {
+            // For athletes, check athlete_email first, then email
+            emailValue = (row as any).athlete_email || (row as any).email;
+          }
+          
           if (!emailValue || emailValue === '' || emailValue === null || emailValue === undefined) {
             emptyEmailIndices.push(startIndex + index);
           }
@@ -160,10 +183,23 @@ export default function CSVExport<T>({
           const codedEmail = `footballhero767+${customerPrefix}${userPrefix}${year}${month}${day}@gmail.com`;
           
           // Add coded email to the selected row
-          processedData[randomIndex] = {
-            ...processedData[randomIndex],
-            [emailColumnName]: codedEmail
-          } as T;
+          if (isHighSchoolExport && emailColumnName) {
+            // For high schools, use the provided emailColumnName
+            processedData[randomIndex] = {
+              ...processedData[randomIndex],
+              [emailColumnName]: codedEmail
+            } as T;
+          } else if (isAthleteExport) {
+            // For athletes, prefer athlete_email if the field exists (even if empty), otherwise use email
+            const row = processedData[randomIndex] as any;
+            // Check if athlete_email field exists in the object structure
+            if (row.hasOwnProperty('athlete_email')) {
+              row.athlete_email = codedEmail;
+            } else {
+              // If athlete_email doesn't exist, use email field
+              row.email = codedEmail;
+            }
+          }
         }
       }
     }
@@ -186,21 +222,31 @@ export default function CSVExport<T>({
     URL.revokeObjectURL(url);
   };
 
+  // Check if user has admin access (package 3 or 4)
+  const hasAdminAccess = userPackages?.some(pkg => {
+    const pkgStr = String(pkg);
+    return pkgStr === '3' || pkgStr === '4';
+  }) || false;
+
+  // Determine effective limit - no limit for admin users
+  const effectiveLimit = hasAdminAccess ? 999999 : maxRows;
+
   // Handle export button click
   const handleExport = async () => {
     try {
       setIsExporting(true);
 
-      // Fetch data with limit
-      const result = await fetchData(1, maxRows);
+      // Fetch data with limit and current sort parameters
+      // For admin users, fetch all data; for others, use maxRows limit
+      const result = await fetchData(1, effectiveLimit, sortField, sortOrder);
 
       if (result.data.length === 0) {
         message.warning('No data to export');
         return;
       }
 
-      // Check if we hit the limit and there's more data
-      if (result.data.length === maxRows && result.hasMore) {
+      // Check if we hit the limit and there's more data (only for non-admin users)
+      if (!hasAdminAccess && result.data.length === maxRows && result.hasMore) {
         setIsExportWarningModalOpen(true);
       }
 

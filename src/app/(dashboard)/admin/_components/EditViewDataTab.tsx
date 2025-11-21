@@ -20,20 +20,27 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   const [athleteData, setAthleteData] = useState<any[]>([]);
   const [loadingAthleteData, setLoadingAthleteData] = useState(false);
   const [athleteSearchInput, setAthleteSearchInput] = useState<string>('');
+  const [athleteLastNameSearchInput, setAthleteLastNameSearchInput] = useState<string>('');
   const [athletePagination, setAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
   const [selectedAthleteSearchSport, setSelectedAthleteSearchSport] = useState<number | undefined>(undefined);
+  const [athleteSortField, setAthleteSortField] = useState<string | null>(null);
+  const [athleteSortOrder, setAthleteSortOrder] = useState<'ascend' | 'descend' | null>(null);
   
   // HS Athlete states
   const [hsAthleteData, setHsAthleteData] = useState<any[]>([]);
   const [loadingHsAthleteData, setLoadingHsAthleteData] = useState(false);
   const [hsAthletePagination, setHsAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
   const [selectedHsAthleteSearchSport, setSelectedHsAthleteSearchSport] = useState<number | undefined>(undefined);
+  const [hsAthleteSortField, setHsAthleteSortField] = useState<string | null>(null);
+  const [hsAthleteSortOrder, setHsAthleteSortOrder] = useState<'ascend' | 'descend' | null>(null);
   
   // JUCO Athlete states
   const [jucoAthleteData, setJucoAthleteData] = useState<any[]>([]);
   const [loadingJucoAthleteData, setLoadingJucoAthleteData] = useState(false);
   const [jucoAthletePagination, setJucoAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
   const [selectedJucoAthleteSearchSport, setSelectedJucoAthleteSearchSport] = useState<number | undefined>(undefined);
+  const [jucoAthleteSortField, setJucoAthleteSortField] = useState<string | null>(null);
+  const [jucoAthleteSortOrder, setJucoAthleteSortOrder] = useState<'ascend' | 'descend' | null>(null);
   
   // All Athletes states
   const [allAthletes, setAllAthletes] = useState<any[]>([]);
@@ -176,6 +183,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
 
   // Debounce the search inputs
   const debouncedAthleteSearch = useDebouncedSearch(athleteSearchInput);
+  const debouncedAthleteLastNameSearch = useDebouncedSearch(athleteLastNameSearchInput);
   const debouncedSchoolSearch = useDebouncedSearch(schoolSearchInput);
   const debouncedCustomerSearch = useDebouncedSearch(customerSearchInput);
   const debouncedCoachSearch = useDebouncedSearch(coachSearchInput);
@@ -468,7 +476,21 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                            dataType === 'hs_athlete' ? selectedHsAthleteSearchSport :
                            selectedJucoAthleteSearchSport;
       
-      const result = await searchAthletes(debouncedAthleteSearch, 25, tableType, page, selectedSport);
+      // Get sorting parameters for this data type
+      const sortField = dataType === 'athlete' ? athleteSortField :
+                       dataType === 'hs_athlete' ? hsAthleteSortField :
+                       jucoAthleteSortField;
+      const sortOrder = dataType === 'athlete' ? athleteSortOrder :
+                       dataType === 'hs_athlete' ? hsAthleteSortOrder :
+                       jucoAthleteSortOrder;
+      
+      // Use last name search if it has a value, otherwise use general search
+      const searchTerm = dataType === 'athlete' && debouncedAthleteLastNameSearch.trim() 
+        ? debouncedAthleteLastNameSearch 
+        : debouncedAthleteSearch;
+      const lastNameOnly = dataType === 'athlete' && debouncedAthleteLastNameSearch.trim().length > 0;
+      
+      const result = await searchAthletes(searchTerm, 25, tableType, page, selectedSport, sortField, sortOrder, lastNameOnly);
 
       // Map sport_id to sport name for display
       const sportIdToName: Record<number, string> = {
@@ -1005,6 +1027,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       setCustomerData([]);
       setCoachData([]);
       setAthleteSearchInput('');
+      setAthleteLastNameSearchInput('');
       setSchoolSearchInput('');
       setCustomerSearchInput('');
       setCoachSearchInput('');
@@ -1019,8 +1042,15 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       setSelectedAthleteSearchSport(undefined);
       setSelectedHsAthleteSearchSport(undefined);
       setSelectedJucoAthleteSearchSport(undefined);
+      // Reset sorting
+      setAthleteSortField(null);
+      setAthleteSortOrder(null);
+      setHsAthleteSortField(null);
+      setHsAthleteSortOrder(null);
+      setJucoAthleteSortField(null);
+      setJucoAthleteSortOrder(null);
     }
-  }, [selectedDataType, debouncedAthleteSearch, debouncedSchoolSearch, debouncedCustomerSearch, debouncedCoachSearch, selectedCustomerSport, selectedCoachSport, selectedAthleteSearchSport, selectedHsAthleteSearchSport, selectedJucoAthleteSearchSport]);
+  }, [selectedDataType, debouncedAthleteSearch, debouncedAthleteLastNameSearch, debouncedSchoolSearch, debouncedCustomerSearch, debouncedCoachSearch, selectedCustomerSport, selectedCoachSport, selectedAthleteSearchSport, selectedHsAthleteSearchSport, selectedJucoAthleteSearchSport, athleteSortField, athleteSortOrder, hsAthleteSortField, hsAthleteSortOrder, jucoAthleteSortField, jucoAthleteSortOrder]);
 
   // Load athletes when sport changes
   useEffect(() => {
@@ -1163,15 +1193,39 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
               <Text strong style={{ display: 'block', marginBottom: 8 }}>
                 Search {selectedDataType === 'athlete' ? 'College' : selectedDataType === 'hs_athlete' ? 'HS' : 'JUCO'} Athletes:
               </Text>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 <Text strong>Search:</Text>
                 <Input
                   placeholder="Search by name, school, or athlete ID"
                   value={athleteSearchInput}
-                  onChange={(e) => setAthleteSearchInput(e.target.value)}
+                  onChange={(e) => {
+                    setAthleteSearchInput(e.target.value);
+                    // Clear last name search when using general search
+                    if (e.target.value.trim()) {
+                      setAthleteLastNameSearchInput('');
+                    }
+                  }}
                   style={{ width: 400 }}
                   allowClear
                 />
+                {selectedDataType === 'athlete' && (
+                  <>
+                    <Text strong>Last Name Only:</Text>
+                    <Input
+                      placeholder="Search last name only"
+                      value={athleteLastNameSearchInput}
+                      onChange={(e) => {
+                        setAthleteLastNameSearchInput(e.target.value);
+                        // Clear general search when using last name search
+                        if (e.target.value.trim()) {
+                          setAthleteSearchInput('');
+                        }
+                      }}
+                      style={{ width: 250 }}
+                      allowClear
+                    />
+                  </>
+                )}
                 <Text strong>Sport Filter:</Text>
                 <Select
                   placeholder="All Sports"
@@ -1240,6 +1294,75 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                   }
                 }}
                 scroll={{ x: 'max-content' }}
+                onChange={(pagination, filters, sorter: any) => {
+                  // Handle server-side sorting (using same pattern as TableSearchContent)
+                  if (Array.isArray(sorter)) {
+                    // Multiple sorters (not used in this case)
+                    const firstSorter = sorter[0];
+                    if (firstSorter) {
+                      const field = firstSorter.field as string;
+                      const order = firstSorter.order as 'ascend' | 'descend' | null;
+                      
+                      if (selectedDataType === 'athlete') {
+                        setAthleteSortField(field);
+                        setAthleteSortOrder(order);
+                        setAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchAthleteData(1);
+                      } else if (selectedDataType === 'hs_athlete') {
+                        setHsAthleteSortField(field);
+                        setHsAthleteSortOrder(order);
+                        setHsAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchHsAthleteData(1);
+                      } else if (selectedDataType === 'juco_athlete') {
+                        setJucoAthleteSortField(field);
+                        setJucoAthleteSortOrder(order);
+                        setJucoAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchJucoAthleteData(1);
+                      }
+                    }
+                  } else {
+                    // Single sorter
+                    if (sorter && sorter.field) {
+                      const fieldName = sorter.field as string;
+                      const order = sorter.order as 'ascend' | 'descend' | null;
+                      
+                      if (selectedDataType === 'athlete') {
+                        setAthleteSortField(fieldName);
+                        setAthleteSortOrder(order);
+                        setAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchAthleteData(1);
+                      } else if (selectedDataType === 'hs_athlete') {
+                        setHsAthleteSortField(fieldName);
+                        setHsAthleteSortOrder(order);
+                        setHsAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchHsAthleteData(1);
+                      } else if (selectedDataType === 'juco_athlete') {
+                        setJucoAthleteSortField(fieldName);
+                        setJucoAthleteSortOrder(order);
+                        setJucoAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchJucoAthleteData(1);
+                      }
+                    } else {
+                      // No sorter provided, clear sorting (will use default in API)
+                      if (selectedDataType === 'athlete') {
+                        setAthleteSortField(null);
+                        setAthleteSortOrder(null);
+                        setAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchAthleteData(1);
+                      } else if (selectedDataType === 'hs_athlete') {
+                        setHsAthleteSortField(null);
+                        setHsAthleteSortOrder(null);
+                        setHsAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchHsAthleteData(1);
+                      } else if (selectedDataType === 'juco_athlete') {
+                        setJucoAthleteSortField(null);
+                        setJucoAthleteSortOrder(null);
+                        setJucoAthletePagination(prev => ({ ...prev, current: 1 }));
+                        fetchJucoAthleteData(1);
+                      }
+                    }
+                  }
+                }}
                 onRow={(record) => ({
                   onClick: () => handleAthleteClick(record),
                   style: { cursor: 'pointer' }
@@ -1253,24 +1376,37 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                      render: (id: string) => (
                        <Text code>{id}</Text>
                      ),
+                     sorter: true,
+                     sortOrder: selectedDataType === 'athlete' ? (athleteSortField === 'athlete_id' ? athleteSortOrder : null) :
+                               selectedDataType === 'hs_athlete' ? (hsAthleteSortField === 'athlete_id' ? hsAthleteSortOrder : null) :
+                               (jucoAthleteSortField === 'athlete_id' ? jucoAthleteSortOrder : null),
                    },
                     {
                       title: 'First Name',
                       dataIndex: 'athlete_first_name',
                       key: 'athlete_first_name',
-                      sorter: (a: any, b: any) => (a.athlete_first_name || '').localeCompare(b.athlete_first_name || ''),
+                      sorter: true,
+                      sortOrder: selectedDataType === 'athlete' ? (athleteSortField === 'athlete_first_name' ? athleteSortOrder : null) :
+                                selectedDataType === 'hs_athlete' ? (hsAthleteSortField === 'athlete_first_name' ? hsAthleteSortOrder : null) :
+                                (jucoAthleteSortField === 'athlete_first_name' ? jucoAthleteSortOrder : null),
                     },
                     {
                       title: 'Last Name',
                       dataIndex: 'athlete_last_name',
                       key: 'athlete_last_name',
-                      sorter: (a: any, b: any) => (a.athlete_last_name || '').localeCompare(b.athlete_last_name || ''),
+                      sorter: true,
+                      sortOrder: selectedDataType === 'athlete' ? (athleteSortField === 'athlete_last_name' ? athleteSortOrder : null) :
+                                selectedDataType === 'hs_athlete' ? (hsAthleteSortField === 'athlete_last_name' ? hsAthleteSortOrder : null) :
+                                (jucoAthleteSortField === 'athlete_last_name' ? jucoAthleteSortOrder : null),
                     },
                   {
                     title: 'School',
                     dataIndex: 'school_name',
                     key: 'school_name',
-                    sorter: (a: any, b: any) => (a.school_name || '').localeCompare(b.school_name || ''),
+                    sorter: true,
+                    sortOrder: selectedDataType === 'athlete' ? (athleteSortField === 'school_name' ? athleteSortOrder : null) :
+                              selectedDataType === 'hs_athlete' ? (hsAthleteSortField === 'school_name' ? hsAthleteSortOrder : null) :
+                              (jucoAthleteSortField === 'school_name' ? jucoAthleteSortOrder : null),
                   },
                    {
                      title: 'Sport',
@@ -1281,80 +1417,42 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                          {sportName}
                        </Tag>
                      ),
-                     sorter: (a: any, b: any) => (a.sport_name || '').localeCompare(b.sport_name || ''),
+                     // Sport name is computed, so don't allow sorting
+                   },
+                   {
+                     title: 'Roster Link',
+                     dataIndex: 'roster_link',
+                     key: 'roster_link',
+                     render: (rosterLink: string, record: any) => {
+                       if (rosterLink && rosterLink.trim() !== '') {
+                         const href = rosterLink.startsWith('http') ? rosterLink : `https://${rosterLink}`;
+                         return (
+                           <a 
+                             href={href} 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             onClick={(e) => e.stopPropagation()}
+                             style={{ 
+                               color: '#1890ff', 
+                               textDecoration: 'underline',
+                               cursor: 'pointer'
+                             }}
+                           >
+                             View Roster
+                           </a>
+                         );
+                       } else {
+                         return (
+                           <Text type="secondary" style={{ fontSize: '12px' }}>
+                             N/A
+                           </Text>
+                         );
+                       }
+                     },
                    },
                 ]}
               />
             </div>
-
-            {/* All Athletes Section - Only show if user has access and for College Athletes */}
-            {hasAthleteAccess && selectedDataType === 'athlete' && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <Text strong>Sport:</Text>
-                  <Select
-                    style={{ width: 200 }}
-                    placeholder="Select a sport"
-                    value={selectedAthleteSport?.id}
-                    onChange={(value) => {
-                      const sport = allSports.find(s => s.id === value);
-                      setSelectedAthleteSport(sport || null);
-                    }}
-                    showSearch
-                    filterOption={(input, option) =>
-                      (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                    }
-                    options={allSports.map(sport => ({
-                      value: sport.id,
-                      label: `${sport.name} (${sport.abbrev.toUpperCase()})`
-                    }))}
-                  />
-                </div>
-                
-                <Card 
-                  title={
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <TeamOutlined style={{ marginRight: 8 }} />
-                        {selectedAthleteSport ? `${selectedAthleteSport.name} Athletes` : 'All Athletes'}
-                        {selectedAthleteSport && (
-                          <Tag color="purple" style={{ marginLeft: 8 }}>
-                            {selectedAthleteSport.abbrev.toUpperCase()}
-                          </Tag>
-                        )}
-                      </div>
-                      <Input.Search
-                        style={{ width: 300 }}
-                        placeholder="Search by name, school, or state..."
-                        allowClear
-                        value={athleteSearchInput}
-                        onChange={(e) => setAthleteSearchInput(e.target.value)}
-                        onSearch={(value) => setAthleteSearchInput(value)}
-                      />
-                    </div>
-                  }
-                >
-                  <Table
-                    columns={athleteColumns}
-                    dataSource={filteredAthletes}
-                    rowKey="athlete_id"
-                    loading={loadingAthletes}
-                    pagination={{
-                      pageSize: 20,
-                      showSizeChanger: true,
-                      showQuickJumper: true,
-                      showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} athletes`,
-                    }}
-                    scroll={{ x: 'max-content' }}
-                    locale={{
-                      emptyText: selectedAthleteSport 
-                        ? `No athletes found for ${selectedAthleteSport.name}`
-                        : 'Select a sport from the dropdown to view athletes'
-                    }}
-                  />
-                </Card>
-              </div>
-            )}
             
             {/* Athlete Modal */}
             <Modal

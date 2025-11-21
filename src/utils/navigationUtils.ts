@@ -64,7 +64,7 @@ export const menuRoutes = [
   { key: '7-4', route: '/cap-manager?view=budget', packageIds: utra_platinum_packages, title: 'Budget' },
   { key: '7-5', route: '/cap-manager?view=reports', packageIds: utra_platinum_packages, title: 'Reports' },
   { key: '7-6', route: '/cap-manager?view=depth-chart', packageIds: utra_platinum_packages, title: 'Depth Chart' },
-  { key: '13', route: '/admin', packageIds: [3, 4], title: 'Admin' },
+  { key: '13', route: '/admin', packageIds: [3, 4, 5], title: 'Admin' },
   { key: '15', route: '/verified-game', packageIds: [3, 4, 5, 78], title: 'Verified Game' },
   { key: '18', route: '/activity-feed', packageIds: football_packages, title: 'Activity Feed' },
   { key: '19', route: '/score-tracker', packageIds: football_packages, title: 'Score Tracker' },

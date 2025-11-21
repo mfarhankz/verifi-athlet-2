@@ -11,7 +11,6 @@ import AdminAlertModal from './_components/AdminAlertModal';
 import AdminOfferAlertModal from './_components/AdminOfferAlertModal';
 import PackageSwitchModal from './_components/PackageSwitchModal';
 import EditViewDataTab from './_components/EditViewDataTab';
-import { fetchSchoolsByMultipleDivisions, DivisionType } from '@/utils/schoolUtils';
 import {   getPackageIdsBySport,  fetchUserDetailsByIds,  fetchDataTypesInUse, fetchAthleteFactData,  insertAthleteFact, searchAthletes,  checkUserAthleteAccess,  fetchAllSports, fetchAthletesFromSportView,  
   fetchCustomersForSport,  fetchPackageDataForCustomers,  fetchPackagesByIds, fetchAlertsForCustomers,  createCustomer,  createCustomerPackageMappings,  fetchExistingPackagesForCustomer,  
   updateCustomerPackageAccess,  updateUserAccess,  updateUserDetails,  createAlert, endAlerts,  fetchOfferAlertsForCustomers, createOfferAlert, endOfferAlerts,  loadSportUsersWithData,  fetchAllCustomersWithPackages} from '@/lib/queries';
@@ -381,6 +380,40 @@ export default function AdminPage() {
     }
   };
 
+  // Copy customer package map ID to clipboard
+  const copyCustomerPackageMapId = async (customerPackageMapId: string | number) => {
+    try {
+      const idString = String(customerPackageMapId);
+      // Try modern clipboard API first
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(idString);
+        message.success('Customer Package Map ID copied to clipboard');
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = idString;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+          document.execCommand('copy');
+          message.success('Customer Package Map ID copied to clipboard');
+        } catch (err) {
+          message.error('Failed to copy Customer Package Map ID');
+        }
+        
+        document.body.removeChild(textArea);
+      }
+    } catch (error) {
+      console.error('Failed to copy Customer Package Map ID:', error);
+      message.error('Failed to copy Customer Package Map ID');
+    }
+  };
+
 
   // Load sports on component mount
   useEffect(() => {
@@ -431,12 +464,56 @@ export default function AdminPage() {
   }, [activeTab, selectedSport, debouncedOfferAlertSearch]);
 
 
-  // Load schools for dropdown (limited to D1, D2, D3, and NAIA)
+  // Load schools for dropdown (limited to University/College from school_fact data_type_id 117)
   const loadSchools = async () => {
     setLoadingSchools(true);
     try {
-      const targetDivisions: DivisionType[] = ['D1', 'D2', 'D3', 'NAIA'];
-      const schoolData = await fetchSchoolsByMultipleDivisions(targetDivisions);
+      // Query for schools with school_fact data_type_id 117 and value "University/College"
+      const { data: schoolFactData, error: schoolFactError } = await supabase
+        .from('school_fact')
+        .select('school_id')
+        .eq('data_type_id', 117)
+        .eq('value', 'University/College')
+        .is('inactive', null);
+
+      if (schoolFactError) {
+        console.error('Error fetching school facts:', schoolFactError);
+        throw schoolFactError;
+      }
+
+      if (!schoolFactData || schoolFactData.length === 0) {
+        setSchools([]);
+        return;
+      }
+
+      // Get unique school IDs
+      const schoolIds = [...new Set(schoolFactData.map((fact: any) => fact.school_id))];
+
+      // Fetch school details in batches
+      const batchSize = 100;
+      const batches = [];
+      for (let i = 0; i < schoolIds.length; i += batchSize) {
+        batches.push(schoolIds.slice(i, i + batchSize));
+      }
+
+      const batchPromises = batches.map(async (batch) => {
+        const { data, error } = await supabase
+          .from('school')
+          .select('id, name')
+          .in('id', batch)
+          .order('name');
+
+        if (error) {
+          console.error('Error fetching schools batch:', error);
+          return [];
+        }
+
+        return data || [];
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      const schoolData = batchResults.flat();
+      
       setSchools(schoolData || []);
     } catch (error) {
       console.error('Error loading schools:', error);
@@ -2095,6 +2172,25 @@ export default function AdminPage() {
       dataIndex: 'school_name',
       key: 'school_name',
       sorter: (a: any, b: any) => a.school_name.localeCompare(b.school_name),
+      render: (schoolName: string, record: any) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span>{schoolName}</span>
+          {record.customer_package_map_id && (
+            <CopyOutlined
+              onClick={(e) => {
+                e.stopPropagation();
+                copyCustomerPackageMapId(record.customer_package_map_id);
+              }}
+              style={{
+                cursor: 'pointer',
+                color: '#1890ff',
+                fontSize: '14px',
+              }}
+              title="Copy Customer Package Map ID"
+            />
+          )}
+        </div>
+      ),
     },
     {
       title: 'Main Contact',

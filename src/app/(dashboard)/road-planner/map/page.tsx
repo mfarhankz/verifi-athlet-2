@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, Fragment } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   GoogleMap,
   useJsApiLoader,
@@ -78,6 +78,7 @@ function SortableItem({
   onRemove,
   userDetails,
   hasFootballPackage,
+  dataSource,
 }: {
   location: School;
   index: number;
@@ -86,6 +87,7 @@ function SortableItem({
   onRemove: (index: number) => void;
   userDetails?: any;
   hasFootballPackage?: boolean;
+  dataSource?: 'high_schools' | 'hs_athletes' | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id: index });
@@ -101,13 +103,24 @@ function SortableItem({
     const fetchAthletes = async () => {
       if (!hasFootballPackage || !userDetails?.customer_id) return;
       
+      // Skip fetching athletes if this location already has athlete data (it's an athlete card)
+      const hasAthleteData = location.raw_data && (location.raw_data as any).athlete_name;
+      if (hasAthleteData) return;
+      
       try {
-        // Use school_id directly if available, otherwise convert from high_school_id
+        // For mixed data, check each location individually
+        // For hs_athletes mode, school_id is already the high school's school_id (no conversion needed)
+        // For high_schools, use school_id directly if available, otherwise convert from high_school_id
         let schoolId: string | undefined = location.school_id;
-        if (!schoolId && location.high_school_id) {
-          schoolId = (await convertHighSchoolIdToSchoolId(location.high_school_id)) || undefined;
-        } else if (!schoolId && location.raw_data?.high_school_id) {
-          schoolId = (await convertHighSchoolIdToSchoolId(location.raw_data.high_school_id)) || undefined;
+        
+        // Only try conversion if we don't have school_id and this is not an athlete card
+        // Check location individually rather than relying on dataSource parameter
+        if (!schoolId && !hasAthleteData) {
+          if (location.high_school_id) {
+            schoolId = (await convertHighSchoolIdToSchoolId(location.high_school_id)) || undefined;
+          } else if (location.raw_data?.high_school_id) {
+            schoolId = (await convertHighSchoolIdToSchoolId(location.raw_data.high_school_id)) || undefined;
+          }
         }
         
         if (schoolId) {
@@ -167,8 +180,8 @@ function SortableItem({
       }
     };
 
-    fetchAthletes();
-  }, [location.school_id, location.high_school_id, location.raw_data?.high_school_id, hasFootballPackage, userDetails?.customer_id]);
+      fetchAthletes();
+    }, [location.school_id, location.high_school_id, location.raw_data?.high_school_id, location.raw_data, hasFootballPackage, userDetails?.customer_id, dataSource]);
 
   return (
     <div
@@ -188,6 +201,7 @@ function SortableItem({
         athletes={athletes}
         routeInfo={routeInfo}
         totalLocations={totalLocations}
+        dataSource={dataSource}
       />
     </div>
   );
@@ -195,6 +209,8 @@ function SortableItem({
 
 
 export default function MapPage() {
+  const searchParams = useSearchParams();
+  const dataSource = searchParams?.get('dataSource') as 'high_schools' | 'hs_athletes' | null;
   const [selectedAddresses, setSelectedAddresses] = useState<string[]>([]);
   const [storedSchoolData, setStoredSchoolData] = useState<School[]>([]);
   const [locations, setLocations] = useState<School[]>([]);
@@ -861,37 +877,46 @@ export default function MapPage() {
             // Find matching school info directly
             const schoolInfo = schoolData.find((s) => s.address === address);
 
-            // Always refresh school data using the shared utility to ensure consistency
+            // Check if this is an athlete location (has athlete data in raw_data)
+            const hasAthleteData = schoolInfo?.raw_data && (schoolInfo.raw_data as any).athlete_name;
+            
+            // Only fetch fresh school data if this is NOT an athlete location
+            // Athlete locations should preserve their raw_data with athlete information
             let freshSchoolData: School | null = null;
-            if (schoolInfo?.school_id) {
-              // We have school_id, refresh data using the shared utility
-              try {
-                freshSchoolData = await fetchSchoolDataFromSchoolId(schoolInfo.school_id);
-              } catch (error) {
-                console.error("Error fetching fresh school data:", error);
-              }
-            } else if (schoolInfo?.high_school_id) {
-              // Convert high_school_id to school_id and fetch
-              try {
-                freshSchoolData = await fetchSchoolDataFromHighSchoolId(schoolInfo.high_school_id);
-              } catch (error) {
-                console.error("Error fetching fresh school data:", error);
-              }
-            } else if (schoolInfo?.raw_data?.high_school_id) {
-              // Last fallback: use raw_data.high_school_id
-              try {
-                freshSchoolData = await fetchSchoolDataFromHighSchoolId(schoolInfo.raw_data.high_school_id);
-              } catch (error) {
-                console.error("Error fetching fresh school data:", error);
+            if (!hasAthleteData) {
+              if (schoolInfo?.school_id) {
+                // We have school_id, refresh data using the shared utility
+                try {
+                  freshSchoolData = await fetchSchoolDataFromSchoolId(schoolInfo.school_id);
+                } catch (error) {
+                  console.error("Error fetching fresh school data:", error);
+                }
+              } else if (schoolInfo?.high_school_id) {
+                // Convert high_school_id to school_id and fetch
+                try {
+                  freshSchoolData = await fetchSchoolDataFromHighSchoolId(schoolInfo.high_school_id);
+                } catch (error) {
+                  console.error("Error fetching fresh school data:", error);
+                }
+              } else if (schoolInfo?.raw_data?.high_school_id) {
+                // Last fallback: use raw_data.high_school_id
+                try {
+                  freshSchoolData = await fetchSchoolDataFromHighSchoolId(schoolInfo.raw_data.high_school_id);
+                } catch (error) {
+                  console.error("Error fetching fresh school data:", error);
+                }
               }
             }
 
             // Use fresh data if available, otherwise fall back to stored data
             // Merge fresh data with stored data to preserve position and other map-specific fields
+            // IMPORTANT: Preserve raw_data from schoolInfo if it exists (contains athlete data)
             const finalSchoolData = freshSchoolData ? {
               ...freshSchoolData,
               // Preserve position if it exists in stored data
               position: schoolInfo?.position || freshSchoolData.position,
+              // Preserve raw_data from schoolInfo if it exists (for athlete data)
+              raw_data: schoolInfo?.raw_data || freshSchoolData.raw_data,
             } : schoolInfo;
 
             // Get geocoded location with position data
@@ -910,6 +935,7 @@ export default function MapPage() {
             // Combine the geocode position with all the school metadata from fresh data
             // Use freshSchoolData (from shared utility) which has all the latest fields
             // Spread finalSchoolData first (has all the latest data), then override with map-specific fields
+            // IMPORTANT: Preserve raw_data from schoolInfo if it exists (contains athlete data)
             return {
               ...(finalSchoolData || schoolInfo || {}),
               address,
@@ -922,6 +948,8 @@ export default function MapPage() {
               // Ensure IDs are preserved
               school_id: finalSchoolData?.school_id || schoolInfo?.school_id,
               high_school_id: finalSchoolData?.high_school_id || finalSchoolData?.raw_data?.high_school_id || schoolInfo?.high_school_id || schoolInfo?.raw_data?.high_school_id,
+              // CRITICAL: Preserve raw_data from schoolInfo (contains athlete data for athlete cards)
+              raw_data: schoolInfo?.raw_data || finalSchoolData?.raw_data,
             };
           })
         );
@@ -996,7 +1024,7 @@ export default function MapPage() {
           {/* Added pb-20 for bottom padding */}
           {/* Controls section - moved from fixed header to scrollable content */}
           <div className="flex items-center justify-between bg-white p-4 mb-3" style={{ position: 'relative', zIndex: 100 }}>
-            <Button type="link" onClick={() => router.push("/road-planner")} className="!text-[20px] !font-semibold !leading-1">
+            <Button type="link" onClick={() => router.back()} className="!text-[20px] !font-semibold !leading-1">
               <i className="icon-svg-left-arrow"></i>
               Map Route
             </Button>
@@ -1307,209 +1335,405 @@ export default function MapPage() {
                       (location, index) =>
                         location.position && (
                           <Fragment key={`marker-${index}`}>
-                            <MarkerF
-                              position={location.position}
-                              label={{
-                                text: `${index + 1}`,
-                                color: "#1C1D4D",
-                                fontWeight: "bold",
-                              }}
-                              icon={{
-                                url: "/svgicons/map-dot.svg",
-                                scaledSize:
-                                  window.google && window.google.maps
-                                    ? new window.google.maps.Size(28, 28)
-                                    : undefined,
-                                anchor:
-                                  window.google && window.google.maps
-                                    ? new window.google.maps.Point(14, 14)
-                                    : undefined,
-                              }}
-                              title={`${index + 1}. ${location.school}`}
-                            />
-
-                            {/* School label */}
-                            <OverlayViewF
-                              position={location.position}
-                              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                              getPixelPositionOffset={(width, height) => ({
-                                x: -width / 2,
-                                y: -height - 30,
-                              })}
-                            >
-                              <Popover
-                                content={
-                                  <div className="space-y-2 min-w-[400px]">
-                                    <div className="mb-4">
-                                      <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
-                                        {location.school} 
-                                        {/* <span className="!text-[16px]"> <i className="icon-svg-location1"></i> 0.3 Miles</span> */}
-                                      </h4>
-                                      <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
-                                        {location.address} <br />
-                                        {(location.county ||
-                                          location.state) && (
-                                          <span>
-                                            {location.county && (
-                                              <span>{location.county}</span>
-                                            )}
-                                            {location.county &&
-                                              location.state && <span> | </span>}
-                                            {location.state && (
-                                              <span>{location.state}</span>
-                                            )}
-                                          </span>
-                                        )}
-                                        {location.ad_email && (
-                                          <>
-                                            <br />
-                                            <a href={`mailto:${location.ad_email}`} className="text-[14px] text-blue-600">{location.ad_email}</a>
-                                          </>
-                                        )}
-                                        {location.school_phone && (
-                                          <>
-                                            <br />
-                                            <a href={`tel:${location.school_phone.replace(/\D/g, '')}`} className="text-[14px] text-blue-600">{formatPhoneNumber(location.school_phone)}</a>
-                                          </>
-                                        )}                                        
-                                      </div>
-                                    </div>
-
-                                    {hasFootballPackage && (
-                                      <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
-                                        {schoolAthletes[index] && schoolAthletes[index].length > 0 ? (
-                                          schoolAthletes[index].map((athlete: any, athleteIndex: number) => (
-                                            <div key={athleteIndex} className="text-xs flex items-center justify-start gap-2">
-                                              <img
-                                                src={athlete.image_url || "/blank-user.svg"}
-                                                alt={athlete.name || "Athlete"}
-                                                height={50}
-                                                width={50}
-                                                className="rounded-full object-cover"
-                                              />
-                                              <div>
-                                                <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
-                                                  {athlete.name || '-'}
-                                                </h6>
-                                                <span className="!text-[14px] !leading-[16px] mb-0">
-                                                  {athlete.athleticProjection || '-'} <br />
-                                                  {athlete.gradYear || '-'}
+                            {/* Render different pins based on whether location has athlete data */}
+                            {(() => {
+                              // Check if this location has athlete data in raw_data
+                              // This allows mixed data (both schools and athletes in the same route)
+                              const hasAthleteData = location.raw_data && (location.raw_data as any).athlete_name;
+                              // Use athlete pin only if location has athlete data (ignore dataSource for mixed routes)
+                              const isAthletePin = hasAthleteData;
+                              
+                              return isAthletePin ? (
+                              // Athlete pin
+                              (() => {
+                                const athleteData = (location.raw_data || {}) as any;
+                                const projection = athleteData.athlete_athletic_projection || '';
+                                
+                                // Color mapping based on athletic projection
+                                const projectionColorMap: Record<string, string> = {
+                                  'FBS P4 - Top half': '#22C55E',
+                                  'FBS P4': '#4ADE80',
+                                  'FBS G5 - Top half': '#86EFAC',
+                                  'FBS G5': '#BEF264',
+                                  'FCS - Full Scholarship': '#FDE047',
+                                  'FCS': '#FCD34D',
+                                  'D2 - Top half': '#FBBF24',
+                                  'D2': '#FB923C',
+                                  'D3 - Top half': '#F87171',
+                                  'D3': '#FCA5A5',
+                                  'D3 Walk-on': '#9CA3AF',
+                                };
+                                
+                                const backgroundColor = projection 
+                                  ? (projectionColorMap[projection] || '#9CA3AF')
+                                  : '#9CA3AF';
+                                
+                                const isGreenMarker = backgroundColor === '#22C55E' || backgroundColor === '#4ADE80' || backgroundColor === '#86EFAC';
+                                const dotZIndex = isGreenMarker ? 1002 : 1000;
+                                const iconZIndex = isGreenMarker ? 1003 : 1001;
+                                
+                                return (
+                                  <OverlayViewF
+                                    position={location.position}
+                                    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                                    getPixelPositionOffset={(width, height) => ({
+                                      x: -width / 2,
+                                      y: -height / 2,
+                                    })}
+                                  >
+                                    <Popover
+                                      content={
+                                        <div className="space-y-2 min-w-[400px]">
+                                          <div className="mb-4">
+                                            <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
+                                              {athleteData.athlete_name || location.school}
+                                            </h4>
+                                            <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                              {location.address} <br />
+                                              {(location.county || location.state) && (
+                                                <span>
+                                                  {location.county && <span>{location.county}</span>}
+                                                  {location.county && location.state && <span> | </span>}
+                                                  {location.state && <span>{location.state}</span>}
                                                 </span>
-                                              </div>
+                                              )}
+                                              {athleteData.athlete_cell_phone && (
+                                                <>
+                                                  <br />
+                                                  <a href={`tel:${String(athleteData.athlete_cell_phone).replace(/\D/g, '')}`} className="text-[14px] text-blue-600">
+                                                    {formatPhoneNumber(String(athleteData.athlete_cell_phone))}
+                                                  </a>
+                                                </>
+                                              )}
                                             </div>
-                                          ))
-                                        ) : schoolAthletes[index] !== undefined ? (
-                                          <div className="text-gray-400 text-[12px]">No athletes found</div>
-                                        ) : (
-                                          <div className="text-gray-400 text-[12px]">Loading athletes...</div>
+                                          </div>
+                                        </div>
+                                      }
+                                      title={null}
+                                      trigger="click"
+                                    >
+                                      <div
+                                        className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full pr-2 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative"
+                                        style={{ minWidth: "max-content", height: "32px", paddingRight: "8px", backgroundColor }}
+                                      >
+                                        {/* Dot behind the athlete icon */}
+                                        <div 
+                                          className="absolute flex items-center justify-center"
+                                          style={{
+                                            left: "-3px",
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            width: "28px",
+                                            height: "28px",
+                                            zIndex: dotZIndex,
+                                          }}
+                                        >
+                                          <img
+                                            src="/svgicons/map-dot.svg"
+                                            alt=""
+                                            style={{
+                                              width: "28px",
+                                              height: "28px",
+                                            }}
+                                          />
+                                        </div>
+                                        <div 
+                                          className="flex items-center justify-center absolute border-[4px] border-solid border-[#1C1D4D] rounded-full overflow-hidden flex-shrink-0"
+                                          style={{
+                                            left: "-3px",
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            width: "24px",
+                                            height: "24px",
+                                            zIndex: iconZIndex,
+                                          }}
+                                        >
+                                          <img
+                                            src={athleteData.athlete_image_url || "/blank-user.svg"}
+                                            alt="Athlete"
+                                            className="w-full h-full object-cover rounded-full"
+                                          />
+                                        </div>
+                                        <h6 className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap" style={{ width: "130px", marginLeft: "26px" }}>
+                                          <span className="truncate block">
+                                            {athleteData.athlete_name || location.school}
+                                          </span>
+                                        </h6>
+                                      </div>
+                                    </Popover>
+                                  </OverlayViewF>
+                                );
+                              })()
+                            ) : (
+                              // High school pin
+                              <>
+                                <MarkerF
+                                  position={location.position}
+                                  label={{
+                                    text: `${index + 1}`,
+                                    color: "#1C1D4D",
+                                    fontWeight: "bold",
+                                  }}
+                                  icon={{
+                                    url: "/svgicons/map-dot.svg",
+                                    scaledSize:
+                                      window.google && window.google.maps
+                                        ? new window.google.maps.Size(28, 28)
+                                        : undefined,
+                                    anchor:
+                                      window.google && window.google.maps
+                                        ? new window.google.maps.Point(14, 14)
+                                        : undefined,
+                                  }}
+                                  title={`${index + 1}. ${location.school}`}
+                                />
+
+                                {/* School label */}
+                                <OverlayViewF
+                                  position={location.position}
+                                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                                  getPixelPositionOffset={(width, height) => ({
+                                    x: -width / 2,
+                                    y: -height - 30,
+                                  })}
+                                >
+                                  <Popover
+                                    content={
+                                      <div className="space-y-2 min-w-[400px]">
+                                        <div className="mb-4">
+                                          <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
+                                            {location.school} 
+                                          </h4>
+                                          <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                            {location.address} <br />
+                                            {(location.county ||
+                                              location.state) && (
+                                              <span>
+                                                {location.county && (
+                                                  <span>{location.county}</span>
+                                                )}
+                                                {location.county &&
+                                                  location.state && <span> | </span>}
+                                                {location.state && (
+                                                  <span>{location.state}</span>
+                                                )}
+                                              </span>
+                                            )}
+                                            {location.ad_email && (
+                                              <>
+                                                <br />
+                                                <a href={`mailto:${location.ad_email}`} className="text-[14px] text-blue-600">{location.ad_email}</a>
+                                              </>
+                                            )}
+                                            {location.school_phone && (
+                                              <>
+                                                <br />
+                                                <a href={`tel:${location.school_phone.replace(/\D/g, '')}`} className="text-[14px] text-blue-600">{formatPhoneNumber(location.school_phone)}</a>
+                                              </>
+                                            )}                                        
+                                          </div>
+                                        </div>
+
+                                        {hasFootballPackage && (
+                                          <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
+                                            {schoolAthletes[index] && schoolAthletes[index].length > 0 ? (
+                                              schoolAthletes[index].map((athlete: any, athleteIndex: number) => (
+                                                <div key={athleteIndex} className="text-xs flex items-center justify-start gap-2">
+                                                  <img
+                                                    src={athlete.image_url || "/blank-user.svg"}
+                                                    alt={athlete.name || "Athlete"}
+                                                    height={50}
+                                                    width={50}
+                                                    className="rounded-full object-cover"
+                                                  />
+                                                  <div>
+                                                    <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
+                                                      {athlete.name || '-'}
+                                                    </h6>
+                                                    <span className="!text-[14px] !leading-[16px] mb-0">
+                                                      {athlete.athleticProjection || '-'} <br />
+                                                      {athlete.gradYear || '-'}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ))
+                                            ) : schoolAthletes[index] !== undefined ? (
+                                              <div className="text-gray-400 text-[12px]">No athletes found</div>
+                                            ) : (
+                                              <div className="text-gray-400 text-[12px]">Loading athletes...</div>
+                                            )}
+                                          </div>
                                         )}
                                       </div>
-                                    )}
-                                  </div>
-                                }
-                                title={null}
-                                trigger="click"
-                                open={popoverOpen[index]}
-                                onOpenChange={async (open) => {
-                                  setPopoverOpen({
-                                    ...popoverOpen,
-                                    [index]: open,
-                                  });
-                                  
-                                  // Fetch athletes when popover opens
-                                  if (open && userDetails?.customer_id) {
-                                    try {
-                                      // Use school_id directly if available, otherwise convert from high_school_id
-                                      let schoolId: string | undefined = location.school_id;
-                                      if (!schoolId && location.high_school_id) {
-                                        schoolId = (await convertHighSchoolIdToSchoolId(location.high_school_id)) || undefined;
-                                      } else if (!schoolId && location.raw_data?.high_school_id) {
-                                        schoolId = (await convertHighSchoolIdToSchoolId(location.raw_data.high_school_id)) || undefined;
-                                      }
+                                    }
+                                    title={null}
+                                    trigger="click"
+                                    open={popoverOpen[index]}
+                                    onOpenChange={async (open) => {
+                                      setPopoverOpen({
+                                        ...popoverOpen,
+                                        [index]: open,
+                                      });
                                       
-                                      if (schoolId) {
-                                        const result = await fetchHighSchoolAthletes(
-                                          schoolId,
-                                          'fb',
-                                          userDetails.customer_id,
-                                          { page: 1, limit: 100 }
-                                        );
-                                        
-                                        if (result.data) {
-                                          // Sort by athletic projection first, then grad_year
-                                          const projectionOrder = [
-                                            'FBS P4 - Top half',
-                                            'FBS P4',
-                                            'FBS G5 - Top half',
-                                            'FBS G5',
-                                            'FCS - Full Scholarship',
-                                            'FCS',
-                                            'D2 - Top half',
-                                            'D2',
-                                            'D3 - Top half',
-                                            'D3',
-                                            'D3 Walk-on'
-                                          ];
+                                      // Fetch athletes when popover opens
+                                      if (open && userDetails?.customer_id) {
+                                        try {
+                                          // Check if this is an athlete location - if so, skip fetching athletes
+                                          const hasAthleteData = location.raw_data && (location.raw_data as any).athlete_name;
+                                          if (hasAthleteData) return;
                                           
-                                          const sortedAthletes = result.data.sort((a: any, b: any) => {
-                                            // First sort by athletic projection
-                                            const indexA = projectionOrder.indexOf(a.athleticProjection || '');
-                                            const indexB = projectionOrder.indexOf(b.athleticProjection || '');
-                                            
-                                            if (indexA !== -1 && indexB !== -1) {
-                                              if (indexA !== indexB) {
-                                                return indexA - indexB;
-                                              }
-                                            } else if (indexA !== -1) {
-                                              return -1;
-                                            } else if (indexB !== -1) {
-                                              return 1;
-                                            } else if (a.athleticProjection && b.athleticProjection) {
-                                              const cmp = a.athleticProjection.localeCompare(b.athleticProjection);
-                                              if (cmp !== 0) return cmp;
+                                          // For mixed data, check each location individually
+                                          // Use school_id directly if available, otherwise convert from high_school_id
+                                          let schoolId: string | undefined = location.school_id;
+                                          
+                                          // Only try conversion if we don't have school_id and this is not an athlete location
+                                          if (!schoolId && !hasAthleteData) {
+                                            if (location.high_school_id) {
+                                              schoolId = (await convertHighSchoolIdToSchoolId(location.high_school_id)) || undefined;
+                                            } else if (location.raw_data?.high_school_id) {
+                                              schoolId = (await convertHighSchoolIdToSchoolId(location.raw_data.high_school_id)) || undefined;
                                             }
-                                            
-                                            // Then sort by grad_year
-                                            const yearA = parseInt(a.gradYear) || 0;
-                                            const yearB = parseInt(b.gradYear) || 0;
-                                            return yearA - yearB;
-                                          });
+                                          }
                                           
-                                          // Limit to 2-3 athletes that fit
-                                          setSchoolAthletes({
-                                            ...schoolAthletes,
-                                            [index]: sortedAthletes.slice(0, 2)
-                                          });
+                                          if (schoolId) {
+                                            const result = await fetchHighSchoolAthletes(
+                                              schoolId,
+                                              'fb',
+                                              userDetails.customer_id,
+                                              { page: 1, limit: 100 }
+                                            );
+                                            
+                                            if (result.data) {
+                                              // Sort by athletic projection first, then grad_year
+                                              const projectionOrder = [
+                                                'FBS P4 - Top half',
+                                                'FBS P4',
+                                                'FBS G5 - Top half',
+                                                'FBS G5',
+                                                'FCS - Full Scholarship',
+                                                'FCS',
+                                                'D2 - Top half',
+                                                'D2',
+                                                'D3 - Top half',
+                                                'D3',
+                                                'D3 Walk-on'
+                                              ];
+                                              
+                                              const sortedAthletes = result.data.sort((a: any, b: any) => {
+                                                // First sort by athletic projection
+                                                const indexA = projectionOrder.indexOf(a.athleticProjection || '');
+                                                const indexB = projectionOrder.indexOf(b.athleticProjection || '');
+                                                
+                                                if (indexA !== -1 && indexB !== -1) {
+                                                  if (indexA !== indexB) {
+                                                    return indexA - indexB;
+                                                  }
+                                                } else if (indexA !== -1) {
+                                                  return -1;
+                                                } else if (indexB !== -1) {
+                                                  return 1;
+                                                } else if (a.athleticProjection && b.athleticProjection) {
+                                                  const cmp = a.athleticProjection.localeCompare(b.athleticProjection);
+                                                  if (cmp !== 0) return cmp;
+                                                }
+                                                
+                                                // Then sort by grad_year
+                                                const yearA = parseInt(a.gradYear) || 0;
+                                                const yearB = parseInt(b.gradYear) || 0;
+                                                return yearA - yearB;
+                                              });
+                                              
+                                              // Limit to 2-3 athletes that fit
+                                              setSchoolAthletes({
+                                                ...schoolAthletes,
+                                                [index]: sortedAthletes.slice(0, 2)
+                                              });
+                                            }
+                                          }
+                                        } catch (error) {
+                                          console.error('Error fetching athletes:', error);
                                         }
                                       }
-                                    } catch (error) {
-                                      console.error('Error fetching athletes:', error);
-                                    }
-                                  }
-                                }}
-                              >
-                                <div
-                                  className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
-                                  style={{ minWidth: "max-content" }}
-                                >
-                                  <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
-                                    <img
-                                      src="/blank-hs.svg"
-                                      alt="School"
-                                      className="w-full h-full object-contain p-1"
-                                    />
-                                  </div>
-                                  <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
-                                    <span className="truncate block w-full">
-                                      {location.school}
-                                    </span>
-                                    {/* <span className="text-white !text-[10px] bg-[#1C1D4D] rounded-full px-2 !text-sm !leading-1">
-                                      4.5
-                                    </span> */}
-                                  </h6>
-                                </div>
-                              </Popover>
-                            </OverlayViewF>
+                                    }}
+                                  >
+                                    {(() => {
+                                      // Get D1 player producing score and determine color
+                                      const d1Score = location.score_d1_producing;
+                                      const score = d1Score !== null && d1Score !== undefined ? parseInt(String(d1Score)) : 0;
+                                      
+                                      const colorMap: Record<number, string> = {
+                                        0: '#9CA3AF',
+                                        1: '#FCA5A5',
+                                        2: '#F87171',
+                                        3: '#FB923C',
+                                        4: '#FBBF24',
+                                        5: '#FCD34D',
+                                        6: '#FDE047',
+                                        7: '#BEF264',
+                                        8: '#86EFAC',
+                                        9: '#4ADE80',
+                                        10: '#22C55E',
+                                      };
+                                      
+                                      const clampedScore = Math.max(0, Math.min(10, score));
+                                      const backgroundColor = colorMap[clampedScore] || '#9CA3AF';
+                                      
+                                      return (
+                                        <div
+                                          className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full pr-2 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative"
+                                          style={{ minWidth: "max-content", height: "32px", paddingRight: "8px", backgroundColor }}
+                                        >
+                                          {/* Dot behind the school icon */}
+                                          <div 
+                                            className="absolute flex items-center justify-center"
+                                            style={{
+                                              left: "-3px",
+                                              top: "50%",
+                                              transform: "translateY(-50%)",
+                                              width: "28px",
+                                              height: "28px",
+                                              zIndex: 1000,
+                                            }}
+                                          >
+                                            <img
+                                              src="/svgicons/map-dot.svg"
+                                              alt=""
+                                              style={{
+                                                width: "28px",
+                                                height: "28px",
+                                              }}
+                                            />
+                                          </div>
+                                          <div 
+                                            className="flex items-center justify-center absolute border-[4px] border-solid border-[#1C1D4D] rounded-full overflow-hidden flex-shrink-0"
+                                            style={{
+                                              left: "-3px",
+                                              top: "50%",
+                                              transform: "translateY(-50%)",
+                                              width: "24px",
+                                              height: "24px",
+                                              zIndex: 1001,
+                                            }}
+                                          >
+                                            <img
+                                              src="/blank-hs.svg"
+                                              alt="School"
+                                              className="w-full h-full object-contain p-0.5"
+                                            />
+                                          </div>
+                                          <h6 className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap" style={{ width: "130px", marginLeft: "26px" }}>
+                                            <span className="truncate block">
+                                              {location.school}
+                                            </span>
+                                          </h6>
+                                        </div>
+                                      );
+                                    })()}
+                                  </Popover>
+                                </OverlayViewF>
+                              </>
+                            );
+                            })()}
                           </Fragment>
                         )
                     )}
@@ -1570,6 +1794,7 @@ export default function MapPage() {
                             onRemove={handleRemoveLocation}
                             userDetails={userDetails}
                             hasFootballPackage={hasFootballPackage}
+                            dataSource={dataSource}
                           />
                         ))}
                       </div>
@@ -1591,6 +1816,8 @@ export default function MapPage() {
         </div>
       </div>
 
+      
+
       <style jsx global>{`
         /* Prevent double scrollbars - only for this page */
         /* Override dashboard layout Content overflow */
@@ -1605,7 +1832,8 @@ export default function MapPage() {
           overflow: hidden !important;
         }
         .map-schools-container .card-list {
-          margin-bottom: 45px !important;
+          margin-bottom: 75px !important;
+          overflow: visible !important;
         }
         .marker-number {
           font-weight: bold;

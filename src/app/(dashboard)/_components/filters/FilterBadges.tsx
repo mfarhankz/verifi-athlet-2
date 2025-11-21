@@ -115,8 +115,8 @@ export function FilterBadges({
         if (value.comparison === 'between' && value.minValue !== undefined && value.maxValue !== undefined) {
           return `${field.label}: ${value.minValue} - ${value.maxValue}`;
         } else if (value.value !== undefined && value.value !== null && value.value !== '') {
-          const comparisonLabel = value.comparison === 'min' ? 'At Least' : 
-                                 value.comparison === 'max' ? 'At Most' : 
+          const comparisonLabel = value.comparison === 'min' ? 'Min' : 
+                                 value.comparison === 'max' ? 'Max' : 
                                  value.comparison;
           return `${field.label}: ${comparisonLabel} ${value.value}`;
         }

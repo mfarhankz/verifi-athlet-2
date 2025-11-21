@@ -32,7 +32,6 @@ import {
   GoogleMap,
   useJsApiLoader,
   MarkerF,
-  DirectionsRenderer,
   Libraries,
   OverlayView,
   OverlayViewF,
@@ -99,6 +98,7 @@ import {
 } from "@/utils/printUtils";
 import { fetchUserDetails } from "@/utils/utils";
 import CSVExport from "./CSVExport";
+import ProgressBar from "@/components/ProgressBar";
 
 const boxStyle: React.CSSProperties = {
   width: "100%",
@@ -180,13 +180,9 @@ export function TableSearchContent({
     libraries,
   });
   const [isMapLoaded, setIsMapLoaded] = useState(false);
-  const [mapDirections, setMapDirections] =
-    useState<google.maps.DirectionsResult | null>(null);
-  const [mapRouteInfo, setMapRouteInfo] = useState<{
-    totalTime: string;
-    totalDistance: string;
-  } | null>(null);
-  const mapCenter = { lat: 32.3441812, lng: -86.3384809 }; // Center of US
+  const defaultMapCenter = { lat: 32.3441812, lng: -86.3384809 }; // Center of US
+  const [mapCenter, setMapCenter] = useState(defaultMapCenter);
+  const [mapZoom, setMapZoom] = useState(8);
 
   useEffect(() => {
     if (isMapApiLoaded && !mapLoadError) {
@@ -224,11 +220,77 @@ export function TableSearchContent({
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [selectedBoardName, setSelectedBoardName] = useState<string>("Main");
 
-  // High school selection state
+  // High school selection state (for list view checkboxes - printing, etc.)
   const [selectedHighSchools, setSelectedHighSchools] = useState<
     HighSchoolData[]
   >([]);
   const [isPrintingHighSchools, setIsPrintingHighSchools] = useState(false);
+
+  // Road map selection state (separate from list view checkboxes)
+  // Initialize from localStorage to persist across data source changes
+  const [roadMapSelectedHighSchools, setRoadMapSelectedHighSchools] = useState<
+    HighSchoolData[]
+  >(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("roadMapSelectedHighSchools");
+        return saved ? JSON.parse(saved) : [];
+      } catch (error) {
+        console.error(
+          "Error loading roadMapSelectedHighSchools from localStorage:",
+          error
+        );
+        return [];
+      }
+    }
+    return [];
+  });
+  const [roadMapSelectedAthletes, setRoadMapSelectedAthletes] = useState<
+    AthleteData[]
+  >(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("roadMapSelectedAthletes");
+        return saved ? JSON.parse(saved) : [];
+      } catch (error) {
+        console.error(
+          "Error loading roadMapSelectedAthletes from localStorage:",
+          error
+        );
+        return [];
+      }
+    }
+    return [];
+  });
+
+  // Save selections to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "roadMapSelectedHighSchools",
+        JSON.stringify(roadMapSelectedHighSchools)
+      );
+    } catch (error) {
+      console.error(
+        "Error saving roadMapSelectedHighSchools to localStorage:",
+        error
+      );
+    }
+  }, [roadMapSelectedHighSchools]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "roadMapSelectedAthletes",
+        JSON.stringify(roadMapSelectedAthletes)
+      );
+    } catch (error) {
+      console.error(
+        "Error saving roadMapSelectedAthletes to localStorage:",
+        error
+      );
+    }
+  }, [roadMapSelectedAthletes]);
   const [recruitingBoardAthletes, setRecruitingBoardAthletes] = useState<
     string[]
   >([]);
@@ -242,24 +304,6 @@ export function TableSearchContent({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [displayedData, setDisplayedData] = useState<AthleteData[]>([]);
-  // Map helpers for high schools: route calc when schools selected
-  const updateMapRouteInfo = (result: google.maps.DirectionsResult) => {
-    const legs = result.routes[0].legs;
-    const totalTimeSeconds = legs.reduce(
-      (sum, leg) => sum + (leg.duration?.value || 0),
-      0
-    );
-    const totalDistanceMeters = legs.reduce(
-      (sum, leg) => sum + (leg.distance?.value || 0),
-      0
-    );
-    const hours = Math.floor(totalTimeSeconds / 3600);
-    const minutes = Math.floor((totalTimeSeconds % 3600) / 60);
-    const totalTime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-    const miles = totalDistanceMeters / 1609.34;
-    const totalDistance = `${Math.round(miles)} mi`;
-    setMapRouteInfo({ totalTime, totalDistance });
-  };
   const [hsPopoverOpen, setHsPopoverOpen] = useState<Record<number, boolean>>(
     {}
   );
@@ -479,6 +523,17 @@ export function TableSearchContent({
   const maintenanceTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Add ref to access map instance for bounds fitting
   const mapRef = useRef<google.maps.Map | null>(null);
+
+  // Add ref to track if scroll position has been restored
+  const scrollPositionRestoredRef = useRef(false);
+
+  // Add ref to track if map bounds have been fitted (to prevent center reset)
+  const mapBoundsFittedRef = useRef(false);
+
+  // Generate a unique key for storing scroll position based on dataSource and activeCustomerId
+  const getScrollPositionKey = () => {
+    return `table_scroll_${dataSource}_${activeCustomerId || "default"}`;
+  };
 
   // Get the active customer and sport abbreviation from context
   const activeCustomer = customers.find(
@@ -741,6 +796,42 @@ export function TableSearchContent({
               <div className="pro-detail">
                 <h4 className="flex items-center mb-0.5">
                   {record.athlete_name}
+                  {(() => {
+                    // Helper function to get honor icon emoji based on best_honor value
+                    const getHonorIcon = (
+                      bestHonor: string | null | undefined
+                    ): string | null => {
+                      if (!bestHonor) return null;
+                      const lowerHonor = bestHonor.toLowerCase();
+
+                      if (lowerHonor.includes("all american")) {
+                        return "🏆"; // Gold trophy emoji
+                      } else if (lowerHonor.includes("all conference")) {
+                        return "🥈"; // Silver medal emoji
+                      } else if (lowerHonor.includes("all region")) {
+                        return "🥉"; // Bronze medal emoji
+                      }
+
+                      return null;
+                    };
+
+                    const honorIcon = getHonorIcon(record.best_honor);
+                    return honorIcon ? (
+                      <div className="ml-2 flex items-center">
+                        <Tooltip title={record.best_honor} placement="top">
+                          <span
+                            style={{
+                              fontSize: "16px",
+                              cursor: "help",
+                              fontStyle: "normal",
+                            }}
+                          >
+                            {honorIcon}
+                          </span>
+                        </Tooltip>
+                      </div>
+                    ) : null;
+                  })()}
                   {record.highlight && record.highlight.trim() !== "" && (
                     <div className="ml-2 flex items-center">
                       <Tooltip title={record.highlight} placement="top">
@@ -971,18 +1062,72 @@ export function TableSearchContent({
         return shouldShowColumn
           ? [
               {
-                title: "Transfer %",
+                title: () => (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "flex-start",
+                    }}
+                  >
+                    <InfoIcon
+                      tooltip="Any athlete with a score above 80% is considered a target worth your consideration as our algorithm has identified them as someone who is actively interested in being recruited to a new school."
+                      style={{ marginRight: "4px" }}
+                    />
+                    <span>Transfer %</span>
+                  </div>
+                ),
                 dataIndex: "transfer_odds",
                 key: "transfer_odds",
-                width: 120,
+                width: 135,
                 sorter: true,
-                render: (value: any) => {
+                render: (value: any, record: any) => {
                   if (value === null || value === undefined || value === "") {
                     return null;
                   }
                   // Convert to percentage with 1 decimal place
                   const percentage = Number(value).toFixed(1);
-                  return `${percentage}%`;
+                  const transferOddsValue = Number(value);
+
+                  // Format date as month-year if transfer odds > 80%
+                  let dateDisplay = null;
+                  if (transferOddsValue > 80 && record?.date) {
+                    try {
+                      const date = new Date(record.date);
+                      if (!isNaN(date.getTime())) {
+                        const month = date.toLocaleDateString("en-US", {
+                          month: "short",
+                        });
+                        const year = date.getFullYear();
+                        dateDisplay = `${month}-${year}`;
+                      }
+                    } catch (error) {
+                      // If date parsing fails, don't show date
+                    }
+                  }
+
+                  return (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <span>{`${percentage}%`}</span>
+                      {dateDisplay && (
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            color: "#666",
+                            marginTop: "2px",
+                          }}
+                        >
+                          {dateDisplay}
+                        </span>
+                      )}
+                    </div>
+                  );
                 },
               },
             ]
@@ -1166,6 +1311,75 @@ export function TableSearchContent({
                     return highSchoolValue;
                   }
                   return null;
+                }
+
+                // Special handling for GP column (data_type_id 98) - conditional green background
+                if (col.data_type_id === 98) {
+                  const sportId = activeCustomer?.sport_id
+                    ? String(activeCustomer.sport_id)
+                    : null;
+                  const gp =
+                    value !== null && value !== undefined
+                      ? Number(value)
+                      : null;
+                  const gpPrev =
+                    record.gp_prev !== null && record.gp_prev !== undefined
+                      ? Number(record.gp_prev)
+                      : null;
+
+                  // Check conditions based on sport
+                  let shouldHighlight = false;
+                  if (sportId && gp !== null && gpPrev !== null) {
+                    // MSOC (sport_id 3) / WSOC (sport_id 4): gp_prev > 10 AND gp < 5
+                    if (
+                      (sportId === "3" || sportId === "4") &&
+                      gpPrev > 10 &&
+                      gp < 5
+                    ) {
+                      shouldHighlight = true;
+                    }
+                    // MBB (sport_id 1) / WBB (sport_id 2): gp_prev > 12 AND gp < 6
+                    else if (
+                      (sportId === "1" || sportId === "2") &&
+                      gpPrev > 12 &&
+                      gp < 6
+                    ) {
+                      shouldHighlight = true;
+                    }
+                    // BSB (sport_id 6) / SB (sport_id 7): gp_prev > 15 AND gp < 8
+                    else if (
+                      (sportId === "6" || sportId === "7") &&
+                      gpPrev > 15 &&
+                      gp < 8
+                    ) {
+                      shouldHighlight = true;
+                    }
+                  }
+
+                  const formattedValue = formatStatDecimal(
+                    value,
+                    col.decimal_places,
+                    col.is_percentage,
+                    col.convert_negative_to_zero
+                  );
+
+                  if (shouldHighlight) {
+                    return (
+                      <span
+                        style={{
+                          backgroundColor: "#52c41a",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          display: "inline-block",
+                          fontWeight: "500",
+                        }}
+                      >
+                        {formattedValue}
+                      </span>
+                    );
+                  }
+
+                  return formattedValue;
                 }
 
                 // Default handling for other stats
@@ -1471,6 +1685,7 @@ export function TableSearchContent({
         "address_longitude",
         "school_state",
         "hs_county",
+        "d1_player_producing", // Add D1 player producing score for map marker colors
         ...selectColumns,
         ...Array.from(filterColumns),
       ];
@@ -1480,7 +1695,7 @@ export function TableSearchContent({
       let query = supabase
         .from("vw_high_school")
         .select(uniqueSelect.join(","), { count: "exact" });
-        console.log("query checking...", query);
+      console.log("query checking...", query);
 
       // Add search filter if provided
       if (search && search.length >= 2) {
@@ -1838,9 +2053,12 @@ export function TableSearchContent({
             currentColumns = cols; // Use the local variable instead of state
           }
 
+          // Use higher limit when map view is active
+          const limit = highSchoolViewMode === "map" ? 100 : ITEMS_PER_PAGE;
+
           const highSchoolData = await fetchHighSchoolData({
             page: targetPage,
-            limit: ITEMS_PER_PAGE,
+            limit: limit,
             search: search,
             selectColumns: currentColumns.map((c) => c.dataIndex),
             filters: filters,
@@ -1991,7 +2209,10 @@ export function TableSearchContent({
         const displayColumns = [
           // Conditionally include columns based on configuration
           // Include transfer_odds based on sport and package (only on pre-portal)
-          ...(shouldIncludeTransferOdds ? ["transfer_odds"] : []),
+          // Also include initiated_date when transfer_odds is shown (needed for date display)
+          ...(shouldIncludeTransferOdds
+            ? ["transfer_odds", "initiated_date"]
+            : []),
           ...(columnConfig.date ? ["date"] : []),
           ...(columnConfig.athletic_aid ? ["athletic_aid"] : []),
           ...(columnConfig.position ? ["position"] : []),
@@ -1999,6 +2220,10 @@ export function TableSearchContent({
           ...(columnConfig.state ? ["state"] : []),
           ...(columnConfig.college_state ? ["school_state"] : []),
           ...(columnConfig.true_score ? ["true_score"] : []),
+          // Always include athletic_projection for hs_athletes map view (needed for marker colors)
+          ...(dataSource === "hs_athletes" && hsAthleteViewMode === "map"
+            ? ["athletic_projection"]
+            : []),
           // Add dynamic stat columns
           ...(currentDynamicColumns.length > 0
             ? currentDynamicColumns.map(
@@ -2012,10 +2237,17 @@ export function TableSearchContent({
 
         // Get user's school_id from active customer
         const userSchoolId = activeCustomer?.school_id;
+
+        // Use higher limit when map view is active for hs_athletes
+        const limit =
+          dataSource === "hs_athletes" && hsAthleteViewMode === "map"
+            ? 100
+            : ITEMS_PER_PAGE;
+
         // Prepare fetch parameters
         const fetchParams = {
           page: targetPage,
-          limit: ITEMS_PER_PAGE,
+          limit: limit,
           sportId: activeCustomer.sport_id,
           dataSource: dataSource, // Use the dataSource prop
           displayColumns,
@@ -2193,6 +2425,8 @@ export function TableSearchContent({
       dataCache,
       activeSportAbbrev,
       userDetails?.packages,
+      highSchoolViewMode,
+      hsAthleteViewMode,
     ]
   ); // Removed displayedData and athleteCommentCounts from dependencies to prevent infinite loop
 
@@ -2213,6 +2447,26 @@ export function TableSearchContent({
     sortOrder,
     isMaintenanceMode,
   ]);
+
+  // Reload data when switching to map view to fetch higher limits
+  useEffect(() => {
+    if (
+      !isMaintenanceMode &&
+      (highSchoolViewMode === "map" || hsAthleteViewMode === "map")
+    ) {
+      // Only reload if we have data already loaded (not initial load)
+      if (displayedData.length > 0 || data.length > 0) {
+        loadAthleteData({
+          isFiltered:
+            Object.keys(activeFilters).length > 0 || searchQuery.trim() !== "",
+          filters: activeFilters,
+          search: searchQuery,
+          sortField,
+          sortOrder,
+        });
+      }
+    }
+  }, [highSchoolViewMode, hsAthleteViewMode]);
 
   // Auto-retry after maintenance mode ends
   useEffect(() => {
@@ -2276,28 +2530,28 @@ export function TableSearchContent({
 
   useEffect(() => {
     const handleScroll = () => {
-      if (loading || !hasMore) {
-        return;
-      }
-
       const tableContainer = document.querySelector(".ant-table-body");
-      const tableWrapper = document.querySelector(".ant-table-wrapper");
-      const tableContent = document.querySelector(".ant-table-content");
 
       if (!tableContainer) {
         return;
       }
 
       const { scrollTop, scrollHeight, clientHeight } = tableContainer;
-      const scrollInfo = {
-        scrollTop,
-        scrollHeight,
-        clientHeight,
-        scrollBottom: scrollHeight - scrollTop - clientHeight,
-        threshold: 100,
-      };
 
-      if (scrollHeight - scrollTop - clientHeight < 100) {
+      // Save scroll position to sessionStorage
+      try {
+        const scrollKey = getScrollPositionKey();
+        sessionStorage.setItem(scrollKey, String(scrollTop));
+      } catch (error) {
+        // Ignore storage errors (e.g., in private browsing mode)
+      }
+
+      // Handle load more functionality
+      if (
+        !loading &&
+        hasMore &&
+        scrollHeight - scrollTop - clientHeight < 100
+      ) {
         loadMoreData();
       }
     };
@@ -2315,60 +2569,112 @@ export function TableSearchContent({
     };
   }, [loading, hasMore, data, page, loadMoreData]);
 
-  // Build map route when HS selection changes
-  useEffect(() => {
-    const buildRoute = async () => {
-      if (!isMapLoaded || !isMapApiLoaded) return;
-      const points = selectedHighSchools
-        .map((hs) => {
-          const lat = (hs as any).address_latitude as number | null | undefined;
-          const lng = (hs as any).address_longitude as
+  // Clustering function for high schools
+  type Cluster = { lat: number; lng: number; count: number; schools: any[] };
+  type ClusteringResult = { clusters: Cluster[]; unclustered: any[] };
+
+  const clusterSchools = useCallback(
+    (schools: any[], zoom: number): ClusteringResult => {
+      // Only cluster when zoomed out (zoom < 11)
+      if (zoom >= 11) {
+        return { clusters: [], unclustered: schools };
+      }
+
+      const clusters: Array<{
+        lat: number;
+        lng: number;
+        count: number;
+        schools: any[];
+      }> = [];
+      const unclustered: any[] = [];
+      const processed = new Set<number>();
+
+      // Distance threshold in degrees (adjust based on zoom level)
+      // Reduced thresholds to cluster less - only very close schools will cluster
+      // Smaller threshold for higher zoom, larger for lower zoom
+      const threshold = zoom < 6 ? 0.8 : zoom < 8 ? 0.4 : zoom < 10 ? 0.2 : 0.1;
+
+      schools.forEach((school, index) => {
+        if (processed.has(index)) return;
+
+        const lat = (school as any).address_latitude as
+          | number
+          | null
+          | undefined;
+        const lng = (school as any).address_longitude as
+          | number
+          | null
+          | undefined;
+
+        if (!lat || !lng) {
+          unclustered.push(school);
+          return;
+        }
+
+        const nearby: any[] = [school];
+        processed.add(index);
+
+        // Find nearby schools
+        schools.forEach((otherSchool, otherIndex) => {
+          if (processed.has(otherIndex) || index === otherIndex) return;
+
+          const otherLat = (otherSchool as any).address_latitude as
             | number
             | null
             | undefined;
-          if (!lat || !lng) return null;
-          return { lat, lng };
-        })
-        .filter(Boolean) as { lat: number; lng: number }[];
+          const otherLng = (otherSchool as any).address_longitude as
+            | number
+            | null
+            | undefined;
 
-    if (points.length < 2) {
-      setMapDirections(null);
-      setMapRouteInfo(null);
-      return;
-    }
+          if (!otherLat || !otherLng) return;
 
-    try {
-      const directionsService = new window.google.maps.DirectionsService();
-      const origin = points[0];
-      const destination = points[points.length - 1];
-      const waypoints =
-        points.length > 2
-          ? points.slice(1, -1).map((p) => ({
-              location: new window.google.maps.LatLng(p.lat, p.lng),
-              stopover: true,
-            }))
-          : [];
+          // Calculate distance in degrees
+          const latDiff = Math.abs(lat - otherLat);
+          const lngDiff = Math.abs(lng - otherLng);
+          const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
 
-      const result = await directionsService.route({
-        origin: new window.google.maps.LatLng(origin.lat, origin.lng),
-          destination: new window.google.maps.LatLng(
-            destination.lat,
-            destination.lng
-          ),
-        waypoints,
-        optimizeWaypoints: false,
-        travelMode: window.google.maps.TravelMode.DRIVING,
+          if (distance < threshold) {
+            nearby.push(otherSchool);
+            processed.add(otherIndex);
+          }
+        });
+
+        if (nearby.length > 1) {
+          // Create cluster
+          const avgLat =
+            nearby.reduce(
+              (sum, s) => sum + ((s as any).address_latitude || 0),
+              0
+            ) / nearby.length;
+          const avgLng =
+            nearby.reduce(
+              (sum, s) => sum + ((s as any).address_longitude || 0),
+              0
+            ) / nearby.length;
+          clusters.push({
+            lat: avgLat,
+            lng: avgLng,
+            count: nearby.length,
+            schools: nearby,
+          });
+        } else {
+          unclustered.push(school);
+        }
       });
 
-      setMapDirections(result);
-      updateMapRouteInfo(result);
-    } catch (err) {
-      // swallow
-    }
-    };
+      return { clusters, unclustered };
+    },
+    []
+  );
 
-    buildRoute();
-  }, [selectedHighSchools, isMapLoaded, isMapApiLoaded]);
+  // Compute clusters for high schools map
+  const highSchoolClusters = useMemo(() => {
+    if (dataSource !== "high_schools" || highSchoolViewMode !== "map") {
+      return { clusters: [], unclustered: [] };
+    }
+    return clusterSchools(displayedData, mapZoom);
+  }, [displayedData, mapZoom, dataSource, highSchoolViewMode, clusterSchools]);
 
   // Fit map bounds to show all schools when in map view
   useEffect(() => {
@@ -2382,6 +2688,8 @@ export function TableSearchContent({
       hsAthleteViewMode === "map" && dataSource === "hs_athletes";
 
     if (!isHighSchoolMap && !isHsAthleteMap) {
+      // Reset ref when not in map view
+      mapBoundsFittedRef.current = false;
       return;
     }
 
@@ -2405,12 +2713,34 @@ export function TableSearchContent({
 
     // Fit bounds with padding
     if (mapRef.current) {
+      // Listen for idle event to update center after fitBounds completes
+      const updateCenter = () => {
+        if (mapRef.current) {
+          const center = mapRef.current.getCenter();
+          if (center) {
+            setMapCenter({
+              lat: center.lat(),
+              lng: center.lng(),
+            });
+          }
+        }
+      };
+
+      // Use addListenerOnce which automatically removes itself after firing
+      window.google.maps.event.addListenerOnce(
+        mapRef.current,
+        "idle",
+        updateCenter
+      );
+
       mapRef.current.fitBounds(bounds, {
         top: 50,
         right: 50,
         bottom: 50,
         left: 50,
       });
+      // Mark that bounds have been fitted to prevent center reset
+      mapBoundsFittedRef.current = true;
     }
   }, [
     displayedData,
@@ -2436,6 +2766,9 @@ export function TableSearchContent({
 
     // Prevent multiple simultaneous filter applications
     if (loading) return;
+
+    // Reset scroll restoration flag when filters/search change
+    scrollPositionRestoredRef.current = false;
 
     // Always run the query when filters or search change, even if filters are empty
     loadAthleteData({
@@ -3037,19 +3370,20 @@ export function TableSearchContent({
   // Handle printing selected high schools
   // Road map functions for high schools
   const handleRemoveSchool = (schoolId: string) => {
-    setSelectedHighSchools((prev) =>
+    setRoadMapSelectedHighSchools((prev) =>
       prev.filter((school) => String(school.id) !== schoolId)
     );
   };
 
-  const handleSubmitToMap = () => {
-    if (selectedHighSchools.length === 0) return;
+  // Helper function to save high schools to localStorage
+  const saveHighSchoolsToLocalStorage = () => {
+    if (roadMapSelectedHighSchools.length === 0) return;
 
-    // Convert selectedHighSchools to the format expected by road planner
+    // Convert roadMapSelectedHighSchools to the format expected by road planner
     const selectedAddresses: string[] = [];
     const selectedSchoolData: any[] = [];
 
-    selectedHighSchools.forEach((school) => {
+    roadMapSelectedHighSchools.forEach((school) => {
       const schoolAny = school as any;
       // Create an address string from available data
       const addressParts: string[] = [];
@@ -3094,68 +3428,111 @@ export function TableSearchContent({
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
+  };
 
+  const handleSubmitToMap = () => {
+    saveHighSchoolsToLocalStorage();
     // Navigate to road planner map
-    router.push("/road-planner/map");
+    router.push("/road-planner");
   };
 
   const clearAllSelections = () => {
-    setSelectedHighSchools([]);
-    try {
-      localStorage.removeItem("selectedAddresses");
-      localStorage.removeItem("schoolData");
-    } catch (error) {
-      console.error("Error clearing localStorage:", error);
-    }
+    clearAllRoadPlanSelections();
   };
 
   // Road map functions for hs_athletes
   const handleRemoveAthlete = (athleteId: string) => {
-    setSelectedAthletes((prev) =>
+    setRoadMapSelectedAthletes((prev) =>
       prev.filter((athlete) => String(athlete.id) !== athleteId)
     );
   };
 
-  const handleSubmitAthletesToMap = () => {
-    if (selectedAthletes.length === 0) return;
+  // Helper function to save athletes to localStorage
+  const saveAthletesToLocalStorage = async () => {
+    if (roadMapSelectedAthletes.length === 0) return;
 
-    // Convert selectedAthletes to the format expected by road planner
+    // Import the utility function to fetch school data
+    const { fetchSchoolDataFromSchoolId } = await import(
+      "@/app/(dashboard)/road-planner/utils/schoolDataUtils"
+    );
+
+    // Convert roadMapSelectedAthletes to the format expected by road planner
     const selectedAddresses: string[] = [];
     const selectedSchoolData: any[] = [];
 
-    selectedAthletes.forEach((athlete) => {
+    // Process each athlete to get their high school address
+    for (const athlete of roadMapSelectedAthletes) {
       const athleteAny = athlete as any;
-      // Create an address string from available data
-      const addressParts: string[] = [];
-      if (athleteAny.hometown_street)
-        addressParts.push(athleteAny.hometown_street);
-      if (athlete.hometown) addressParts.push(athlete.hometown);
-      if (athlete.hometown_state) addressParts.push(athlete.hometown_state);
-      if (athleteAny.hometown_zip) addressParts.push(athleteAny.hometown_zip);
 
-      const address =
-        addressParts.join(", ") ||
-        `${athlete.hometown || ""}, ${athlete.hometown_state || ""}`;
+      // For hs_athletes, school_id is already the high school's school_id (no conversion needed)
+      const schoolId = athlete.school_id || "";
+
+      if (!schoolId) {
+        console.warn("No school_id found for athlete:", athlete.athlete_name);
+        continue;
+      }
+
+      // Fetch high school data to get the address
+      let schoolData = null;
+      try {
+        schoolData = await fetchSchoolDataFromSchoolId(schoolId);
+      } catch (error) {
+        console.error("Error fetching school data for athlete:", error);
+      }
+
+      // Use high school address if available, otherwise fallback to athlete data
+      let address = "";
+      if (schoolData?.address) {
+        address = schoolData.address;
+      } else {
+        // Fallback: try to construct address from athlete's high school fields
+        const addressParts: string[] = [];
+        if (athleteAny.hs_address_street1)
+          addressParts.push(athleteAny.hs_address_street1);
+        if (athleteAny.hs_address_city)
+          addressParts.push(athleteAny.hs_address_city);
+        if (athleteAny.school_state) addressParts.push(athleteAny.school_state);
+        if (athleteAny.hs_address_zip)
+          addressParts.push(athleteAny.hs_address_zip);
+
+        address =
+          addressParts.join(", ") ||
+          `${athlete.high_name || ""}, ${athleteAny.school_state || ""}`;
+      }
 
       selectedAddresses.push(address);
+
+      // Merge athlete data with school data
       selectedSchoolData.push({
-        school: athlete.high_name || athlete.athlete_name || "",
+        school:
+          schoolData?.school || athlete.high_name || athlete.athlete_name || "",
         address: address,
-        county: athleteAny.hs_county || "",
-        state: athlete.hometown_state || "",
-        school_id: athlete.school_id || "",
-        high_school_id: athlete.school_id || "",
-        address_latitude: athleteAny.address_latitude,
-        address_longitude: athleteAny.address_longitude,
+        county: schoolData?.county || athleteAny.hs_county || "",
+        state:
+          schoolData?.state ||
+          athleteAny.school_state ||
+          athlete.hometown_state ||
+          "",
+        school_id: schoolId,
+        high_school_id: schoolId, // For compatibility, use school_id as high_school_id
+        // Include all school data fields for the road planner
+        ...(schoolData || {}),
+        // Store athlete info in raw_data for the athlete card
         raw_data: {
-          address_street1: athleteAny.hometown_street || "",
-          address_city: athlete.hometown || "",
-          address_state: athlete.hometown_state || "",
-          address_zip: athleteAny.hometown_zip || "",
-          high_school_id: String(athlete.school_id || ""),
+          ...(schoolData?.raw_data || {}),
+          high_school_id: String(schoolId),
+          // Store athlete information for the athlete card
+          athlete_id: athlete.id,
+          athlete_name: athlete.athlete_name,
+          athlete_image_url: athlete.image_url,
+          athlete_position: athlete.position,
+          athlete_athletic_projection:
+            athleteAny.athleticProjection || athleteAny.athletic_projection,
+          athlete_grad_year: athlete.gradYear || athleteAny.grad_year,
+          athlete_cell_phone: athlete.cell_phone,
         },
       });
-    });
+    }
 
     // Save to localStorage
     try {
@@ -3167,16 +3544,160 @@ export function TableSearchContent({
     } catch (error) {
       console.error("Error saving to localStorage:", error);
     }
+  };
 
+  const handleSubmitAthletesToMap = async () => {
+    await saveAthletesToLocalStorage();
     // Navigate to road planner map
-    router.push("/road-planner/map");
+    router.push("/road-planner/map?dataSource=hs_athletes");
   };
 
   const clearAllAthleteSelections = () => {
-    setSelectedAthletes([]);
+    setRoadMapSelectedAthletes([]);
     try {
       localStorage.removeItem("selectedAddresses");
       localStorage.removeItem("schoolData");
+    } catch (error) {
+      console.error("Error clearing localStorage:", error);
+    }
+  };
+
+  // Combined function to save both high schools and athletes to localStorage
+  const saveCombinedToLocalStorage = async () => {
+    const selectedAddresses: string[] = [];
+    const selectedSchoolData: any[] = [];
+
+    // Process high schools
+    roadMapSelectedHighSchools.forEach((school) => {
+      const schoolAny = school as any;
+      const addressParts: string[] = [];
+      if (schoolAny.address_street1)
+        addressParts.push(schoolAny.address_street1);
+      if (schoolAny.address_city) addressParts.push(schoolAny.address_city);
+      if (schoolAny.address_state) addressParts.push(schoolAny.address_state);
+      if (schoolAny.address_zip) addressParts.push(schoolAny.address_zip);
+
+      const address =
+        addressParts.join(", ") ||
+        `${school.school || ""}, ${schoolAny.school_state || ""}`;
+
+      selectedAddresses.push(address);
+      selectedSchoolData.push({
+        school: school.school || "",
+        address: address,
+        county: schoolAny.hs_county || "",
+        state: schoolAny.school_state || "",
+        school_id: school.id,
+        high_school_id: school.high_school_id || school.id,
+        address_latitude: schoolAny.address_latitude,
+        address_longitude: schoolAny.address_longitude,
+        raw_data: {
+          address_street1: schoolAny.address_street1 || "",
+          address_city: schoolAny.address_city || "",
+          address_state:
+            schoolAny.address_state || schoolAny.school_state || "",
+          address_zip: schoolAny.address_zip || "",
+          high_school_id: String(school.high_school_id || school.id || ""),
+        },
+      });
+    });
+
+    // Process athletes
+    if (roadMapSelectedAthletes.length > 0) {
+      const { fetchSchoolDataFromSchoolId } = await import(
+        "@/app/(dashboard)/road-planner/utils/schoolDataUtils"
+      );
+
+      for (const athlete of roadMapSelectedAthletes) {
+        const athleteAny = athlete as any;
+        const schoolId = athlete.school_id || "";
+
+        if (!schoolId) {
+          console.warn("No school_id found for athlete:", athlete.athlete_name);
+          continue;
+        }
+
+        let schoolData = null;
+        try {
+          schoolData = await fetchSchoolDataFromSchoolId(schoolId);
+        } catch (error) {
+          console.error("Error fetching school data for athlete:", error);
+        }
+
+        let address = "";
+        if (schoolData?.address) {
+          address = schoolData.address;
+        } else {
+          const addressParts: string[] = [];
+          if (athleteAny.hs_address_street1)
+            addressParts.push(athleteAny.hs_address_street1);
+          if (athleteAny.hs_address_city)
+            addressParts.push(athleteAny.hs_address_city);
+          if (athleteAny.school_state)
+            addressParts.push(athleteAny.school_state);
+          if (athleteAny.hs_address_zip)
+            addressParts.push(athleteAny.hs_address_zip);
+
+          address =
+            addressParts.join(", ") ||
+            `${athlete.high_name || ""}, ${athleteAny.school_state || ""}`;
+        }
+
+        selectedAddresses.push(address);
+        selectedSchoolData.push({
+          school:
+            schoolData?.school ||
+            athlete.high_name ||
+            athlete.athlete_name ||
+            "",
+          address: address,
+          county: schoolData?.county || athleteAny.hs_county || "",
+          state:
+            schoolData?.state ||
+            athleteAny.school_state ||
+            athlete.hometown_state ||
+            "",
+          school_id: schoolId,
+          high_school_id: schoolId,
+          ...(schoolData || {}),
+          raw_data: {
+            ...(schoolData?.raw_data || {}),
+            high_school_id: String(schoolId),
+            athlete_id: athlete.id,
+            athlete_name: athlete.athlete_name,
+            athlete_image_url: athlete.image_url,
+            athlete_position: athlete.position,
+            athlete_athletic_projection:
+              athleteAny.athleticProjection || athleteAny.athletic_projection,
+            athlete_grad_year: athlete.gradYear || athleteAny.grad_year,
+            athlete_cell_phone: athlete.cell_phone,
+            athlete_twitter: athleteAny.twitter || athleteAny.twitter_handle,
+          },
+        });
+      }
+    }
+
+    // Save to localStorage
+    try {
+      localStorage.setItem(
+        "selectedAddresses",
+        JSON.stringify(selectedAddresses)
+      );
+      localStorage.setItem("schoolData", JSON.stringify(selectedSchoolData));
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+    }
+  };
+
+  // Combined clear function
+  const clearAllRoadPlanSelections = () => {
+    setRoadMapSelectedHighSchools([]);
+    setRoadMapSelectedAthletes([]);
+    try {
+      localStorage.removeItem("selectedAddresses");
+      localStorage.removeItem("schoolData");
+      localStorage.removeItem("roadMapSelectedHighSchools");
+      localStorage.removeItem("roadMapSelectedAthletes");
     } catch (error) {
       console.error("Error clearing localStorage:", error);
     }
@@ -3267,6 +3788,43 @@ export function TableSearchContent({
     setLocalSearchInput(value); // Update local input state, debouncing will handle the actual search
   };
 
+  // Restore scroll position when data is loaded or tab becomes visible
+  useEffect(() => {
+    if (!displayedData.length || loading) {
+      return;
+    }
+
+    const restoreScrollPosition = () => {
+      const tableContainer = document.querySelector(".ant-table-body");
+      if (!tableContainer) {
+        return;
+      }
+
+      try {
+        const scrollKey = getScrollPositionKey();
+        const savedScrollTop = sessionStorage.getItem(scrollKey);
+
+        if (savedScrollTop && !scrollPositionRestoredRef.current) {
+          const scrollTop = parseInt(savedScrollTop, 10);
+          if (!isNaN(scrollTop) && scrollTop > 0) {
+            // Use requestAnimationFrame to ensure DOM is ready
+            requestAnimationFrame(() => {
+              tableContainer.scrollTop = scrollTop;
+              scrollPositionRestoredRef.current = true;
+            });
+          }
+        }
+      } catch (error) {
+        // Ignore storage errors
+      }
+    };
+
+    // Small delay to ensure table is fully rendered
+    const timeoutId = setTimeout(restoreScrollPosition, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [displayedData.length, loading, dataSource, activeCustomerId]);
+
   // --- DEBUG: Log in visibility handler and forcibly set loading states to false ---
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -3274,8 +3832,31 @@ export function TableSearchContent({
         setLoading(false);
         setIsLoadingRecruitingBoard(false);
         setTableKey((k) => k + 1);
+
+        // Reset scroll restoration flag when tab becomes visible
+        scrollPositionRestoredRef.current = false;
+
         setTimeout(() => {
           window.dispatchEvent(new Event("resize"));
+
+          // Restore scroll position after a brief delay
+          const tableContainer = document.querySelector(".ant-table-body");
+          if (tableContainer) {
+            try {
+              const scrollKey = getScrollPositionKey();
+              const savedScrollTop = sessionStorage.getItem(scrollKey);
+              if (savedScrollTop) {
+                const scrollTop = parseInt(savedScrollTop, 10);
+                if (!isNaN(scrollTop) && scrollTop > 0) {
+                  setTimeout(() => {
+                    tableContainer.scrollTop = scrollTop;
+                  }, 150);
+                }
+              }
+            } catch (error) {
+              // Ignore storage errors
+            }
+          }
         }, 50);
       }
     };
@@ -3285,7 +3866,12 @@ export function TableSearchContent({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [dataSource, activeCustomerId]);
+
+  // Reset scroll restoration flag when dataSource changes
+  useEffect(() => {
+    scrollPositionRestoredRef.current = false;
+  }, [dataSource, activeCustomerId]);
 
   // Cleanup effect to prevent state updates after unmount
   useEffect(() => {
@@ -3815,10 +4401,10 @@ export function TableSearchContent({
                         athleteIds={selectedAthletes.map((a) => a.id)}
                         placement="bottomRight"
                         simpleMode={true}
-                                  />
-                                </div>
+                      />
+                    </div>
                   )}
-                              </div>
+                </div>
               )}
               {dataSource === "high_schools" && (
                 <div className="flex gap-2">
@@ -3845,8 +4431,8 @@ export function TableSearchContent({
                   >
                     List View
                   </Button>
-                    </div>
-                  )}
+                </div>
+              )}
               {dataSource === "hs_athletes" && (
                 <div className="flex gap-2">
                   <Button
@@ -3885,8 +4471,8 @@ export function TableSearchContent({
                     }}
                   >
                     Stats on Display from the {seasonData} season
-            </div>
-          )}
+                  </div>
+                )}
                 <Button
                   onClick={loadMoreData}
                   disabled={loading || !hasMore}
@@ -3894,460 +4480,636 @@ export function TableSearchContent({
                   size="small"
                   type="default"
                 >
-                  Load More (25)
+                  Load More (
+                  {(() => {
+                    const currentDataSource = dataSource as
+                      | "transfer_portal"
+                      | "all_athletes"
+                      | "juco"
+                      | "high_schools"
+                      | "hs_athletes"
+                      | undefined;
+                    const isMapView =
+                      (currentDataSource === "high_schools" &&
+                        highSchoolViewMode === "map") ||
+                      (currentDataSource === "hs_athletes" &&
+                        hsAthleteViewMode === "map");
+                    return isMapView ? 100 : ITEMS_PER_PAGE;
+                  })()}
+                  )
                 </Button>
 
-            <Space>
-              <div
-                className="selectbox-ui"
-                style={{ display: "flex", alignItems: "center" }}
-              >
-                {isAnyFilterActive && dataSource === "transfer_portal" && (
-                  <AddAlert
-                    trigger={
-                      <Button
-                        type="primary"
-                        size="large"
-                        className="alert-gradient-btn"
-                        style={{
-                          marginRight: 5,
-                          fontWeight: 500,
-                          background:
-                            "linear-gradient(90deg, #6affab 0%, #c8ff24 111.68%)",
-                          border: "none",
-                          fontFamily: '"Inter Tight", serif',
-                          boxShadow: "0 2px 8px rgba(202, 255, 36, 0.15)",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                      >
-                        <img src="/bell.svg"></img> Set Up Email Alert
-                      </Button>
-                    }
-                    renderActiveFilters={renderActiveFilters}
-                  />
-                )}
-                {(dataSource === "transfer_portal" ||
-                  dataSource === "all_athletes" ||
-                  dataSource === "high_schools" ||
-                      dataSource === "juco" ||
-                      dataSource === "hs_athletes") && (
-                  <CSVExport<any>
-                    fetchData={async (page: number, pageSize: number) => {
-                      // Handle high schools separately
-                      if (dataSource === "high_schools") {
-                        let currentColumns = hsColumns;
-                        if (hsColumns.length === 0) {
-                              const configs =
-                                await fetchHighSchoolColumnConfig();
-                          let cols = configs.map((cfg) => ({
-                            dataIndex: cfg.sanitized_column_name,
-                            display_name: cfg.display_name,
-                                search_column_display:
-                                  cfg.search_column_display,
-                            data_type_id: cfg.data_type_id,
-                          }));
-                          cols = cols.filter(
-                            (c) => Number(c.search_column_display) > 0
-                          );
-                          cols.sort(
-                            (a, b) =>
-                                  a.search_column_display -
-                                  b.search_column_display
-                          );
-                          currentColumns = cols;
+                <Space>
+                  <div
+                    className="selectbox-ui"
+                    style={{ display: "flex", alignItems: "center" }}
+                  >
+                    {isAnyFilterActive && dataSource === "transfer_portal" && (
+                      <AddAlert
+                        trigger={
+                          <Button
+                            type="primary"
+                            size="large"
+                            className="alert-gradient-btn"
+                            style={{
+                              marginRight: 5,
+                              fontWeight: 500,
+                              background:
+                                "linear-gradient(90deg, #6affab 0%, #c8ff24 111.68%)",
+                              border: "none",
+                              fontFamily: '"Inter Tight", serif',
+                              boxShadow: "0 2px 8px rgba(202, 255, 36, 0.15)",
+                              display: "flex",
+                              alignItems: "center",
+                            }}
+                          >
+                            <img src="/bell.svg"></img> Set Up Email Alert
+                          </Button>
                         }
+                        renderActiveFilters={renderActiveFilters}
+                      />
+                    )}
+                    {(() => {
+                      const currentDataSource = dataSource as
+                        | "transfer_portal"
+                        | "all_athletes"
+                        | "juco"
+                        | "high_schools"
+                        | "hs_athletes"
+                        | undefined;
+                      const isMapView =
+                        (currentDataSource === "high_schools" &&
+                          highSchoolViewMode === "map") ||
+                        (currentDataSource === "hs_athletes" &&
+                          hsAthleteViewMode === "map");
+                      const shouldShowExport =
+                        (currentDataSource === "transfer_portal" ||
+                          currentDataSource === "all_athletes" ||
+                          currentDataSource === "high_schools" ||
+                          currentDataSource === "juco" ||
+                          currentDataSource === "hs_athletes") &&
+                        !isMapView;
 
-                        const highSchoolData = await fetchHighSchoolData({
-                          page,
-                          limit: pageSize,
-                          search: localSearchInput,
-                              selectColumns: currentColumns.map(
-                                (c) => c.dataIndex
-                              ),
-                          filters: activeFilters,
-                          sortField,
-                          sortOrder,
-                        });
+                      return shouldShowExport ? (
+                        <CSVExport<any>
+                          fetchData={async (
+                            page: number,
+                            pageSize: number,
+                            sortField?: string | null,
+                            sortOrder?: "ascend" | "descend" | null
+                          ) => {
+                            // Preserve full dataSource type for use in props
+                            const currentDataSource = dataSource as
+                              | "transfer_portal"
+                              | "all_athletes"
+                              | "juco"
+                              | "high_schools"
+                              | "hs_athletes";
 
-                        return {
-                          data: highSchoolData.data,
-                          hasMore: highSchoolData.hasMore || false,
-                          totalCount: highSchoolData.totalCount || 0,
-                        };
-                      }
+                            // Handle high schools separately
+                            if (dataSource === "high_schools") {
+                              let currentColumns = hsColumns;
+                              if (hsColumns.length === 0) {
+                                const configs =
+                                  await fetchHighSchoolColumnConfig();
+                                let cols = configs.map((cfg) => ({
+                                  dataIndex: cfg.sanitized_column_name,
+                                  display_name: cfg.display_name,
+                                  search_column_display:
+                                    cfg.search_column_display,
+                                  data_type_id: cfg.data_type_id,
+                                }));
+                                cols = cols.filter(
+                                  (c) => Number(c.search_column_display) > 0
+                                );
+                                cols.sort(
+                                  (a, b) =>
+                                    a.search_column_display -
+                                    b.search_column_display
+                                );
+                                currentColumns = cols;
+                              }
 
-                      // Handle athlete data sources
-                      if (!activeCustomer?.sport_id || !activeCustomerId) {
-                        throw new Error("No customer or sport found");
-                      }
+                              const highSchoolData = await fetchHighSchoolData({
+                                page,
+                                limit: pageSize,
+                                search: localSearchInput,
+                                selectColumns: currentColumns.map(
+                                  (c) => c.dataIndex
+                                ),
+                                filters: activeFilters,
+                                sortField: sortField ?? null,
+                                sortOrder: sortOrder ?? null,
+                              });
 
-                      // Use current filters and search
-                      const fetchParams = {
-                        page,
-                        limit: pageSize,
-                        sportId: activeCustomer.sport_id,
-                        dataSource: dataSource,
-                        displayColumns: [
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].date
-                            ? ["date"]
-                            : []),
-                              ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
-                                .athletic_aid
-                            ? ["athletic_aid"]
-                            : []),
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].position
-                            ? ["position"]
-                            : []),
-                              ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
-                                .high_name
-                            ? ["high_name"]
-                            : []),
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].state
-                            ? ["state"]
-                            : []),
-                          ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
-                            .college_state
-                            ? ["school_state"]
-                            : []),
-                              ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
-                                .true_score
-                            ? ["true_score"]
-                            : []),
-                          ...dynamicColumns.map(
-                            (col) =>
-                              col.sanitized_column_name ||
-                              col.data_type_name
-                                ?.toLowerCase()
-                                .replace(/\s+/g, "_") ||
-                              col.display_name
-                                .toLowerCase()
-                                .replace(/\s+/g, "_")
-                          ),
-                        ],
-                        sportAbbrev: activeSportAbbrev || undefined,
-                        userPackages: userDetails?.packages || [],
-                        dynamicColumns: filterColumns,
-                        userSchoolId: activeCustomer?.school_id,
-                        ...(Object.keys(activeFilters).length > 0 && {
-                          filters: activeFilters,
-                          search: localSearchInput,
-                        }),
-                            ...(sortField &&
-                              sortOrder && { sortField, sortOrder }),
-                      };
+                              return {
+                                data: highSchoolData.data,
+                                hasMore: highSchoolData.hasMore || false,
+                                totalCount: highSchoolData.totalCount || 0,
+                              };
+                            }
 
-                      const result = await fetchAthleteData(
-                        activeSport,
-                        fetchParams
-                      );
-                      return {
-                        data: result.data,
-                        hasMore: result.hasMore || false,
-                        totalCount: result.totalCount || 0,
-                      };
-                    }}
-                    transformRow={(item) => {
-                      const row: (string | number)[] = [];
+                            // Handle athlete data sources
+                            if (
+                              !activeCustomer?.sport_id ||
+                              !activeCustomerId
+                            ) {
+                              throw new Error("No customer or sport found");
+                            }
 
-                      // Handle high schools
-                      if (dataSource === "high_schools") {
-                        // Add school name as first column
-                        row.push(item.school || item.school_name || "");
-                        // Then add all other columns
-                        hsColumns.forEach((col) => {
-                          const value =
-                            item[col.dataIndex as keyof typeof item];
-                          if (value !== null && value !== undefined) {
-                            row.push(
-                                  typeof value === "number"
-                                    ? value
-                                    : String(value)
+                            // Use current filters and search
+                            // Additional columns for CSV export (only for hs_athletes)
+                            const exportColumns =
+                              (dataSource as "hs_athletes") === "hs_athletes"
+                                ? [
+                                    "hs_county",
+                                    "school_state",
+                                    "all_position",
+                                    "athlete_cell",
+                                    "hs_highlight",
+                                    "parent_name",
+                                    "parent_email",
+                                    "parent_phone",
+                                    "major",
+                                    "athlete_address_street",
+                                    "athlete_address_city",
+                                    "address_state",
+                                    "athlete_address_zip",
+                                    "birthday",
+                                    "hs_ncaa_id",
+                                  ]
+                                : undefined;
+
+                            const fetchParams = {
+                              page,
+                              limit: pageSize,
+                              sportId: activeCustomer.sport_id,
+                              dataSource: dataSource,
+                              displayColumns: [
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].date
+                                  ? ["date"]
+                                  : []),
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                  .athletic_aid
+                                  ? ["athletic_aid"]
+                                  : []),
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                  .position
+                                  ? ["position"]
+                                  : []),
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                  .high_name
+                                  ? ["high_name"]
+                                  : []),
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource].state
+                                  ? ["state"]
+                                  : []),
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                  .college_state
+                                  ? ["school_state"]
+                                  : []),
+                                ...(DATA_SOURCE_COLUMN_CONFIG[dataSource]
+                                  .true_score
+                                  ? ["true_score"]
+                                  : []),
+                                ...dynamicColumns.map(
+                                  (col) =>
+                                    col.sanitized_column_name ||
+                                    col.data_type_name
+                                      ?.toLowerCase()
+                                      .replace(/\s+/g, "_") ||
+                                    col.display_name
+                                      .toLowerCase()
+                                      .replace(/\s+/g, "_")
+                                ),
+                              ],
+                              sportAbbrev: activeSportAbbrev || undefined,
+                              userPackages: userDetails?.packages || [],
+                              dynamicColumns: filterColumns,
+                              userSchoolId: activeCustomer?.school_id,
+                              ...(Object.keys(activeFilters).length > 0 && {
+                                filters: activeFilters,
+                                search: localSearchInput,
+                              }),
+                              ...(sortField &&
+                                sortOrder && {
+                                  sortField: sortField ?? null,
+                                  sortOrder: sortOrder ?? null,
+                                }),
+                              ...(exportColumns && { exportColumns }),
+                            };
+
+                            const result = await fetchAthleteData(
+                              activeSport,
+                              fetchParams
                             );
-                          } else {
-                            row.push("");
-                          }
-                        });
-                        return row;
-                      }
+                            return {
+                              data: result.data,
+                              hasMore: result.hasMore || false,
+                              totalCount: result.totalCount || 0,
+                            };
+                          }}
+                          transformRow={(item) => {
+                            const row: (string | number)[] = [];
 
-                      // Handle athlete data sources
-                      const athlete = item as AthleteData;
-                          const currentDataSource = dataSource as
-                            | "transfer_portal"
-                            | "all_athletes"
-                            | "juco"
-                            | "hs_athletes";
+                            // Handle high schools
+                            if (dataSource === "high_schools") {
+                              // Add school name as first column
+                              row.push(item.school || item.school_name || "");
+                              // Then add all other columns
+                              hsColumns.forEach((col) => {
+                                const value =
+                                  item[col.dataIndex as keyof typeof item];
+                                if (value !== null && value !== undefined) {
+                                  row.push(
+                                    typeof value === "number"
+                                      ? value
+                                      : String(value)
+                                  );
+                                } else {
+                                  row.push("");
+                                }
+                              });
+                              return row;
+                            }
 
-                      // Separate Name column fields into individual columns
-                      row.push(athlete.athlete_name || ""); // Name
-
-                      // For hs_athletes, skip Year and Division
-                          if (currentDataSource !== "hs_athletes") {
-                        row.push(athlete.year || ""); // Year
-                        row.push(athlete.division || ""); // Division
-                      }
-
-                      row.push(athlete.name_name || ""); // Current School
-                      row.push(athlete.commit_school_name || ""); // Commit School
-                      row.push(
-                        athlete.commit_date
-                              ? new Date(
-                                  athlete.commit_date
-                                ).toLocaleDateString("en-US", {
-                                month: "numeric",
-                                day: "numeric",
-                                year: "2-digit",
-                                })
-                          : ""
-                      ); // Commit Date
-
-                          const config =
-                            DATA_SOURCE_COLUMN_CONFIG[currentDataSource];
-                      if (config.date) row.push(athlete.date || "");
-                      if (config.athletic_aid)
-                        row.push(athlete.athletic_aid || "");
-                      if (config.position) row.push(athlete.position || "");
-
-                      // For hs_athletes and juco, skip High School column
-                      if (
-                            currentDataSource !== "hs_athletes" &&
-                            currentDataSource !== "juco" &&
-                        config.high_name
-                      ) {
-                        row.push(athlete.high_name || ""); // High School
-                      }
-
-                      if (config.state) row.push(athlete.state || "");
-                      if (config.college_state)
-                        row.push(athlete.school_state || "");
-                      // Removed true_score
-
-                      // Add dynamic columns
-                      dynamicColumns.forEach((col) => {
-                        // Skip high_name if it's in dynamic columns (duplicate)
-                        const colName =
-                          col.sanitized_column_name ||
-                          col.data_type_name
-                            ?.toLowerCase()
-                            .replace(/\s+/g, "_") ||
-                              col.display_name
-                                .toLowerCase()
-                                .replace(/\s+/g, "_");
-                        if (
-                          colName === "high_name" ||
-                          colName === "high_school"
-                        ) {
-                          return; // Skip duplicate high school column
-                        }
-
-                        const isOfferColumn =
-                          col.display_name?.toLowerCase() === "offer";
-
-                        // Special handling for height (data_type_id 304)
-                        if (col.data_type_id === 304) {
-                          const heightFeet = athlete.height_feet;
-                          const heightInch = athlete.height_inch;
-                          if (heightFeet && heightInch) {
-                            row.push(`${heightFeet}'${heightInch}"`);
-                          } else if (heightFeet) {
-                            row.push(`${heightFeet}'0"`);
-                          } else {
-                            row.push("");
-                          }
-                          return;
-                        }
-
-                        const value = athlete[colName as keyof AthleteData];
-                        if (value !== null && value !== undefined) {
-                          row.push(
-                                typeof value === "number"
-                                  ? value
-                                  : String(value)
-                          );
-                        } else {
-                          row.push("");
-                        }
-
-                        // For hs_athletes, add Number of Offers after the Offer column
+                            // Handle athlete data sources
+                            const athlete = item as AthleteData;
                             const currentDataSource = dataSource as
                               | "transfer_portal"
                               | "all_athletes"
                               | "juco"
                               | "hs_athletes";
-                            if (
-                              isOfferColumn &&
-                              currentDataSource === "hs_athletes"
-                            ) {
-                          row.push(athlete.offer_count_all ?? 0); // Number of Offers
-                        }
-                      });
 
-                      return row;
-                    }}
-                    headers={
-                      dataSource === "high_schools"
-                        ? [
-                            "School Name",
-                            ...hsColumns.map(
-                              (col) => col.display_name || col.dataIndex
-                            ),
-                          ]
-                            : (() => {
-                                const currentDataSource = dataSource as
-                                  | "transfer_portal"
-                                  | "all_athletes"
-                                  | "juco"
-                                  | "hs_athletes";
-                                return [
-                            "Name", // Separated from Name column
+                            // Separate Name column fields into individual columns
+                            row.push(athlete.athlete_name || ""); // Name
+
                             // For hs_athletes, skip Year and Division
-                                  ...(currentDataSource !== "hs_athletes"
-                              ? ["Year", "Division"]
-                              : []),
-                            "Current School", // Separated from Name column
-                            "Commit School", // Separated from Name column
-                            "Commit Date", // Separated from Name column
-                                  ...(DATA_SOURCE_COLUMN_CONFIG[
-                                    currentDataSource
-                                  ].date
-                              ? ["Date"]
-                              : []),
-                                  ...(DATA_SOURCE_COLUMN_CONFIG[
-                                    currentDataSource
-                                  ].athletic_aid
-                              ? ["Athletic Aid"]
-                              : []),
-                                  ...(DATA_SOURCE_COLUMN_CONFIG[
-                                    currentDataSource
-                                  ].position
-                              ? ["Position"]
-                              : []),
-                            // For hs_athletes and juco, skip High School column
-                                  ...(currentDataSource !== "hs_athletes" &&
-                                  currentDataSource !== "juco" &&
-                                  DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
-                                    .high_name
-                              ? ["High School"]
-                              : []),
-                                  ...(DATA_SOURCE_COLUMN_CONFIG[
-                                    currentDataSource
-                                  ].state
-                              ? ["State"]
-                              : []),
-                                  ...(DATA_SOURCE_COLUMN_CONFIG[
-                                    currentDataSource
-                                  ].college_state
-                              ? ["College State"]
-                              : []),
-                            // Removed True Score
-                            ...dynamicColumns
-                              .filter((col) => {
-                                // Filter out duplicate high_name/high_school from dynamic columns
-                                const colName =
-                                  col.sanitized_column_name ||
-                                  col.data_type_name
-                                    ?.toLowerCase()
-                                    .replace(/\s+/g, "_") ||
-                                  col.display_name
-                                    .toLowerCase()
-                                    .replace(/\s+/g, "_");
-                                return (
-                                  colName !== "high_name" &&
-                                  colName !== "high_school"
-                                );
-                              })
-                              .flatMap((col) => {
-                                const isOfferColumn =
-                                        col.display_name?.toLowerCase() ===
-                                        "offer";
-                                const displayName =
-                                  col.display_name ||
-                                  col.data_type_name ||
-                                  col.sanitized_column_name ||
-                                  "";
+                            if (currentDataSource !== "hs_athletes") {
+                              row.push(athlete.year || ""); // Year
+                              row.push(athlete.division || ""); // Division
+                            }
 
-                                // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
-                                if (
-                                  isOfferColumn &&
-                                        currentDataSource === "hs_athletes"
-                                ) {
-                                        return [
-                                          "Best Offer",
-                                          "Number of Offers",
-                                        ];
-                                }
-                                return [displayName];
-                              }),
-                                ];
-                              })()
-                    }
-                    filename={
-                          dataSource === "high_schools"
-                            ? "high-schools"
-                            : dataSource === "transfer_portal"
-                        ? "transfers"
-                        : dataSource === "all_athletes"
-                        ? "pre-portal"
-                        : dataSource === "juco"
-                        ? "juco"
-                            : (dataSource as "hs_athletes") === "hs_athletes"
-                            ? "hs-athletes"
-                        : "high-schools"
-                    }
-                    maxRows={
-                          dataSource === "high_schools"
-                            ? 500
-                            : dataSource === "transfer_portal"
-                        ? 50
-                        : dataSource === "all_athletes"
-                        ? 50
-                        : dataSource === "juco"
-                        ? 50
-                            : (dataSource as "hs_athletes") === "hs_athletes"
-                            ? 1000
-                        : 50
-                    }
-                    disabled={
-                      dataSource === "high_schools"
-                        ? false
-                        : !activeCustomerId || !activeCustomer?.sport_id
-                    }
-                    userId={userDetails?.id}
-                    customerId={activeCustomerId || undefined}
-                    tableName={
-                          dataSource === "high_schools"
-                            ? "high-schools"
-                            : dataSource === "transfer_portal"
-                        ? "transfers"
-                        : dataSource === "all_athletes"
-                        ? "pre-portal"
-                        : dataSource === "juco"
-                        ? "juco"
-                            : (dataSource as "hs_athletes") === "hs_athletes"
-                            ? "hs-athletes"
-                        : "unknown"
-                    }
-                    filterDetails={activeFilters}
-                    buttonProps={{ style: { marginRight: "12px" } }}
-                    emailColumnName={
-                      dataSource === "high_schools"
-                        ? (() => {
-                            const emailColumn = hsColumns.find(
-                              (col) =>
-                                col.display_name
+                            row.push(athlete.name_name || ""); // Current School
+                            row.push(athlete.commit_school_name || ""); // Commit School
+                            row.push(
+                              athlete.commit_date
+                                ? new Date(
+                                    athlete.commit_date
+                                  ).toLocaleDateString("en-US", {
+                                    month: "numeric",
+                                    day: "numeric",
+                                    year: "2-digit",
+                                  })
+                                : ""
+                            ); // Commit Date
+
+                            const config =
+                              DATA_SOURCE_COLUMN_CONFIG[currentDataSource];
+                            if (config.date) row.push(athlete.date || "");
+                            if (config.athletic_aid)
+                              row.push(athlete.athletic_aid || "");
+                            if (config.position)
+                              row.push(athlete.position || "");
+
+                            // For hs_athletes and juco, skip High School column
+                            if (
+                              currentDataSource !== "hs_athletes" &&
+                              currentDataSource !== "juco" &&
+                              config.high_name
+                            ) {
+                              row.push(athlete.high_name || ""); // High School
+                            }
+
+                            if (config.state) row.push(athlete.state || "");
+                            if (config.college_state)
+                              row.push(athlete.school_state || "");
+                            // Removed true_score
+
+                            // Add email for transfers and hs_athletes (not juco or pre-portal)
+                            if (
+                              (dataSource as
+                                | "transfer_portal"
+                                | "hs_athletes") === "transfer_portal" ||
+                              (dataSource as "hs_athletes") === "hs_athletes"
+                            ) {
+                              // Check athlete_email first, then fall back to email
+                              const email =
+                                (athlete as any).athlete_email ||
+                                (athlete as any).email ||
+                                "";
+                              row.push(email);
+                            }
+
+                            // Add dynamic columns
+                            dynamicColumns.forEach((col) => {
+                              // Skip high_name if it's in dynamic columns (duplicate)
+                              const colName =
+                                col.sanitized_column_name ||
+                                col.data_type_name
                                   ?.toLowerCase()
-                                  .includes("email") ||
-                                    col.dataIndex
-                                      ?.toLowerCase()
-                                      .includes("email")
-                            );
-                            return emailColumn?.dataIndex;
-                          })()
-                        : undefined
-                    }
-                  />
-                )}
+                                  .replace(/\s+/g, "_") ||
+                                col.display_name
+                                  .toLowerCase()
+                                  .replace(/\s+/g, "_");
+                              if (
+                                colName === "high_name" ||
+                                colName === "high_school"
+                              ) {
+                                return; // Skip duplicate high school column
+                              }
+
+                              const isOfferColumn =
+                                col.display_name?.toLowerCase() === "offer";
+
+                              // Special handling for height (data_type_id 304)
+                              if (col.data_type_id === 304) {
+                                const heightFeet = athlete.height_feet;
+                                const heightInch = athlete.height_inch;
+                                if (heightFeet && heightInch) {
+                                  row.push(`${heightFeet}'${heightInch}"`);
+                                } else if (heightFeet) {
+                                  row.push(`${heightFeet}'0"`);
+                                } else {
+                                  row.push("");
+                                }
+                                return;
+                              }
+
+                              const value =
+                                athlete[colName as keyof AthleteData];
+                              if (value !== null && value !== undefined) {
+                                row.push(
+                                  typeof value === "number"
+                                    ? value
+                                    : String(value)
+                                );
+                              } else {
+                                row.push("");
+                              }
+
+                              // For hs_athletes, add Number of Offers after the Offer column
+                              const currentDataSource = dataSource as
+                                | "transfer_portal"
+                                | "all_athletes"
+                                | "juco"
+                                | "hs_athletes";
+                              if (
+                                isOfferColumn &&
+                                currentDataSource === "hs_athletes"
+                              ) {
+                                row.push(athlete.offer_count_all ?? 0); // Number of Offers
+                              }
+                            });
+
+                            // Add additional CSV export columns for hs_athletes
+                            if (
+                              (dataSource as "hs_athletes") === "hs_athletes"
+                            ) {
+                              row.push((athlete as any).hs_county || "");
+                              row.push((athlete as any).school_state || "");
+                              row.push((athlete as any).all_position || "");
+                              row.push((athlete as any).athlete_cell || "");
+                              row.push((athlete as any).hs_highlight || "");
+                              row.push((athlete as any).parent_name || "");
+                              row.push((athlete as any).parent_email || "");
+                              row.push((athlete as any).parent_phone || "");
+                              row.push((athlete as any).major || "");
+                              row.push(
+                                (athlete as any).athlete_address_street || ""
+                              );
+                              row.push(
+                                (athlete as any).athlete_address_city || ""
+                              );
+                              row.push((athlete as any).address_state || "");
+                              row.push(
+                                (athlete as any).athlete_address_zip || ""
+                              );
+                              row.push((athlete as any).birthday || "");
+                              row.push((athlete as any).hs_ncaa_id || "");
+                            }
+
+                            return row;
+                          }}
+                          headers={
+                            dataSource === "high_schools"
+                              ? [
+                                  "School Name",
+                                  ...hsColumns.map(
+                                    (col) => col.display_name || col.dataIndex
+                                  ),
+                                ]
+                              : (() => {
+                                  const currentDataSource = dataSource as
+                                    | "transfer_portal"
+                                    | "all_athletes"
+                                    | "juco"
+                                    | "hs_athletes";
+                                  return [
+                                    "Name", // Separated from Name column
+                                    // For hs_athletes, skip Year and Division
+                                    ...(currentDataSource !== "hs_athletes"
+                                      ? ["Year", "Division"]
+                                      : []),
+                                    "Current School", // Separated from Name column
+                                    "Commit School", // Separated from Name column
+                                    "Commit Date", // Separated from Name column
+                                    ...(DATA_SOURCE_COLUMN_CONFIG[
+                                      currentDataSource
+                                    ].date
+                                      ? ["Date"]
+                                      : []),
+                                    ...(DATA_SOURCE_COLUMN_CONFIG[
+                                      currentDataSource
+                                    ].athletic_aid
+                                      ? ["Athletic Aid"]
+                                      : []),
+                                    ...(DATA_SOURCE_COLUMN_CONFIG[
+                                      currentDataSource
+                                    ].position
+                                      ? ["Position"]
+                                      : []),
+                                    // For hs_athletes and juco, skip High School column
+                                    ...(currentDataSource !== "hs_athletes" &&
+                                    currentDataSource !== "juco" &&
+                                    DATA_SOURCE_COLUMN_CONFIG[currentDataSource]
+                                      .high_name
+                                      ? ["High School"]
+                                      : []),
+                                    ...(DATA_SOURCE_COLUMN_CONFIG[
+                                      currentDataSource
+                                    ].state
+                                      ? ["State"]
+                                      : []),
+                                    ...(DATA_SOURCE_COLUMN_CONFIG[
+                                      currentDataSource
+                                    ].college_state
+                                      ? ["College State"]
+                                      : []),
+                                    // Removed True Score
+                                    // Add Email for transfers and hs_athletes (not juco or pre-portal)
+                                    ...(currentDataSource ===
+                                      "transfer_portal" ||
+                                    currentDataSource === "hs_athletes"
+                                      ? ["Email"]
+                                      : []),
+                                    ...dynamicColumns
+                                      .filter((col) => {
+                                        // Filter out duplicate high_name/high_school from dynamic columns
+                                        const colName =
+                                          col.sanitized_column_name ||
+                                          col.data_type_name
+                                            ?.toLowerCase()
+                                            .replace(/\s+/g, "_") ||
+                                          col.display_name
+                                            .toLowerCase()
+                                            .replace(/\s+/g, "_");
+                                        return (
+                                          colName !== "high_name" &&
+                                          colName !== "high_school"
+                                        );
+                                      })
+                                      .flatMap((col) => {
+                                        const isOfferColumn =
+                                          col.display_name?.toLowerCase() ===
+                                          "offer";
+                                        const displayName =
+                                          col.display_name ||
+                                          col.data_type_name ||
+                                          col.sanitized_column_name ||
+                                          "";
+
+                                        // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
+                                        if (
+                                          isOfferColumn &&
+                                          currentDataSource === "hs_athletes"
+                                        ) {
+                                          return [
+                                            "Best Offer",
+                                            "Number of Offers",
+                                          ];
+                                        }
+                                        return [displayName];
+                                      }),
+                                    // Add additional CSV export column headers for hs_athletes
+                                    ...(currentDataSource === "hs_athletes"
+                                      ? [
+                                          "HS County",
+                                          "School State",
+                                          "All Position",
+                                          "Athlete Cell",
+                                          "HS Highlight",
+                                          "Parent Name",
+                                          "Parent Email",
+                                          "Parent Phone",
+                                          "Major",
+                                          "Athlete Address Street",
+                                          "Athlete Address City",
+                                          "Address State",
+                                          "Athlete Address Zip",
+                                          "Birthday",
+                                          "HS NCAA ID",
+                                        ]
+                                      : []),
+                                  ];
+                                })()
+                          }
+                          filename={(() => {
+                            const ds = dataSource as
+                              | "transfer_portal"
+                              | "all_athletes"
+                              | "juco"
+                              | "high_schools"
+                              | "hs_athletes";
+                            return ds === "hs_athletes"
+                              ? "hs-athletes"
+                              : ds === "high_schools"
+                              ? "high-schools"
+                              : ds === "transfer_portal"
+                              ? "transfers"
+                              : ds === "all_athletes"
+                              ? "pre-portal"
+                              : ds === "juco"
+                              ? "juco"
+                              : "high-schools";
+                          })()}
+                          maxRows={(() => {
+                            const ds = dataSource as
+                              | "transfer_portal"
+                              | "all_athletes"
+                              | "juco"
+                              | "high_schools"
+                              | "hs_athletes";
+                            return ds === "hs_athletes"
+                              ? 1000
+                              : ds === "high_schools"
+                              ? 500
+                              : ds === "transfer_portal"
+                              ? 25
+                              : ds === "all_athletes"
+                              ? 25
+                              : ds === "juco"
+                              ? 25
+                              : 25;
+                          })()}
+                          disabled={
+                            dataSource === "high_schools"
+                              ? false
+                              : !activeCustomerId || !activeCustomer?.sport_id
+                          }
+                          userId={userDetails?.id}
+                          customerId={activeCustomerId || undefined}
+                          tableName={
+                            dataSource === "high_schools"
+                              ? "high-schools"
+                              : dataSource === "transfer_portal"
+                              ? "transfers"
+                              : dataSource === "all_athletes"
+                              ? "pre-portal"
+                              : dataSource === "juco"
+                              ? "juco"
+                              : (dataSource as "hs_athletes") === "hs_athletes"
+                              ? "hs-athletes"
+                              : "unknown"
+                          }
+                          filterDetails={activeFilters}
+                          buttonProps={{ style: { marginRight: "12px" } }}
+                          emailColumnName={
+                            dataSource === "high_schools"
+                              ? (() => {
+                                  const emailColumn = hsColumns.find(
+                                    (col) =>
+                                      col.display_name
+                                        ?.toLowerCase()
+                                        .includes("email") ||
+                                      col.dataIndex
+                                        ?.toLowerCase()
+                                        .includes("email")
+                                  );
+                                  return emailColumn?.dataIndex;
+                                })()
+                              : undefined
+                          }
+                          sortField={sortField}
+                          sortOrder={sortOrder}
+                          userPackages={userDetails?.packages}
+                        />
+                      ) : null;
+                    })()}
+                    <Filters
+                      onApplyFilters={applyFilters}
+                      onResetFilters={resetFilters}
+                      dynamicColumns={dynamicColumns}
+                      filterColumns={filterColumns}
+                      dataSource={dataSource}
+                    />
+                  </div>
+                </Space>
+              </div>
+            )}
+            {/* Show Filters for hs_athletes even in map view */}
+            {dataSource === "hs_athletes" && hsAthleteViewMode === "map" && (
+              <div style={{ marginTop: "16px" }}>
                 <Filters
                   onApplyFilters={applyFilters}
                   onResetFilters={resetFilters}
@@ -4355,8 +5117,6 @@ export function TableSearchContent({
                   filterColumns={filterColumns}
                   dataSource={dataSource}
                 />
-              </div>
-            </Space>
               </div>
             )}
           </div>
@@ -4418,59 +5178,62 @@ export function TableSearchContent({
             )}
           {(dataSource !== "high_schools" || highSchoolViewMode === "list") &&
             (dataSource !== "hs_athletes" || hsAthleteViewMode === "list") && (
-          <div
-            style={{
-              flex: "1 1 auto",
-              overflow: "hidden",
-              minHeight: 0,
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              maxHeight: "calc(100vh - 180px)", // Ensure container doesn't exceed viewport
-            }}
-          >
-            <Table<any>
-              key={tableKey}
-              rowKey="id"
-              rowSelection={
-                dataSource === "high_schools"
-                  ? { type: "checkbox", ...highSchoolRowSelection }
-                  : { type: selectionType, ...rowSelection }
-              }
-              columns={columns}
-              dataSource={displayedData}
-              loading={loading || isLoadingRecruitingBoard}
-              pagination={false}
-              bordered
-              style={{
-                width: "100%",
-                height: "100%",
-                flex: "1 1 auto",
-              }}
-              scroll={{
-                x: "max-content",
-                y: extensionInactive
-                  ? "calc(100vh - 330px)"
-                  : "calc(100vh - 280px)", // Adjust height when alert is shown
-              }}
-              onChange={handleTableChange}
-              onRow={(record) => {
+              <div
+                style={{
+                  flex: "1 1 auto",
+                  overflow: "hidden",
+                  minHeight: 0,
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  maxHeight: "calc(100vh - 180px)", // Ensure container doesn't exceed viewport
+                }}
+              >
+                <Table<any>
+                  key={tableKey}
+                  rowKey="id"
+                  rowSelection={
+                    dataSource === "high_schools"
+                      ? { type: "checkbox", ...highSchoolRowSelection }
+                      : { type: selectionType, ...rowSelection }
+                  }
+                  columns={columns}
+                  dataSource={displayedData}
+                  loading={loading || isLoadingRecruitingBoard}
+                  pagination={false}
+                  bordered
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    flex: "1 1 auto",
+                  }}
+                  scroll={{
+                    x: "max-content",
+                    y: extensionInactive
+                      ? "calc(100vh - 330px)"
+                      : "calc(100vh - 280px)", // Adjust height when alert is shown
+                  }}
+                  onChange={handleTableChange}
+                  onRow={(record) => {
                     const isOnBoard = recruitingBoardAthletes.includes(
                       record.id
                     );
-                return {
-                  style: isOnBoard
-                    ? {
-                        backgroundColor: "#d4edda",
-                      }
-                    : {},
-                };
-              }}
-            />
-          </div>
+                    return {
+                      style: isOnBoard
+                        ? {
+                            backgroundColor: "#d4edda",
+                          }
+                        : {},
+                    };
+                  }}
+                />
+              </div>
             )}
           {dataSource === "high_schools" && highSchoolViewMode === "map" && (
-            <div className="">
+            <div
+              className=""
+              style={{ width: "100%", flex: "1 1 auto", minHeight: 0 }}
+            >
               {!isMapLoaded ? (
                 <div className="text-center py-4">Loading map...</div>
               ) : (
@@ -4478,7 +5241,7 @@ export function TableSearchContent({
                   style={{
                     position: "relative",
                     width: "100%",
-                    height: "545px",
+                    height: "100%",
                     border: "1px solid #eee",
                   }}
                 >
@@ -4488,6 +5251,15 @@ export function TableSearchContent({
                     center={mapCenter}
                     onLoad={(map) => {
                       mapRef.current = map;
+                      // Get initial zoom
+                      if (map) {
+                        setMapZoom(map.getZoom() || 8);
+                      }
+                    }}
+                    onZoomChanged={() => {
+                      if (mapRef.current) {
+                        setMapZoom(mapRef.current.getZoom() || 8);
+                      }
                     }}
                     onUnmount={() => {
                       mapRef.current = null;
@@ -4501,341 +5273,467 @@ export function TableSearchContent({
                       gestureHandling: "greedy",
                     }}
                   >
-                    {mapDirections ? (
-                      <DirectionsRenderer
-                        directions={mapDirections}
-                        options={{
-                          suppressMarkers: true,
-                          polylineOptions: {
-                            strokeColor: "#1C1D4D",
-                            strokeWeight: 4,
-                            strokeOpacity: 1,
-                          },
-                        }}
-                      />
-                    ) : null}
-                    {(dataSource === "high_schools"
-                      ? displayedData
-                      : selectedHighSchools
-                    ).map((hs, index) => {
-                      const lat = (hs as any).address_latitude as
-                        | number
-                        | null
-                        | undefined;
-                      const lng = (hs as any).address_longitude as
-                        | number
-                        | null
-                        | undefined;
-                      if (!lat || !lng) return null;
-                      const schoolId =
-                        (hs as any).id ||
-                        (hs as any).school_id ||
-                        `school-${index}`;
-                      return (
-                        <Fragment key={`marker-${schoolId}-${index}`}>
-                          <MarkerF
-                            position={{ lat, lng }}
-                            label={{
-                              text: `${index + 1}`,
-                              color: "#1C1D4D",
-                              fontWeight: "bold",
-                            }}
-                            icon={{
-                              url: "/svgicons/map-dot.svg",
-                              scaledSize:
-                                window.google && window.google.maps
-                                  ? new window.google.maps.Size(28, 28)
-                                  : undefined,
-                              anchor:
-                                window.google && window.google.maps
-                                  ? new window.google.maps.Point(14, 14)
-                                  : undefined,
-                            }}
-                            title={`${index + 1}. ${(hs as any).school || ""}`}
-                          />
-                          <OverlayViewF
-                            position={{ lat, lng }}
-                            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-                            getPixelPositionOffset={(width, height) => ({
-                              x: -width / 2,
-                              y: -height - 30,
-                            })}
-                          >
-                            <Popover
-                              content={
-                                <div className="space-y-2 min-w-[400px]">
-                                  <div className="mb-4">
-                                    <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
-                                      {(hs as any).school || ""}
+                    <>
+                      {/* Render cluster markers */}
+                      {highSchoolClusters.clusters.map(
+                        (cluster: Cluster, clusterIndex: number) => {
+                          // Calculate size based on number of schools (min 50px, max 120px)
+                          // Scale from 2 schools (50px) to 50+ schools (120px)
+                          const baseSize = 50;
+                          const maxSize = 120;
+                          const minCount = 2;
+                          const maxCount = 50;
+                          const count = Math.min(cluster.count, maxCount);
+                          const size =
+                            baseSize +
+                            ((count - minCount) / (maxCount - minCount)) *
+                              (maxSize - baseSize);
 
-                                      <a
-                                        href="#"
-                                        className="text-[14px] text-blue-600 hover:underline"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          // Add school to selection if not already selected
-                                          const schoolId = String(
-                                            (hs as any).id
-                                          );
-                                          const isAlreadySelected =
-                                            selectedHighSchools.some(
-                                              (selected) =>
-                                                String(selected.id) === schoolId
-                                            );
-                                          if (!isAlreadySelected) {
-                                            setSelectedHighSchools((prev) => [
-                                              ...prev,
-                                              hs as HighSchoolData,
-                                            ]);
-                                          }
-                                        }}
-                                      >
-                                        Add
-                                      </a>
-                                    </h4>
-                                    <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
-                                      {/* No address string available in HS view; show county/state */}
-                                      {((hs as any).hs_county ||
-                                        (hs as any).school_state) && (
-                                        <span>
-                                          {(hs as any).hs_county && (
-                                            <span>{(hs as any).hs_county}</span>
-                                          )}
-                                          {(hs as any).hs_county &&
-                                            (hs as any).school_state && (
-                                              <span> | </span>
-                                            )}
-                                          {(hs as any).school_state && (
-                                            <span>
-                                              {(hs as any).school_state}
-                                            </span>
-                                          )}
-                                        </span>
-                                      )}
-                                      {(hs as any).ad_email && (
-                                        <>
-                                          <br />
-                                          <a
-                                            href={`mailto:${
-                                              (hs as any).ad_email
-                                            }`}
-                                            className="text-[14px] text-blue-600"
-                                          >
-                                            {(hs as any).ad_email}
-                                          </a>
-                                        </>
-                                      )}
-                                      {(hs as any).school_phone && (
-                                        <>
-                                          <br />
-                                          <a
-                                            href={`tel:${String(
-                                              (hs as any).school_phone
-                                            ).replace(/\D/g, "")}`}
-                                            className="text-[14px] text-blue-600"
-                                          >
-                                            {formatPhoneNumber(
-                                              String((hs as any).school_phone)
-                                            )}
-                                          </a>
-                                        </>
-                                      )}
-                                    </div>
-                                  </div>
+                          // Calculate text size proportionally
+                          const textSize = Math.max(
+                            14,
+                            Math.min(24, size * 0.4)
+                          );
 
-                                  {/* Athletes (if loaded) */}
-                                  <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
-                                    {hsAthletes[index] &&
-                                    hsAthletes[index].length > 0 ? (
-                                      hsAthletes[index].map(
-                                        (
-                                          athlete: any,
-                                          athleteIndex: number
-                                        ) => (
-                                          <div
-                                            key={athleteIndex}
-                                            className="text-xs flex items-center justify-start gap-2"
-                                          >
-                                            <img
-                                              src={
-                                                athlete.image_url ||
-                                                "/blank-user.svg"
-                                              }
-                                              alt={athlete.name || "Athlete"}
-                                              height={50}
-                                              width={50}
-                                              className="rounded-full object-cover"
-                                            />
-                                            <div>
-                                              <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
-                                                {athlete.name || "-"}
-                                              </h6>
-                                              <span className="!text-[14px] !leading-[16px] mb-0">
-                                                {athlete.athleticProjection ||
-                                                  "-"}{" "}
-                                                <br />
-                                                {athlete.gradYear || "-"}
-                                              </span>
-                                            </div>
-                                          </div>
-                                        )
-                                      )
-                                    ) : hsAthletes[index] !== undefined ? (
-                                      <div className="text-gray-400 text-[12px]">
-                                        No athletes found
-                                      </div>
-                                    ) : (
-                                      <div className="text-gray-400 text-[12px]">
-                                        Loading athletes...
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              }
-                              title={null}
-                              trigger="click"
-                              open={!!hsPopoverOpen[index]}
-                              onOpenChange={async (open: boolean) => {
-                                setHsPopoverOpen({
-                                  ...hsPopoverOpen,
-                                  [index]: open,
-                                });
-                                if (open && activeCustomerId) {
-                                  try {
-                                    const schoolId = String((hs as any).id);
-                                    if (schoolId) {
-                                      const result =
-                                        await fetchHighSchoolAthletes(
-                                          schoolId,
-                                          "fb",
-                                          activeCustomerId,
-                                          { page: 1, limit: 100 }
-                                        );
-                                      if (result.data) {
-                                        const projectionOrder = [
-                                          "FBS P4 - Top half",
-                                          "FBS P4",
-                                          "FBS G5 - Top half",
-                                          "FBS G5",
-                                          "FCS - Full Scholarship",
-                                          "FCS",
-                                          "D2 - Top half",
-                                          "D2",
-                                          "D3 - Top half",
-                                          "D3",
-                                          "D3 Walk-on",
-                                        ];
-                                        const sortedAthletes = result.data.sort(
-                                          (a: any, b: any) => {
-                                            const indexA =
-                                              projectionOrder.indexOf(
-                                                a.athleticProjection || ""
-                                              );
-                                            const indexB =
-                                              projectionOrder.indexOf(
-                                                b.athleticProjection || ""
-                                              );
-                                            if (
-                                              indexA !== -1 &&
-                                              indexB !== -1
-                                            ) {
-                                              if (indexA !== indexB)
-                                                return indexA - indexB;
-                                            } else if (indexA !== -1) {
-                                              return -1;
-                                            } else if (indexB !== -1) {
-                                              return 1;
-                                            } else if (
-                                              a.athleticProjection &&
-                                              b.athleticProjection
-                                            ) {
-                                              const cmp =
-                                                a.athleticProjection.localeCompare(
-                                                  b.athleticProjection
-                                                );
-                                              if (cmp !== 0) return cmp;
-                                            }
-                                            const yearA =
-                                              parseInt(a.gradYear) || 0;
-                                            const yearB =
-                                              parseInt(b.gradYear) || 0;
-                                            return yearA - yearB;
-                                          }
-                                        );
-                                        setHsAthletes({
-                                          ...hsAthletes,
-                                          [index]: sortedAthletes.slice(0, 2),
-                                        });
-                                      }
-                                    }
-                                  } catch (e) {
-                                    // ignore
-                                  }
-                                }
-                              }}
+                          return (
+                            <OverlayViewF
+                              key={`cluster-${clusterIndex}`}
+                              position={{ lat: cluster.lat, lng: cluster.lng }}
+                              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                              getPixelPositionOffset={(width, height) => ({
+                                x: -width / 2,
+                                y: -height / 2,
+                              })}
                             >
                               <div
-                                className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
-                                style={{ minWidth: "max-content" }}
+                                className="relative flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+                                style={{
+                                  width: `${size}px`,
+                                  height: `${size}px`,
+                                  zIndex: 2000, // Higher than individual markers (1001-1002)
+                                }}
                               >
-                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
-                                  <img
-                                    src="/blank-hs.svg"
-                                    alt="School"
-                                    className="w-full h-full object-contain p-1"
-                                  />
-                                </div>
-                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
-                                  <span className="truncate block w-full">
-                                    {(hs as any).school || ""}
-                                  </span>
-                                </h6>
+                                {/* Green dot SVG behind the count */}
+                                <img
+                                  src="/svgicons/map-dot.svg"
+                                  alt=""
+                                  style={{
+                                    position: "absolute",
+                                    width: `${size}px`,
+                                    height: `${size}px`,
+                                    zIndex: 2000,
+                                  }}
+                                />
+                                {/* Count text on top */}
+                                <span
+                                  className="text-white font-bold relative"
+                                  style={{
+                                    zIndex: 2001,
+                                    fontSize: `${textSize}px`,
+                                  }}
+                                >
+                                  {cluster.count}
+                                </span>
                               </div>
-                            </Popover>
-                          </OverlayViewF>
-                        </Fragment>
-                      );
-                    })}
+                            </OverlayViewF>
+                          );
+                        }
+                      )}
+
+                      {/* Render individual markers for unclustered schools */}
+                      {highSchoolClusters.unclustered.map(
+                        (hs: any, index: number) => {
+                          const lat = (hs as any).address_latitude as
+                            | number
+                            | null
+                            | undefined;
+                          const lng = (hs as any).address_longitude as
+                            | number
+                            | null
+                            | undefined;
+                          if (!lat || !lng) return null;
+                          const schoolId =
+                            (hs as any).id ||
+                            (hs as any).school_id ||
+                            `school-${index}`;
+                          return (
+                            <Fragment key={`marker-${schoolId}-${index}`}>
+                              <OverlayViewF
+                                position={{ lat, lng }}
+                                mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                                getPixelPositionOffset={(width, height) => ({
+                                  x: -width / 2,
+                                  y: -height / 2,
+                                })}
+                              >
+                                <Popover
+                                  content={
+                                    <div className="space-y-2 min-w-[400px]">
+                                      <div className="mb-4">
+                                        <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
+                                          <span
+                                            className="cursor-pointer hover:text-blue-600 hover:underline"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              // Open school profile modal using URL params (same as table view)
+                                              const schoolId = String(
+                                                (hs as any).id ||
+                                                  (hs as any).school_id
+                                              );
+                                              if (schoolId) {
+                                                const params =
+                                                  new URLSearchParams(
+                                                    searchParams?.toString() ||
+                                                      ""
+                                                  );
+                                                params.set("school", schoolId);
+                                                params.set(
+                                                  "dataSource",
+                                                  "high_schools"
+                                                );
+                                                const newUrl = params.toString()
+                                                  ? `${baseRoute}?${params.toString()}`
+                                                  : baseRoute;
+                                                router.push(newUrl);
+                                              }
+                                            }}
+                                          >
+                                            {(hs as any).school || ""}
+                                          </span>
+
+                                          <a
+                                            href="#"
+                                            className="text-[14px] text-blue-600 hover:underline"
+                                            onClick={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              // Add school to road map selection if not already selected
+                                              const schoolId = String(
+                                                (hs as any).id
+                                              );
+                                              const isAlreadySelected =
+                                                roadMapSelectedHighSchools.some(
+                                                  (selected) =>
+                                                    String(selected.id) ===
+                                                    schoolId
+                                                );
+                                              if (!isAlreadySelected) {
+                                                setRoadMapSelectedHighSchools(
+                                                  (prev) => [
+                                                    ...prev,
+                                                    hs as HighSchoolData,
+                                                  ]
+                                                );
+                                              }
+                                            }}
+                                          >
+                                            Add to Road Plan
+                                          </a>
+                                        </h4>
+                                        <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                          {/* No address string available in HS view; show county/state */}
+                                          {((hs as any).hs_county ||
+                                            (hs as any).school_state) && (
+                                            <span>
+                                              {(hs as any).hs_county && (
+                                                <span>
+                                                  {(hs as any).hs_county}
+                                                </span>
+                                              )}
+                                              {(hs as any).hs_county &&
+                                                (hs as any).school_state && (
+                                                  <span> | </span>
+                                                )}
+                                              {(hs as any).school_state && (
+                                                <span>
+                                                  {(hs as any).school_state}
+                                                </span>
+                                              )}
+                                            </span>
+                                          )}
+                                          {(hs as any).ad_email && (
+                                            <>
+                                              <br />
+                                              <a
+                                                href={`mailto:${
+                                                  (hs as any).ad_email
+                                                }`}
+                                                className="text-[14px] text-blue-600"
+                                              >
+                                                {(hs as any).ad_email}
+                                              </a>
+                                            </>
+                                          )}
+                                          {(hs as any).school_phone && (
+                                            <>
+                                              <br />
+                                              <a
+                                                href={`tel:${String(
+                                                  (hs as any).school_phone
+                                                ).replace(/\D/g, "")}`}
+                                                className="text-[14px] text-blue-600"
+                                              >
+                                                {formatPhoneNumber(
+                                                  String(
+                                                    (hs as any).school_phone
+                                                  )
+                                                )}
+                                              </a>
+                                            </>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Athletes (if loaded) */}
+                                      <div className="text-xs flex items-center justify-between gap-2 flex-wrap">
+                                        {hsAthletes[index] &&
+                                        hsAthletes[index].length > 0 ? (
+                                          hsAthletes[index].map(
+                                            (
+                                              athlete: any,
+                                              athleteIndex: number
+                                            ) => (
+                                              <div
+                                                key={athleteIndex}
+                                                className="text-xs flex items-center justify-start gap-2"
+                                              >
+                                                <img
+                                                  src={
+                                                    athlete.image_url ||
+                                                    "/blank-user.svg"
+                                                  }
+                                                  alt={
+                                                    athlete.name || "Athlete"
+                                                  }
+                                                  height={50}
+                                                  width={50}
+                                                  className="rounded-full object-cover"
+                                                />
+                                                <div>
+                                                  <h6 className="!text-[14px] !font-semibold !leading-1 mb-0">
+                                                    {athlete.name || "-"}
+                                                  </h6>
+                                                  <span className="!text-[14px] !leading-[16px] mb-0">
+                                                    {athlete.athleticProjection ||
+                                                      "-"}{" "}
+                                                    <br />
+                                                    {athlete.gradYear || "-"}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            )
+                                          )
+                                        ) : hsAthletes[index] !== undefined ? (
+                                          <div className="text-gray-400 text-[12px]">
+                                            No athletes found
+                                          </div>
+                                        ) : (
+                                          <div className="text-gray-400 text-[12px]">
+                                            Loading athletes...
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  }
+                                  title={null}
+                                  trigger="click"
+                                  open={!!hsPopoverOpen[index]}
+                                  onOpenChange={async (open: boolean) => {
+                                    setHsPopoverOpen({
+                                      ...hsPopoverOpen,
+                                      [index]: open,
+                                    });
+                                    if (open && activeCustomerId) {
+                                      try {
+                                        const schoolId = String((hs as any).id);
+                                        if (schoolId) {
+                                          const result =
+                                            await fetchHighSchoolAthletes(
+                                              schoolId,
+                                              "fb",
+                                              activeCustomerId,
+                                              { page: 1, limit: 100 }
+                                            );
+                                          if (result.data) {
+                                            const projectionOrder = [
+                                              "FBS P4 - Top half",
+                                              "FBS P4",
+                                              "FBS G5 - Top half",
+                                              "FBS G5",
+                                              "FCS - Full Scholarship",
+                                              "FCS",
+                                              "D2 - Top half",
+                                              "D2",
+                                              "D3 - Top half",
+                                              "D3",
+                                              "D3 Walk-on",
+                                            ];
+                                            const sortedAthletes =
+                                              result.data.sort(
+                                                (a: any, b: any) => {
+                                                  const indexA =
+                                                    projectionOrder.indexOf(
+                                                      a.athleticProjection || ""
+                                                    );
+                                                  const indexB =
+                                                    projectionOrder.indexOf(
+                                                      b.athleticProjection || ""
+                                                    );
+                                                  if (
+                                                    indexA !== -1 &&
+                                                    indexB !== -1
+                                                  ) {
+                                                    if (indexA !== indexB)
+                                                      return indexA - indexB;
+                                                  } else if (indexA !== -1) {
+                                                    return -1;
+                                                  } else if (indexB !== -1) {
+                                                    return 1;
+                                                  } else if (
+                                                    a.athleticProjection &&
+                                                    b.athleticProjection
+                                                  ) {
+                                                    const cmp =
+                                                      a.athleticProjection.localeCompare(
+                                                        b.athleticProjection
+                                                      );
+                                                    if (cmp !== 0) return cmp;
+                                                  }
+                                                  const yearA =
+                                                    parseInt(a.gradYear) || 0;
+                                                  const yearB =
+                                                    parseInt(b.gradYear) || 0;
+                                                  return yearA - yearB;
+                                                }
+                                              );
+                                            setHsAthletes({
+                                              ...hsAthletes,
+                                              [index]: sortedAthletes.slice(
+                                                0,
+                                                2
+                                              ),
+                                            });
+                                          }
+                                        }
+                                      } catch (e) {
+                                        // ignore
+                                      }
+                                    }
+                                  }}
+                                >
+                                  {(() => {
+                                    // Get D1 player producing score and determine color (each score gets its own color)
+                                    const d1Score = (hs as any)
+                                      .d1_player_producing;
+                                    const score =
+                                      d1Score !== null && d1Score !== undefined
+                                        ? parseInt(String(d1Score))
+                                        : 0;
+
+                                    // Color scale: 0/null = gray, then gradient from red to yellow to green
+                                    // More drastic changes 0-5, subtle changes 5-10, darker colors
+                                    const colorMap: Record<number, string> = {
+                                      0: "#9CA3AF", // Gray for 0 and null
+                                      1: "#FCA5A5", // Red (dramatic change)
+                                      2: "#F87171", // Darker red (dramatic change)
+                                      3: "#FB923C", // Orange-red (dramatic change)
+                                      4: "#FBBF24", // Orange-yellow (dramatic change)
+                                      5: "#FCD34D", // Yellow (transition point)
+                                      6: "#FDE047", // Yellow (subtle change)
+                                      7: "#BEF264", // Yellow-green (subtle change)
+                                      8: "#86EFAC", // Light green (subtle change)
+                                      9: "#4ADE80", // Green (subtle change)
+                                      10: "#22C55E", // Darker green (subtle change)
+                                    };
+
+                                    // Clamp score to 0-10 range
+                                    const clampedScore = Math.max(
+                                      0,
+                                      Math.min(10, score)
+                                    );
+                                    const backgroundColor =
+                                      colorMap[clampedScore] || "#9CA3AF";
+
+                                    return (
+                                      <div
+                                        className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full pr-2 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative"
+                                        style={{
+                                          minWidth: "max-content",
+                                          height: "32px",
+                                          paddingRight: "8px",
+                                          backgroundColor,
+                                        }}
+                                      >
+                                        {/* Dot behind the school icon */}
+                                        <div
+                                          className="absolute flex items-center justify-center"
+                                          style={{
+                                            left: "-3px",
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            width: "28px",
+                                            height: "28px",
+                                            zIndex: 1000,
+                                          }}
+                                        >
+                                          <img
+                                            src="/svgicons/map-dot.svg"
+                                            alt=""
+                                            style={{
+                                              width: "28px",
+                                              height: "28px",
+                                            }}
+                                          />
+                                        </div>
+                                        <div
+                                          className="flex items-center justify-center absolute border-[4px] border-solid border-[#1C1D4D] rounded-full overflow-hidden flex-shrink-0"
+                                          style={{
+                                            left: "-3px",
+                                            top: "50%",
+                                            transform: "translateY(-50%)",
+                                            width: "24px",
+                                            height: "24px",
+                                            zIndex: 1001,
+                                          }}
+                                        >
+                                          <img
+                                            src="/blank-hs.svg"
+                                            alt="School"
+                                            className="w-full h-full object-contain p-0.5"
+                                          />
+                                        </div>
+                                        <h6
+                                          className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap"
+                                          style={{
+                                            width: "130px",
+                                            marginLeft: "26px",
+                                          }}
+                                        >
+                                          <span className="truncate block">
+                                            {(hs as any).school || ""}
+                                          </span>
+                                        </h6>
+                                      </div>
+                                    );
+                                  })()}
+                                </Popover>
+                              </OverlayViewF>
+                            </Fragment>
+                          );
+                        }
+                      )}
+                    </>
                   </GoogleMap>
-                  {mapRouteInfo && (
-                    <div
-                      style={{ position: "absolute", left: 16, bottom: 16 }}
-                      className="text-left p-1.5 bg-white/60 w-[180px] border-2 border-[#1C1D4D] border-solid"
-                    >
-                      <div className="text-base font-bold text-gray-700 flex items-center justify-center">
-                        <img
-                          src="/svgicons/big-flag.svg"
-                          alt="Route"
-                          height={50}
-                          className="mr-1.5"
-                        />
-                        <div className="text-gray-600 mt-0.5 text-right">
-                          <h5 className="font-semibold !text-[14px] italic mb-0.5">
-                            Total Drive Time
-                          </h5>
-                          <h3 className="!text-[18px] font-bold italic mb-1">
-                            {mapRouteInfo.totalTime}
-                          </h3>
-                          <h6 className="font-semibold !text-[14px] italic flex items-center justify-end">
-                            <img
-                              src="/svgicons/mile-car.svg"
-                              alt="Miles"
-                              height={16}
-                              className="mr-1.5"
-                            />
-                            {mapRouteInfo.totalDistance}
-                          </h6>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           )}
           {dataSource === "hs_athletes" && hsAthleteViewMode === "map" && (
-            <div className="">
+            <div
+              className=""
+              style={{ width: "100%", flex: "1 1 auto", minHeight: 0 }}
+            >
               {!isMapLoaded ? (
                 <div className="text-center py-4">Loading map...</div>
               ) : (
@@ -4843,7 +5741,7 @@ export function TableSearchContent({
                   style={{
                     position: "relative",
                     width: "100%",
-                    height: "820px",
+                    height: "100%",
                     border: "1px solid #eee",
                   }}
                 >
@@ -4879,66 +5777,88 @@ export function TableSearchContent({
                       const athleteId = String(athlete.id || index);
                       return (
                         <Fragment key={`marker-${athleteId}-${index}`}>
-                          <MarkerF
-                            position={{ lat, lng }}
-                            label={{
-                              text: `${index + 1}`,
-                              color: "#1C1D4D",
-                              fontWeight: "bold",
-                            }}
-                            icon={{
-                              url: "/svgicons/map-dot.svg",
-                              scaledSize:
-                                window.google && window.google.maps
-                                  ? new window.google.maps.Size(28, 28)
-                                  : undefined,
-                              anchor:
-                                window.google && window.google.maps
-                                  ? new window.google.maps.Point(14, 14)
-                                  : undefined,
-                            }}
-                            title={`${index + 1}. ${
-                              athlete.athlete_name || ""
-                            }`}
-                          />
                           <OverlayViewF
                             position={{ lat, lng }}
                             mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                             getPixelPositionOffset={(width, height) => ({
                               x: -width / 2,
-                              y: -height - 30,
+                              y: -height / 2,
                             })}
                           >
                             <Popover
                               content={
-                                <div className="space-y-2 min-w-[400px]">
+                                <div className="space-y-2 min-w-[400px] 4455">
                                   <div className="mb-4">
-                                    <h4 className="!text-[24px] font-semibold text-sm mb-3 flex items-center justify-between">
-                                      {athlete.athlete_name || ""}
-                                      <a
+                                    <div className="flex items-start justify-start gap-2">
+                                    <Flex
+                                      className="user-image"
+                                      style={{ width: "88px", margin: 0 }}
+                                    >
+                                      <Flex className="gray-scale">
+                                        <Image
+                                          src={"/blank-user.svg"}
+                                          alt={"name"}
+                                          width={88}
+                                          height={88}
+                                        />
+                                        {1 > 0 && (
+                                          <span className="yellow">{5.9}</span>
+                                        )}
+                                      </Flex>
+                                    </Flex>
+                                    <h4 className="!text-[24px] mt-2 font-semibold text-sm mb-3 flex items-center justify-between">
+                                      <span
+                                        className="cursor-pointer hover:text-blue-600 hover:underline"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          // Open HS athlete profile modal using URL params (same as table view)
+                                          const athleteId = String(
+                                            athlete.id || athlete.athlete_id
+                                          );
+                                          if (athleteId) {
+                                            const params = new URLSearchParams(
+                                              searchParams?.toString() || ""
+                                            );
+                                            params.set("player", athleteId);
+                                            params.set(
+                                              "dataSource",
+                                              "hs_athletes"
+                                            );
+                                            const newUrl = params.toString()
+                                              ? `${baseRoute}?${params.toString()}`
+                                              : baseRoute;
+                                            router.push(newUrl);
+                                          }
+                                        }}
+                                      >
+                                        {athlete.athlete_name || ""}
+                                      </span>
+
+                                      {/* <a
                                         href="#"
                                         className="text-[14px] text-blue-600 hover:underline"
                                         onClick={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          // Add athlete to selection if not already selected
+                                          // Add athlete to road map selection if not already selected
                                           const isAlreadySelected =
-                                            selectedAthletes.some(
+                                            roadMapSelectedAthletes.some(
                                               (selected) =>
                                                 selected.id === athlete.id
                                             );
                                           if (!isAlreadySelected) {
-                                            setSelectedAthletes((prev) => [
-                                              ...prev,
-                                              athlete,
-                                            ]);
+                                            setRoadMapSelectedAthletes(
+                                              (prev) => [...prev, athlete]
+                                            );
                                           }
                                         }}
                                       >
-                                        Add
-                                      </a>
+                                        Add to Road Plan
+                                      </a> */}
                                     </h4>
-                                    <div className="text-[14px] text-gray-600 w-[190px] !leading-[20px]">
+                                    </div>
+                                    <div className="text-[14px] text-gray-600 !leading-[20px] w-[100%]">
                                       {athlete.high_name && (
                                         <span>{athlete.high_name}</span>
                                       )}
@@ -4969,6 +5889,52 @@ export function TableSearchContent({
                                           </a>
                                         </>
                                       )}
+                                      <div className="w-[100%] flex flex-col items-center justify-between">
+                                        <h6 className="flex flex-col items-center justify-between">
+                                          <small>Current Projection</small>
+                                          <span className="font-medium">
+                                            D3 - TOPHALF
+                                          </span>
+                                        </h6>
+                                        <ProgressBar
+                                          value={55}
+                                          height={30}
+                                          color="#2BB650"
+                                          label=""
+                                          labelSize="12"
+                                          labelWeight={400}
+                                          labelWidth={110}
+                                        />
+                                      </div>
+                                      <div className="w-[95%] flex items-center justify-between mt-5 mx-auto">
+                                        <Button
+                                          type="primary"
+                                          onClick={() => ""}
+                                        >
+                                          View Profile
+                                        </Button>
+
+                                        <Button
+                                          type="text"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            // Add athlete to road map selection if not already selected
+                                            const isAlreadySelected =
+                                              roadMapSelectedAthletes.some(
+                                                (selected) =>
+                                                  selected.id === athlete.id
+                                              );
+                                            if (!isAlreadySelected) {
+                                              setRoadMapSelectedAthletes(
+                                                (prev) => [...prev, athlete]
+                                              );
+                                            }
+                                          }}
+                                        >
+                                          + Road Map
+                                        </Button>
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -4976,23 +5942,111 @@ export function TableSearchContent({
                               title={null}
                               trigger="click"
                             >
-                              <div
-                                className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity"
-                                style={{ minWidth: "max-content" }}
-                              >
-                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
-                                  <img
-                                    src={athlete.image_url || "/blank-user.svg"}
-                                    alt="Athlete"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1 w-[65px]">
-                                  <span className="truncate block w-full">
-                                    {athlete.athlete_name || ""}
-                                  </span>
-                                </h6>
-                              </div>
+                              {(() => {
+                                // Get athletic projection and determine color
+                                // Check both camelCase and snake_case field names
+                                const projection =
+                                  (athlete as any).athleticProjection ||
+                                  ((athlete as any).athletic_projection as
+                                    | string
+                                    | null
+                                    | undefined);
+
+                                // Color mapping based on athletic projection (higher = greener)
+                                // Map projections to colors: FBS P4 (best) = green, D3 Walk-on (lowest) = red
+                                const projectionColorMap: Record<
+                                  string,
+                                  string
+                                > = {
+                                  "FBS P4 - Top half": "#22C55E", // Dark green (best)
+                                  "FBS P4": "#4ADE80", // Green
+                                  "FBS G5 - Top half": "#86EFAC", // Light green
+                                  "FBS G5": "#BEF264", // Yellow-green
+                                  "FCS - Full Scholarship": "#FDE047", // Yellow
+                                  FCS: "#FCD34D", // Yellow
+                                  "D2 - Top half": "#FBBF24", // Orange-yellow
+                                  D2: "#FB923C", // Orange-red
+                                  "D3 - Top half": "#F87171", // Darker red
+                                  D3: "#FCA5A5", // Red
+                                  "D3 Walk-on": "#9CA3AF", // Gray (lowest)
+                                };
+
+                                const backgroundColor = projection
+                                  ? projectionColorMap[projection] || "#9CA3AF"
+                                  : "#9CA3AF"; // Gray for null/undefined
+
+                                // Higher z-index for green markers (best projections)
+                                const isGreenMarker =
+                                  backgroundColor === "#22C55E" ||
+                                  backgroundColor === "#4ADE80" ||
+                                  backgroundColor === "#86EFAC";
+                                const dotZIndex = isGreenMarker ? 1002 : 1000;
+                                const iconZIndex = isGreenMarker ? 1003 : 1001;
+
+                                return (
+                                  <div
+                                    className="flex items-center justify-start gap-1 border-[4px] border-solid border-[#1C1D4D] rounded-full pr-2 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative"
+                                    style={{
+                                      minWidth: "max-content",
+                                      height: "32px",
+                                      paddingRight: "8px",
+                                      backgroundColor,
+                                    }}
+                                  >
+                                    {/* Dot behind the athlete icon */}
+                                    <div
+                                      className="absolute flex items-center justify-center"
+                                      style={{
+                                        left: "-3px",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        width: "28px",
+                                        height: "28px",
+                                        zIndex: dotZIndex,
+                                      }}
+                                    >
+                                      <img
+                                        src="/svgicons/map-dot.svg"
+                                        alt=""
+                                        style={{
+                                          width: "28px",
+                                          height: "28px",
+                                        }}
+                                      />
+                                    </div>
+                                    <div
+                                      className="flex items-center justify-center absolute border-[4px] border-solid border-[#1C1D4D] rounded-full overflow-hidden flex-shrink-0"
+                                      style={{
+                                        left: "-3px",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        width: "24px",
+                                        height: "24px",
+                                        zIndex: iconZIndex,
+                                      }}
+                                    >
+                                      <img
+                                        src={
+                                          athlete.image_url || "/blank-user.svg"
+                                        }
+                                        alt="Athlete"
+                                        className="w-full h-full object-cover rounded-full"
+                                      />
+                                    </div>
+                                    <h6
+                                      className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap"
+                                      style={{
+                                        width: "130px",
+                                        marginLeft: "26px",
+                                      }}
+                                    >
+                                      <span className="truncate block">
+                                        {athlete.athlete_name || ""}
+                                      </span>
+                                    </h6>
+                                  </div>
+                                );
+                              })()}
                             </Popover>
                           </OverlayViewF>
                         </Fragment>
@@ -5004,173 +6058,166 @@ export function TableSearchContent({
             </div>
           )}
 
-          {dataSource === "high_schools" && highSchoolViewMode === "map" && (
-            <div className="absolute bottom-[0] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
+          {/* Combined Road Plan Panel - shows when in map view for either data source */}
+          {((dataSource === "high_schools" && highSchoolViewMode === "map") ||
+            (dataSource === "hs_athletes" && hsAthleteViewMode === "map")) && (
+            <div
+              className="absolute bottom-[0] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3"
+              style={{ zIndex: 1001 }}
+            >
               <div className="flex flex-row justify-between items-center max-w-full">
                 <div className="flex-1 flex flex-col items-start overflow-hidden">
-                  <h4>Road Map</h4>
+                  <h4>Road Plan</h4>
                   <div className="flex-1 flex flex-wrap gap-2 min-h-[36px] overflow-x-auto">
-                    {selectedHighSchools.length === 0 ? (
+                    {roadMapSelectedHighSchools.length === 0 &&
+                    roadMapSelectedAthletes.length === 0 ? (
                       <span className="text-gray-400 italic">
-                        No schools selected
+                        No items selected
                       </span>
                     ) : (
-                      selectedHighSchools.map((school, index) => {
-                        const schoolId = String((school as any).id || index);
-                        return (
-                          <div key={schoolId} className="">
-                            <div
-                              className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
-                              style={{ minWidth: "max-content" }}
-                            >
-                              <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
-                                <img
-                                  src="/blank-hs.svg"
-                                  alt="School"
-                                  className="w-full h-full object-contain p-1"
-                                />
-                              </div>
-                              <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
-                                <span className="block w-full truncate max-w-[150px]">
-                                  {school.school || ""}
-                                </span>
-                              </h6>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveSchool(schoolId);
-                                }}
-                                className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
-                                title="Remove from road plan"
-                                aria-label="Remove school from road plan"
+                      <>
+                        {/* High Schools */}
+                        {roadMapSelectedHighSchools.map((school, index) => {
+                          const schoolId = String((school as any).id || index);
+                          return (
+                            <div key={`hs-${schoolId}`} className="">
+                              <div
+                                className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
+                                style={{ minWidth: "max-content" }}
                               >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  className="w-5 h-5"
-                                  style={{
-                                    fill: "white",
-                                    stroke: "white",
-                                    strokeWidth: 0,
-                                  }}
-                                >
-                                  <path
-                                    d="M6 18L18 6M6 6l12 12"
-                                    stroke="white"
-                                    strokeWidth="3.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    fill="none"
+                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                  <img
+                                    src="/blank-hs.svg"
+                                    alt="School"
+                                    className="w-full h-full object-contain p-1"
                                   />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end mr-10">
-                  <Button
-                    type="primary"
-                    onClick={() => router.push("/road-planner")}
-                    disabled={selectedHighSchools.length === 0}
-                  >
-                    Map{" "}
-                    {selectedHighSchools.length > 0 &&
-                      `(${selectedHighSchools.length})`}
-                  </Button>
-
-                  {selectedHighSchools.length > 0 && (
-                    <Button
-                      type="link"
-                      className="text-[16px] italic underline !text-[#126DB8] font-medium"
-                      onClick={clearAllSelections}
-                    >
-                      Clear All
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          {dataSource === "hs_athletes" && hsAthleteViewMode === "map" && (
-            <div className="absolute bottom-[0] left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
-              <div className="flex flex-row justify-between items-center max-w-full">
-                <div className="flex-1 flex flex-col items-start overflow-hidden">
-                  <h4>Road Map</h4>
-                  <div className="flex-1 flex flex-wrap gap-2 min-h-[36px] overflow-x-auto">
-                    {selectedAthletes.length === 0 ? (
-                      <span className="text-gray-400 italic">
-                        No athletes selected
-                      </span>
-                    ) : (
-                      selectedAthletes.map((athlete, index) => {
-                        const athleteId = String(athlete.id || index);
-                        return (
-                          <div key={athleteId} className="">
-                            <div
-                              className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
-                              style={{ minWidth: "max-content" }}
-                            >
-                              <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
-                                <img
-                                  src={athlete.image_url || "/blank-user.svg"}
-                                  alt="Athlete"
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                              <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
-                                <span className="block w-full truncate max-w-[150px]">
-                                  {athlete.athlete_name || ""}
-                                </span>
-                              </h6>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveAthlete(athleteId);
-                                }}
-                                className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
-                                title="Remove from road plan"
-                                aria-label="Remove athlete from road plan"
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  className="w-5 h-5"
-                                  style={{
-                                    fill: "white",
-                                    stroke: "white",
-                                    strokeWidth: 0,
+                                </div>
+                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
+                                  <span className="block w-full truncate max-w-[150px]">
+                                    {school.school || ""}
+                                  </span>
+                                </h6>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveSchool(schoolId);
                                   }}
+                                  className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                  title="Remove from road plan"
+                                  aria-label="Remove school from road plan"
                                 >
-                                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                                </svg>
-                              </button>
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    className="w-5 h-5"
+                                    style={{
+                                      fill: "white",
+                                      stroke: "white",
+                                      strokeWidth: 0,
+                                    }}
+                                  >
+                                    <path
+                                      d="M6 18L18 6M6 6l12 12"
+                                      stroke="white"
+                                      strokeWidth="3.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      fill="none"
+                                    />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })}
+                        {/* Athletes */}
+                        {roadMapSelectedAthletes.map((athlete, index) => {
+                          const athleteId = String(athlete.id || index);
+                          return (
+                            <div key={`athlete-${athleteId}`} className="">
+                              <div
+                                className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
+                                style={{ minWidth: "max-content" }}
+                              >
+                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                  <img
+                                    src={athlete.image_url || "/blank-user.svg"}
+                                    alt="Athlete"
+                                    className="w-full h-full object-cover rounded-full"
+                                  />
+                                </div>
+                                <h6 className="flex flex-col text-white items-start justify-start mb-0 !text-[12px] !font-semibold !leading-1">
+                                  <span className="block w-full truncate max-w-[150px]">
+                                    {athlete.athlete_name || ""}
+                                  </span>
+                                </h6>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveAthlete(athleteId);
+                                  }}
+                                  className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                  title="Remove from road plan"
+                                  aria-label="Remove athlete from road plan"
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    className="w-5 h-5"
+                                    style={{
+                                      fill: "white",
+                                      stroke: "white",
+                                      strokeWidth: 0,
+                                    }}
+                                  >
+                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 </div>
                 <div className="flex flex-col items-end mr-10">
                   <Button
                     type="primary"
-                    onClick={() => router.push("/road-planner")}
-                    disabled={selectedAthletes.length === 0}
+                    onClick={async () => {
+                      await saveCombinedToLocalStorage();
+                      // Determine dataSource based on what's selected, default to high_schools if both or neither
+                      const hasSchools = roadMapSelectedHighSchools.length > 0;
+                      const hasAthletes = roadMapSelectedAthletes.length > 0;
+                      const dataSourceParam =
+                        hasAthletes && !hasSchools
+                          ? "hs_athletes"
+                          : "high_schools";
+                      router.push(
+                        `/road-planner/map?dataSource=${dataSourceParam}`
+                      );
+                    }}
+                    disabled={
+                      roadMapSelectedHighSchools.length === 0 &&
+                      roadMapSelectedAthletes.length === 0
+                    }
                   >
                     Map{" "}
-                    {selectedAthletes.length > 0 &&
-                      `(${selectedAthletes.length})`}
+                    {roadMapSelectedHighSchools.length +
+                      roadMapSelectedAthletes.length >
+                      0 &&
+                      `(${
+                        roadMapSelectedHighSchools.length +
+                        roadMapSelectedAthletes.length
+                      })`}
                   </Button>
 
-                  {selectedAthletes.length > 0 && (
+                  {(roadMapSelectedHighSchools.length > 0 ||
+                    roadMapSelectedAthletes.length > 0) && (
                     <Button
                       type="link"
                       className="text-[16px] italic underline !text-[#126DB8] font-medium"
-                      onClick={clearAllAthleteSelections}
+                      onClick={clearAllRoadPlanSelections}
                     >
                       Clear All
                     </Button>
@@ -5301,6 +6348,7 @@ export function TableSearchContent({
         destroyOnHidden={true}
         closable={true}
         maskClosable={true}
+        zIndex={10000}
       >
         {selectedPlayerId ? (
           <div style={{ height: "100%", overflow: "auto" }}>
@@ -5337,6 +6385,7 @@ export function TableSearchContent({
                     | "hs_athletes"
                     | null
                 }
+                onClose={handleClosePlayerModal}
               />
             ) : (
               <AthleteProfileContent
@@ -5352,6 +6401,7 @@ export function TableSearchContent({
                     | "hs_athletes"
                     | null
                 }
+                onClose={handleClosePlayerModal}
               />
             )}
           </div>
@@ -5381,6 +6431,7 @@ export function TableSearchContent({
         destroyOnHidden={true}
         closable={true}
         maskClosable={true}
+        zIndex={10000}
       >
         <button className="close" onClick={handleCloseSchoolModal}></button>
         {selectedSchoolId ? (

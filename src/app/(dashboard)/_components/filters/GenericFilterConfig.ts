@@ -20,7 +20,7 @@ export type DataSourceType = 'transfer_portal' | 'all_athletes' | 'juco' | 'high
 
 export const FILTER_VISIBILITY_CONFIG = {
   juco: ['position', 'year', 'conference', 'schools', 'stats', 'location','juco-athletic-association', 'juco-region', 'juco-division'] as string[],
-  transfer_portal: ['position', 'division', 'year', 'height', 'weight', 'location', 'schools', 'conference', 'stats', 'athletic_aid', 'status', 'date_entered', 'survey_completed', 'honors', 'designated_student_athlete'] as string[],
+  transfer_portal: ['position', 'division', 'year', 'height', 'weight', 'location', 'schools', 'conference', 'stats', 'verified-rating', 'athletic_aid', 'status', 'date_entered', 'survey_completed', 'grad_student', 'honors', 'designated_student_athlete'] as string[],
   recruiting_board: ['position', 'division', 'year', 'height', 'weight', 'schools', 'conference', 'athletic_aid', 'status', 'date_entered', 'survey_completed'] as string[],
   all_athletes: ['position', 'division', 'year', 'height', 'weight', 'location', 'schools', 'conference',  'stats', 'transfer-odds', 'status', 'honors'] as string[],
   high_schools: ['location', 'hs-school-type', 'hs-prospects-score', 'hs-d1-prospects-score', 'hs-team-quality-score', 'hs-athlete-income-score', 'hs-academics-score', 'hs-religious-affiliation'] as string[],
@@ -423,6 +423,23 @@ export const createGenericFilterConfig = (dataSource: DataSourceType, sportAbbre
       ]
     },
     {
+      key: "verified-rating",
+      title: "Verified Rating",
+      collapsible: true,
+      defaultExpanded: false,
+      fields: [
+        {
+          key: "verified_rating",
+          label: "Verified Rating",
+          type: "min-max-range" as const,
+          placeholder: "Enter verified rating range",
+          min: 50,
+          max: 100,
+          step: 0.1
+        }
+      ]
+    },
+    {
       key: "athletic_aid", // Athletic Aid
       title: "Athletic Aid",
       collapsible: true,
@@ -488,6 +505,24 @@ export const createGenericFilterConfig = (dataSource: DataSourceType, sportAbbre
           label: "Survey Completed",
           type: "multiselect" as const,
           placeholder: "Select survey completion status",
+          options: [
+            { value: true, label: 'Yes' },
+            { value: false, label: 'No' }
+          ]
+        }
+      ]
+    },
+    {
+      key: "grad_student", // Grad Student
+      title: "Grad Student",
+      collapsible: true,
+      defaultExpanded: false,
+      fields: [
+        {
+          key: "gradStudent",
+          label: "Grad Student",
+          type: "multiselect" as const,
+          placeholder: "Select grad student status",
           options: [
             { value: true, label: 'Yes' },
             { value: false, label: 'No' }
@@ -883,6 +918,16 @@ export const createGenericFilterConfig = (dataSource: DataSourceType, sportAbbre
           label: "Offer Count",
           type: "offer-count" as const,
           placeholder: "Select category and enter count range"
+        },
+        {
+          key: "commit_school",
+          label: "Commit School",
+          type: "multiselect" as const,
+          placeholder: "Select commit schools",
+          options: [], // Will be populated dynamically
+          showSearch: true,
+          filterOption: (input: string, option?: { label: string; value: string }) =>
+            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
         }
       ]
     },

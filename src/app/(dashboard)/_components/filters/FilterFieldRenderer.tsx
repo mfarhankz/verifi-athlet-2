@@ -153,8 +153,8 @@ function MinMaxRangeField({ value, onChange, disabled, field }: MinMaxRangeField
   }, [value]);
 
   const comparisonOptions = [
-    { value: 'min', label: 'At Least' },
-    { value: 'max', label: 'At Most' },
+    { value: 'min', label: 'Min' },
+    { value: 'max', label: 'Max' },
     { value: 'between', label: 'Between' }
   ];
 
@@ -511,8 +511,8 @@ interface HeightFieldProps {
 
 function HeightField({ value, onChange, disabled }: HeightFieldProps) {
   const comparisonOptions = [
-    { value: 'min', label: 'At Least' },
-    { value: 'max', label: 'At Most' },
+    { value: 'min', label: 'Min' },
+    { value: 'max', label: 'Max' },
     { value: 'between', label: 'Between' }
   ];
 
@@ -614,8 +614,8 @@ interface WeightFieldProps {
 
 function WeightField({ value, onChange, disabled }: WeightFieldProps) {
   const comparisonOptions = [
-    { value: 'min', label: 'At Least' },
-    { value: 'max', label: 'At Most' },
+    { value: 'min', label: 'Min' },
+    { value: 'max', label: 'Max' },
     { value: 'between', label: 'Between' }
   ];
 

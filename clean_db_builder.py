@@ -18,18 +18,18 @@ CREATE_SOURCE_INDEXES = False
 
 # Materialized Views to build (in dependency order)
 BUILD_MVS = {
-    "latest_athlete_facts": True,
-    "mv_school_fact_wide": True,  # Must come before athlete_stat_wide
-    "mv_athlete_fact_wide": True,
-    "mv_athlete_stat_wide": True,  # Depends on mv_school_fact_wide
-    "mv_athlete_honor_best": True,
-    "mv_athlete_commit": True,
-    "mv_athlete_sign": True,
-    "mv_tp_athletes_wide": True,
-    "mv_college_athletes_wide": True,
-    "mv_hs_athletes_wide": True,
-    "mv_juco_athletes_wide": True,
-    "mv_activity_feed": True,
+    "latest_athlete_facts": False,
+    "mv_school_fact_wide": False,  # Must come before athlete_stat_wide
+    "mv_athlete_fact_wide": False,
+    "mv_athlete_stat_wide": False,  # Depends on mv_school_fact_wide
+    "mv_athlete_honor_best": False,
+    "mv_athlete_commit": False,
+    "mv_athlete_sign": False,
+    "mv_tp_athletes_wide": False,
+    "mv_college_athletes_wide": False,
+    "mv_hs_athletes_wide": False,
+    "mv_juco_athletes_wide": False,
+    "mv_activity_feed": False,
 }
 
 # Starting point for MV operations (skip MVs before this one)
@@ -38,10 +38,10 @@ START_FROM_MV = None  # e.g., "mv_activity_feed" to only rebuild that one
 
 # Views to build
 BUILD_VIEWS = {
-    "public_views": True,      # Sport-specific public views (vw_tp_athletes_wide_*, etc.)
-    "admin_views": True,       # Admin views (vw_admin_*)
+    "public_views": True,  # Sport-specific public views (vw_tp_athletes_wide_*, etc.)
+    "admin_views": True,  # Admin views (vw_admin_*)
     "high_school_view": True,  # vw_high_school
-    "pub_fb_hs_athlete": True, # vw_pub_fb_hs_athlete
+    "pub_fb_hs_athlete": True,  # vw_pub_fb_hs_athlete
 }
 
 # Athlete fact mapping
@@ -53,6 +53,7 @@ athlete_fact_mapping = {
     65: "faith_based_school", 634: 'track_wrestling_profile', 635: 'wrestle_stat_link',
     639: 'stats_url', 308: 'roster_year', 690: 'utr_link', 720: 'long_jump',
     698: 'college_career_score', 699: 'hs_career_score', 700: 'football_career_score',
+    698: 'college_career_score', 699: 'hs_career_score', 700: 'football_career_score',
     701: 'predicted_transfer_destination', 702: 'transfer_odds', 703: 'up_predictions',
     704: 'down_predictions', 705: 'flat_predictions', 706: 'risk_category', 707: 'pred_direction',
     729: 'rivals_rating', 739: 'shot_put', 761: 'forty', 762: 'shuttle', 763: 'three_cone',
@@ -61,7 +62,13 @@ athlete_fact_mapping = {
     1048: 'hs_coach_hide', 1059: 'best_offer', 1062: 'income', 1097: 'added_date',
     1098: 'last_major_change', 1065: 'on3_consensus_rating', 1073: 'on3_rating',
     1080: '_247_rating', 1087: 'espn_rating', 1064: 'on3_consensus_stars',
-    1072: 'on3_stars', 1079: '_247_stars', 1086: 'espn_stars'
+    1072: 'on3_stars', 1079: '_247_stars', 1086: 'espn_stars', 571: 'athlete_email',
+    14: 'instagram', 21: 'bio', 114: 'award', 121: 'birthday', 248: 'athlete_address_zip', 247: 'athlete_address_city',
+    246: 'athlete_address_street', 685: 'transcript_link', 964: 'mile_split_link', 1014: 'all_position',
+    1016: '_247_link', 1017: 'on3_link', 1019: 'zillow_address', 1021: 'parent_name',
+    1022: 'parent_email', 1023: 'parent_phone', 1033: 'captain', 1049: 'hs_coach_remove_reason',
+    1093: 'transcript_checked', 1096: 'athlete_original_source', 1106: 'hide_athlete',
+    1108: 'hs_coach_rating', 27: 'athlete_cell', 1058: 'hs_ncaa_id'
 }
 
 afw_numeric_fields = {
@@ -81,7 +88,10 @@ school_fact_mapping = {
     649: "juco_division", 982: 'juco_has_football', 960: 'academics',
     696: "hc_name", 255: "hc_email", 907: "address_latitude", 908: "address_longitude",
     256: "hc_number", 961: "affiliation", 928: "private_public", 956: "college_player_producing",
-    957: "d1_player_producing", 958: "team_quality", 959: "athlete_income", 966: "county_id"
+    957: "d1_player_producing", 958: "team_quality", 959: "athlete_income", 966: "county_id",
+    246: "address_street", 13: "hc_twitter", 932: "ad_name_first", 933: "ad_name_last",
+    934: "ad_email", 950: "max_prep_link", 962: "hc_update_date", 954: "coach_signed_up",
+    926: "visit_info", 969: "best_phone", 970: "best_contact"
 }
 
 sfw_numeric_fields = {
@@ -92,21 +102,25 @@ sfw_numeric_fields = {
 ALLOWED_JUCO_SUFFIXES = {"wsoc", "msoc", "wvol", "wbb", "bsb"}
 
 standard_redacted_columns = [
-    "ncaa_id", "last_updated", "m_year", "m_division", "m_sport", "m_conference", "m_link", "sport_id",
-    "athlete_first_name", "athlete_last_name", "athlete_knack_id", "athlete_created_at", "details_id",
-    "ok_to_contact", "is_transfer_graduate_student", "is_receiving_athletic_aid", "is_recruited",
-    "details_commit", "db_update", "expected_grad_date", "is_four_year_transfer", "athlete_survey_sent",
-    "is_aid_cancelled", "comments", "details_link", "email", "year", "primary_position", "height_feet",
-    "height_inch", "weight", "high_school", "previous_schools", "major", "twitter", "club", "hand",
-    "image_url", "address_state", "elig_remaining", "gpa", "highlight", "summer_league", "survey_completed",
-    "gp", "height", "gs", "best_honor", "faith_based_school", "school_type", "athletic_association", "sub_division",
-    "commit_school_id", "commit_school_name", "commit_date", "sign_school_id", "sign_school_name",
-    'utr_link', 'long_jump', 'college_career_score', 'hs_career_score', 'football_career_score',
-    'predicted_transfer_destination', 'transfer_odds', 'up_predictions', 'down_predictions', 'flat_predictions',
-    'risk_category', 'pred_direction', 'rivals_rating', 'shot_put', 'forty', 'shuttle', 'three_cone',
-    'broad_jump', 'vert_jump', 'roster_link', 'grad_year', 'sat', 'act', 'gpa_type', 'best_offer', 'income',
-    'income_category', 'added_date', 'last_major_change', 'on3_consensus_rating', 'on3_rating', '_247_rating',
-    'espn_rating', 'on3_consensus_stars', 'on3_stars', '_247_stars', 'espn_stars'
+   "ncaa_id", "last_updated", "m_year", "m_division", "m_sport", "m_conference", "m_link", "sport_id",
+   "athlete_first_name", "athlete_last_name", "athlete_knack_id", "athlete_created_at", "details_id",
+   "ok_to_contact", "is_transfer_graduate_student", "is_receiving_athletic_aid", "is_recruited",
+   "details_commit", "db_update", "expected_grad_date", "is_four_year_transfer", "athlete_survey_sent",
+   "is_aid_cancelled", "comments", "details_link", "email", "year", "primary_position", "height_feet",
+   "height_inch", "weight", "high_school", "previous_schools", "major", "twitter", "club", "hand",
+   "image_url", "address_state", "elig_remaining", "gpa", "highlight", "summer_league", "survey_completed",
+   "gp", "height", "gs", "best_honor", "faith_based_school", "school_type", "athletic_association", "sub_division",
+   "commit_school_id", "commit_school_name", "commit_date", "sign_school_id", "sign_school_name",
+   'utr_link', 'long_jump', 'college_career_score', 'hs_career_score', 'football_career_score',
+   'predicted_transfer_destination', 'transfer_odds', 'up_predictions', 'down_predictions', 'flat_predictions',
+   'risk_category', 'pred_direction', 'rivals_rating', 'shot_put', 'forty', 'shuttle', 'three_cone',
+   'broad_jump', 'vert_jump', 'roster_link', 'grad_year', 'sat', 'act', 'gpa_type', 'best_offer', 'income',
+   'income_category', 'added_date', 'last_major_change', 'on3_consensus_rating', 'on3_rating', '_247_rating',
+   'espn_rating', 'on3_consensus_stars', 'on3_stars', '_247_stars', 'espn_stars', 'athlete_email', 'instagram', 'bio',
+    'award', 'birthday', 'athlete_address_zip', 'athlete_address_city', 'athlete_address_street', 'transcript_link',
+    'mile_split_link', 'all_position', '_247_link', 'on3_link', 'zillow_address', 'parent_name', 'parent_email', 'parent_phone',
+    'captain', 'hs_coach_remove_reason', 'transcript_checked', 'athlete_original_source', 'hide_athlete', 'hs_coach_rating',
+    'athlete_cell', 'hs_ncaa_id', 'gp_prev'
 ]
 
 view_configs = [
@@ -241,7 +255,9 @@ view_configs = [
         "full_access_package_ids": [23, 24, 84, 26],
         "redacted_columns": [
             "gs", "goals", "assists", "points", "sh_att", "sog", "gb", "ct", "fo_won", "fos_taken", "g_min_played",
-            "ga", "saves", "sv_pct", "to", "re", "ms", "s_pct", "kps", "dps", "verified_rating"
+            "ga", "saves", "sv_pct", "to", "re", "ms", "s_pct", "kps", "dps", "verified_rating", "sets", "kills", "err",
+            "attacks", "hit_pct", "aces", "s_err", "digs", "blk_solo", "blk_assist", "b_err", "trp_dbl",
+            "bhe", "r_err", "ret_att"
         ]
     },
     {
@@ -679,10 +695,24 @@ def create_materialized_views():
         FROM stat s
         JOIN season_pref sp ON sp.athlete_id = s.athlete_id AND sp.season = s.season
         WHERE s.game_id IS NULL
+    ),
+    prev_season_gp AS (
+        SELECT DISTINCT ON (s.athlete_id) s.athlete_id, s.value AS gp_prev
+        FROM stat s
+        JOIN season_pref sp ON sp.athlete_id = s.athlete_id AND s.season = sp.season - 1
+        WHERE s.game_id IS NULL AND s.data_type_id = 98
+        ORDER BY s.athlete_id, s.created_at DESC
+    ),
+    pivoted_stats AS (
+        SELECT athlete_id, {build_case_lines(athlete_stat_mapping)}
+        FROM latest_stat
+        GROUP BY athlete_id
     )
-    SELECT athlete_id, {build_case_lines(athlete_stat_mapping)}
-    FROM latest_stat
-    GROUP BY athlete_id
+    SELECT 
+        ps.*,
+        psg.gp_prev
+    FROM pivoted_stats ps
+    LEFT JOIN prev_season_gp psg ON psg.athlete_id = ps.athlete_id
     WITH DATA;
     """
 
@@ -787,6 +817,7 @@ def create_materialized_views():
     afw_block = ",\n        ".join(afw_lines)
 
     asw_lines = [build_cast_line("asw", col) for col in athlete_stat_mapping.values()]
+    asw_lines.append(build_cast_line("asw", "gp_prev"))
     asw_lines += [
         "(CAST(asw.p_bb AS NUMERIC) + CAST(asw.p_h AS NUMERIC)) / NULLIF(CAST(c.ip_decimal AS NUMERIC), 0) AS whip",
         "CAST(asw.ob_pct AS NUMERIC) + CAST(asw.slg_pct AS NUMERIC) AS ops",
@@ -805,6 +836,7 @@ def create_materialized_views():
         "(CAST(asw.blk AS NUMERIC) / NULLIF(CAST(asw.gp AS NUMERIC),0)) AS blk_pg",
         "(CAST(asw.kills AS NUMERIC) / NULLIF(CAST(asw.sets AS NUMERIC),0)) AS kps",
         "(CAST(asw.digs AS NUMERIC) / NULLIF(CAST(asw.sets AS NUMERIC),0)) AS dps",
+        "(CAST(asw.points AS NUMERIC) / NULLIF(CAST(asw.sets AS NUMERIC),0)) AS pps",
     ]
     asw_block = ",\n        ".join(asw_lines)
 
@@ -1272,7 +1304,7 @@ def create_materialized_views():
         FROM (SELECT 1) AS dummy
     ) agg ON TRUE
     WHERE scw.school_type ILIKE ANY(ARRAY['high school', 'junior college'])
-      {HIDE_PREDICATE}
+    {HIDE_PREDICATE}
     WITH DATA;
     """
 
@@ -1997,7 +2029,9 @@ WHERE t.sport_id = {sport_id} AND EXISTS (
             }
 
     # ===== JUCO VIEW (unchanged behavior if applicable) =====
-    if suffix in ALLOWED_JUCO_SUFFIXES and juco_pkg is not None:
+    if suffix in ALLOWED_JUCO_SUFFIXES and (juco_pkg is not None or ultra_pkg is not None):
+        # Build package list including both juco_pkg and ultra_pkg
+        juco_pkg_list = ", ".join(str(p) for p in [p for p in [juco_pkg, ultra_pkg] if p is not None])
         views[f"vw_juco_athletes_wide_{suffix}"] = {
             "drop": "",
             "create": f"""CREATE OR REPLACE VIEW public.vw_juco_athletes_wide_{suffix} AS
@@ -2005,7 +2039,7 @@ SELECT t.* FROM intermediate.mv_juco_athletes_wide t  -- ← pointer
 WHERE t.sport_id = {sport_id} AND EXISTS (
     SELECT 1 FROM public.user_package_access upa
     WHERE upa.user_id = auth.uid() 
-      AND upa.customer_package_id IN ({juco_pkg})
+      AND upa.customer_package_id IN ({juco_pkg_list})
 );"""
         }
 
@@ -2376,19 +2410,19 @@ def main():
         # Step 3: Create views (based on BUILD_VIEWS configuration)
         if any(BUILD_VIEWS.values()):
             safe_print(f"\n[STEP {step_num}] Creating views...")
-            
+
             if BUILD_VIEWS.get("public_views", False):
                 safe_print("[VIEWS] Creating public views...")
                 create_public_views()
-            
+
             if BUILD_VIEWS.get("admin_views", False):
                 safe_print("[VIEWS] Creating admin views...")
                 create_admin_views()
-            
+
             if BUILD_VIEWS.get("high_school_view", False):
                 safe_print("[VIEWS] Creating high school view...")
                 create_high_school_view()
-            
+
             if BUILD_VIEWS.get("pub_fb_hs_athlete", False):
                 safe_print("[VIEWS] Creating public FB HS athlete view...")
                 create_pub_fb_hs_athlete_view()

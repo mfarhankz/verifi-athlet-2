@@ -36,11 +36,13 @@ export default function GenericFilters({
   const [config, setConfig] = useState(() => createGenericFilterConfig(dataSource, activeSportAbbrev || undefined));
   const [positions, setPositions] = useState<{ name: string; order: number; other_filter: boolean; include_filter: string | null }[]>([]);
   const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
+  const [commitSchools, setCommitSchools] = useState<{ id: string; name: string }[]>([]);
   const [conferences, setConferences] = useState<string[]>([]);
   const [graduationYears, setGraduationYears] = useState<string[]>([]);
   const [religiousAffiliations, setReligiousAffiliations] = useState<string[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const [commitSchoolsLoading, setCommitSchoolsLoading] = useState(false);
   const [conferencesLoading, setConferencesLoading] = useState(false);
 
   // Helper function to check if Transfer Odds filter should be shown
@@ -68,6 +70,25 @@ export default function GenericFilters({
     
     // Show for: football non-NAIA teams OR non-football NAIA teams
     return (isFootball && !hasNaiaPackage) || (!isFootball && hasNaiaPackage);
+  };
+
+  // Helper function to check if Verified Rating filter should be shown
+  const shouldShowVerifiedRatingFilter = () => {
+    // Only show for transfer_portal data source
+    if (dataSource !== 'transfer_portal') {
+      return false;
+    }
+    
+    // Check if sport abbreviation is available
+    if (!activeSportAbbrev) {
+      return false;
+    }
+    
+    const sportAbbrev = activeSportAbbrev.toLowerCase();
+    
+    // Show only for: msoc, wsoc, wbb, mbb, wvol
+    const allowedSports = ['msoc', 'wsoc', 'wbb', 'mbb', 'wvol'];
+    return allowedSports.includes(sportAbbrev);
   };
 
   // Update config when dataSource or sportAbbrev changes
@@ -209,6 +230,27 @@ export default function GenericFilters({
     return () => clearTimeout(timeoutId);
   }, [dataSource]);
 
+  // Load commit schools (colleges) when dataSource is hs_athletes
+  useEffect(() => {
+    if (dataSource !== 'hs_athletes') return;
+    
+    const loadCommitSchools = async () => {
+      setCommitSchoolsLoading(true);
+      try {
+        // Fetch colleges (D1, D2, D3, NAIA)
+        const collegesData = await fetchSchoolsByMultipleDivisions(['D1', 'D2', 'D3', 'NAIA'] as any);
+        setCommitSchools(collegesData || []);
+      } catch (error) {
+        console.error('Error loading commit schools:', error);
+        setCommitSchools([]);
+      } finally {
+        setCommitSchoolsLoading(false);
+      }
+    };
+
+    loadCommitSchools();
+  }, [dataSource]);
+
   // Update config with dynamic data
   useEffect(() => {
     const updatedConfig = { ...config };
@@ -220,6 +262,16 @@ export default function GenericFilters({
       if (!shouldShow) {
         // Remove transfer_odds section if it shouldn't be shown
         updatedConfig.sections = updatedConfig.sections.filter(s => s.key !== 'transfer-odds');
+      }
+    }
+    
+    // Conditionally show/hide verified_rating filter based on sport
+    const verifiedRatingSection = updatedConfig.sections.find(s => s.key === 'verified-rating');
+    if (verifiedRatingSection) {
+      const shouldShow = shouldShowVerifiedRatingFilter();
+      if (!shouldShow) {
+        // Remove verified-rating section if it shouldn't be shown
+        updatedConfig.sections = updatedConfig.sections.filter(s => s.key !== 'verified-rating');
       }
     }
     
@@ -290,8 +342,23 @@ export default function GenericFilters({
       }
     }
 
+    // Update commit school options and disable based on package (inside offer-commit section)
+    const offerCommitSection = updatedConfig.sections.find(s => s.key === 'offer-commit');
+    if (offerCommitSection && dataSource === 'hs_athletes') {
+      const commitSchoolField = offerCommitSection.fields.find(f => f.key === 'commit_school');
+      if (commitSchoolField) {
+        commitSchoolField.options = commitSchools.map(school => ({ value: school.id, label: school.name }));
+        
+        // Check if user has packages 100, 101, or 105 - if so, disable the filter
+        const userPackageNumbers = (userDetails?.packages || []).map((pkg: string | number) => Number(pkg));
+        const restrictedPackages = [100, 101, 105];
+        const hasRestrictedPackage = userPackageNumbers.some(pkg => restrictedPackages.includes(pkg));
+        commitSchoolField.disabled = hasRestrictedPackage;
+      }
+    }
+
     setConfig(updatedConfig);
-  }, [positions, schools, conferences, graduationYears, religiousAffiliations, filterColumns, dataSource, userDetails, activeSportAbbrev]); // Added dependencies for NAIA logic
+  }, [positions, schools, commitSchools, conferences, graduationYears, religiousAffiliations, filterColumns, dataSource, userDetails, activeSportAbbrev]); // Added dependencies for NAIA logic
 
   // Auto-set default transfer odds filter when it should be shown (like in old system)
   useEffect(() => {
@@ -322,6 +389,7 @@ export default function GenericFilters({
       designatedStudentAthlete: filters.designatedStudentAthlete,
       dateRange: filters.dateRange,
       transfer_odds: filters.transfer_odds,
+      verified_rating: filters.verified_rating,
       // JUCO filters
       athleticAssociation: filters.athleticAssociation,
       jucoRegion: filters.jucoRegion,
@@ -345,6 +413,7 @@ export default function GenericFilters({
       committed: filters.committed,
       signed: filters.signed,
       offer_count: filters.offer_count,
+      commit_school: filters.commit_school,
       gpa: filters.gpa,
       gpa_type: filters.gpa_type,
       major: filters.major,

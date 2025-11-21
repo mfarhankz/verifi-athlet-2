@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Button, Table, Typography, Space, Input, message, Tooltip, Modal } from "antd";
+import type { TableProps } from "antd";
+import type { SortOrder } from "antd/es/table/interface";
 import { SearchOutlined, ExportOutlined, FilterOutlined } from "@ant-design/icons";
 import { ActivityFeedFilters } from "./_components/ActivityFeedFilters";
 import type { ActivityEvent, ActivityFeedFilterState } from "./types";
@@ -34,6 +36,8 @@ export default function ActivityFeed() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalCount, setTotalCount] = useState(0);
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | null>(null);
   
   // Modal state for player profile
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
@@ -86,7 +90,7 @@ export default function ActivityFeed() {
         
         if (userDetailsData?.customer_id) {
           setCustomerId(userDetailsData.customer_id);
-          const result = await fetchActivityFeedEvents(userDetailsData.customer_id, searchText);
+          const result = await fetchActivityFeedEvents(userDetailsData.customer_id, searchText, undefined, 1, 25, sortField, sortOrder);
           setEvents(result.data);
           setHasMore(result.hasMore);
           setTotalCount(result.totalCount);
@@ -111,20 +115,29 @@ export default function ActivityFeed() {
     loadData();
   }, []);
 
-  // Search effect - triggers database query when search text changes
+  // Search/filter/sort effect - triggers database query when search text, filters, or sorting changes
   useEffect(() => {
     if (!customerId) return;
     
-    // Don't search if searchText is empty and no filters are applied
-    if (!searchText && !currentFiltersRef.current) return;
+    // Don't search if searchText is empty and no filters are applied and no sorting is set
+    // But if sorting is set, we should still reload to apply the sort
+    if (!searchText && !currentFiltersRef.current && !sortField) return;
     
-    // console.log('Search effect triggered:', { searchText, currentFilters });
+    // console.log('Search effect triggered:', { searchText, currentFilters, sortField, sortOrder });
+    
+    // Check if this is a sort-only change (has existing data, no search, no filters)
+    const hasExistingData = events.length > 0;
+    const isSortOnlyChange = (sortField || sortOrder) && hasExistingData && !searchText && !currentFiltersRef.current;
     
     const performSearch = async () => {
       try {
-        setLoading(true);
-        // Clear events immediately when starting a new search/filter change
-        setEvents([]);
+        // Only show full loading if this is a search/filter change, not just a sort change
+        // For sort-only changes, don't show loading - just update data smoothly
+        if (!isSortOnlyChange) {
+          setLoading(true);
+          setEvents([]);
+        }
+        
         setCurrentPage(1);
         setHasMore(true);
         
@@ -155,7 +168,9 @@ export default function ActivityFeed() {
           searchText, 
           filterParams,
           1, // Reset to page 1 on search
-          25
+          25,
+          sortField,
+          sortOrder
         );
         setEvents(result.data);
         setHasMore(result.hasMore);
@@ -165,13 +180,20 @@ export default function ActivityFeed() {
         console.error('Error searching events:', error);
         message.error('Failed to search events');
       } finally {
-        setLoading(false);
+        if (!isSortOnlyChange) {
+          setLoading(false);
+        }
       }
     };
 
-    const timeoutId = setTimeout(performSearch, 300); // Debounce search
+    // Debounce search/filter changes, but not sort changes (immediate for sorting)
+    const isSortChange = sortField !== null || sortOrder !== null;
+    const timeoutId = isSortChange 
+      ? setTimeout(performSearch, 0) // Immediate for sorting
+      : setTimeout(performSearch, 300); // Debounce for search/filter
+    
     return () => clearTimeout(timeoutId);
-  }, [searchText, customerId, currentFilters]);
+  }, [searchText, customerId, currentFilters, sortField, sortOrder]);
 
 
   // Load more events for infinite scroll
@@ -209,10 +231,17 @@ export default function ActivityFeed() {
         searchText,
         filterParams,
         nextPage,
-        25
+        25,
+        sortField,
+        sortOrder
       );
       
-      setEvents(prevEvents => [...prevEvents, ...result.data]);
+      // Prevent duplicate rows by using a Map keyed by offer_id
+      setEvents(prevEvents => {
+        const existingIds = new Set(prevEvents.map(e => e.key));
+        const newEvents = result.data.filter(e => !existingIds.has(e.key));
+        return [...prevEvents, ...newEvents];
+      });
       setHasMore(result.hasMore);
       setCurrentPage(nextPage);
     } catch (error) {
@@ -221,7 +250,7 @@ export default function ActivityFeed() {
     } finally {
       setLoadingMore(false);
     }
-  }, [customerId, loadingMore, hasMore, currentPage, searchText]);
+  }, [customerId, loadingMore, hasMore, currentPage, searchText, sortField, sortOrder]);
 
   // Infinite scroll effect
   useEffect(() => {
@@ -284,7 +313,7 @@ export default function ActivityFeed() {
       setLoading(true);
       setCurrentFilters(null);
       
-      const result = await fetchActivityFeedEvents(customerId, searchText, undefined, 1, 25);
+      const result = await fetchActivityFeedEvents(customerId, searchText, undefined, 1, 25, sortField, sortOrder);
       setEvents(result.data);
       setHasMore(result.hasMore);
       setTotalCount(result.totalCount);
@@ -387,7 +416,7 @@ export default function ActivityFeed() {
   };
 
   // Fetch data function for CSV export
-  const fetchExportData = async (page: number, pageSize: number) => {
+  const fetchExportData = async (page: number, pageSize: number, sortField?: string | null, sortOrder?: 'ascend' | 'descend' | null) => {
     if (!customerId) {
       throw new Error('No customer found');
     }
@@ -419,7 +448,9 @@ export default function ActivityFeed() {
       searchText,
       filterParams,
       page,
-      pageSize
+      pageSize,
+      sortField,
+      sortOrder
     );
   };
 
@@ -446,6 +477,31 @@ export default function ActivityFeed() {
       event.offerCounts?.d2Naia || 0,
       event.offerCounts?.d3 || 0
     ];
+  };
+
+  // Handle table sorting
+  const handleTableChange: TableProps<ActivityEvent>['onChange'] = (pagination, filters, sorter) => {
+    // Handle sorting
+    if (Array.isArray(sorter)) {
+      // Multiple sorters (not used in this case)
+      const firstSorter = sorter[0];
+      if (firstSorter) {
+        setSortField(firstSorter.field as string);
+        setSortOrder(firstSorter.order as 'ascend' | 'descend' | null);
+      } else {
+        setSortField(null);
+        setSortOrder(null);
+      }
+    } else {
+      // Single sorter
+      if (sorter && sorter.field) {
+        setSortField(sorter.field as string);
+        setSortOrder(sorter.order as 'ascend' | 'descend' | null);
+      } else {
+        setSortField(null);
+        setSortOrder(null);
+      }
+    }
   };
 
   // Handle row click to open athlete profile
@@ -793,41 +849,53 @@ export default function ActivityFeed() {
     },
     {
       title: "Tot Off",
-      dataIndex: "offerCounts",
+      dataIndex: "totalOffers",
       key: "totalOffers",
-      render: (offerCounts: ActivityEvent['offerCounts']) => (
+      width: 70,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'] as SortOrder[],
+      render: (_: any, record: ActivityEvent) => (
         <span style={{ fontWeight: 600, color: "#1890ff" }}>
-          {offerCounts.totalOffers}
+          {record.offerCounts.totalOffers}
         </span>
       ),
     },
     {
       title: "P4",
-      dataIndex: "offerCounts",
+      dataIndex: "p4",
       key: "p4",
-      render: (offerCounts: ActivityEvent['offerCounts']) => (
-        <span style={{ color: offerCounts.p4 > 0 ? "#52c41a" : "#d9d9d9" }}>
-          {offerCounts.p4}
+      width: 60,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'] as SortOrder[],
+      render: (_: any, record: ActivityEvent) => (
+        <span style={{ color: record.offerCounts.p4 > 0 ? "#52c41a" : "#d9d9d9" }}>
+          {record.offerCounts.p4}
         </span>
       ),
     },
     {
       title: "G5",
-      dataIndex: "offerCounts",
+      dataIndex: "g5",
       key: "g5",
-      render: (offerCounts: ActivityEvent['offerCounts']) => (
-        <span style={{ color: offerCounts.g5 > 0 ? "#52c41a" : "#d9d9d9" }}>
-          {offerCounts.g5}
+      width: 60,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'] as SortOrder[],
+      render: (_: any, record: ActivityEvent) => (
+        <span style={{ color: record.offerCounts.g5 > 0 ? "#52c41a" : "#d9d9d9" }}>
+          {record.offerCounts.g5}
         </span>
       ),
     },
     {
       title: "FCS",
-      dataIndex: "offerCounts",
+      dataIndex: "fcs",
       key: "fcs",
-      render: (offerCounts: ActivityEvent['offerCounts']) => (
-        <span style={{ color: offerCounts.fcs > 0 ? "#52c41a" : "#d9d9d9" }}>
-          {offerCounts.fcs}
+      width: 60,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'] as SortOrder[],
+      render: (_: any, record: ActivityEvent) => (
+        <span style={{ color: record.offerCounts.fcs > 0 ? "#52c41a" : "#d9d9d9" }}>
+          {record.offerCounts.fcs}
         </span>
       ),
     },
@@ -838,21 +906,27 @@ export default function ActivityFeed() {
           <div>NAIA</div>
         </div>
       ),
-      dataIndex: "offerCounts",
+      dataIndex: "d2Naia",
       key: "d2Naia",
-      render: (offerCounts: ActivityEvent['offerCounts']) => (
-        <span style={{ color: offerCounts.d2Naia > 0 ? "#52c41a" : "#d9d9d9" }}>
-          {offerCounts.d2Naia}
+      width: 70,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'] as SortOrder[],
+      render: (_: any, record: ActivityEvent) => (
+        <span style={{ color: record.offerCounts.d2Naia > 0 ? "#52c41a" : "#d9d9d9" }}>
+          {record.offerCounts.d2Naia}
         </span>
       ),
     },
     {
       title: "D3",
-      dataIndex: "offerCounts",
+      dataIndex: "d3",
       key: "d3",
-      render: (offerCounts: ActivityEvent['offerCounts']) => (
-        <span style={{ color: offerCounts.d3 > 0 ? "#52c41a" : "#d9d9d9" }}>
-          {offerCounts.d3}
+      width: 60,
+      sorter: true,
+      sortDirections: ['descend', 'ascend'] as SortOrder[],
+      render: (_: any, record: ActivityEvent) => (
+        <span style={{ color: record.offerCounts.d3 > 0 ? "#52c41a" : "#d9d9d9" }}>
+          {record.offerCounts.d3}
         </span>
       ),
     },
@@ -909,6 +983,9 @@ export default function ActivityFeed() {
               customerId={customerId || undefined}
               tableName="activity-feed"
               filterDetails={currentFiltersRef.current}
+              sortField={sortField}
+              sortOrder={sortOrder}
+              userPackages={userDetails?.packages}
             />
             <ActivityFeedFilters
               visible={filterDrawerVisible}
@@ -925,19 +1002,46 @@ export default function ActivityFeed() {
 
       {/* Timeline of Events Table */}
       <div>
-        <Table
-          dataSource={events}
-          columns={columns}
-          loading={loading}
-          pagination={false}
-          scroll={{ 
-            x: "max-content", 
-            y: "calc(100vh - 300px)" 
-          }}
-          rowClassName={(record, index) => 
-            index % 2 === 0 ? "activity-feed-row-even" : "activity-feed-row-odd"
-          }
-        />
+        <>
+          <style>{`
+            .activity-feed-table .ant-table-thead > tr > th {
+              position: relative;
+              padding-right: 24px !important;
+            }
+            .activity-feed-table .ant-table-thead > tr > th .ant-table-column-title {
+              padding-right: 0;
+              flex: 1;
+            }
+            .activity-feed-table .ant-table-column-sorter {
+              position: absolute;
+              right: 8px;
+              top: 50%;
+              transform: translateY(-50%);
+              margin-left: 0;
+            }
+            .activity-feed-table .ant-table-thead > tr > th .ant-table-column-sorters {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              width: 100%;
+            }
+          `}</style>
+          <Table
+            className="activity-feed-table"
+            dataSource={events}
+            columns={columns}
+            loading={loading}
+            pagination={false}
+            onChange={handleTableChange}
+            scroll={{ 
+              x: "max-content", 
+              y: "calc(100vh - 300px)" 
+            }}
+            rowClassName={(record, index) => 
+              index % 2 === 0 ? "activity-feed-row-even" : "activity-feed-row-odd"
+            }
+          />
+        </>
         
         {/* Loading indicator for infinite scroll */}
         {loadingMore && (

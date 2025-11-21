@@ -191,6 +191,7 @@ export interface AthleteData {
   twitter?: string;
   roster_link?: string;
   stats_link?: string;
+  pff_link?: string;
   bio?: string;
   major?: string;
   hand?: string;

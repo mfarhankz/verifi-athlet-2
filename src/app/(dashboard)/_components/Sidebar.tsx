@@ -381,31 +381,6 @@ function SidebarContent() {
 
   // Define unclickable menu items
   const unclickableMenuItems: MenuItem[] = [
-    {
-      key: "8",
-      icon: <UnclickableIcon className="icon-search-normal" />,
-      label: <UnclickableMenuItem>Pre-Portal</UnclickableMenuItem>,
-    },
-    {
-      key: "9",
-      icon: <UnclickableIcon className="icon-data" />,
-      label: <UnclickableMenuItem>JUCO Database</UnclickableMenuItem>,
-    },
-    {
-      key: "10",
-      icon: <UnclickableIcon className="icon-chart" />,
-      label: <UnclickableMenuItem>TrueGrade Rankings</UnclickableMenuItem>,
-    },
-    {
-      key: "11",
-      icon: <UnclickableIcon className="icon-chart-square" />,
-      label: <UnclickableMenuItem>Depth Chart</UnclickableMenuItem>,
-    },
-    {
-      key: "12",
-      icon: <UnclickableIcon className="icon-user" />,
-      label: <UnclickableMenuItem>Player Tracking</UnclickableMenuItem>,
-    },
   ];
 
   // Filter menu items based on user's package access

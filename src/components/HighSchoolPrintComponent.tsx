@@ -72,11 +72,27 @@ const HighSchoolPrintComponent = forwardRef<HighSchoolPrintComponentRef, HighSch
 
     try {
       // Extract high school IDs from the stored school data
+      // Priority: location.high_school_id > schoolInfo.high_school_id > schoolInfo.raw_data.high_school_id
       const highschoolIds = locations.map(location => {
-        // Look for high_school_id in raw_data
+        // First check if location has high_school_id directly
+        if (location.high_school_id) {
+          return String(location.high_school_id);
+        }
+        
+        // Look for high_school_id in stored school data
         const schoolInfo = storedSchoolData.find(s => s.address === location.address);
+        
+        // Try to get high_school_id from schoolInfo directly
+        if (schoolInfo?.high_school_id) {
+          return String(schoolInfo.high_school_id);
+        }
+        
         // Try to get high_school_id from the raw_data
-        return schoolInfo?.raw_data?.high_school_id || '';
+        if (schoolInfo?.raw_data?.high_school_id) {
+          return String(schoolInfo.raw_data.high_school_id);
+        }
+        
+        return '';
       }).filter(id => id !== '');
 
       if (highschoolIds.length === 0) {

@@ -12,6 +12,8 @@ import {
   Input,
   Modal,
   Select,
+  Typography,
+  message,
 } from "antd";
 import Image from "next/image";
 import PlayerList from "./PlayerList";
@@ -34,11 +36,13 @@ import {
 import { StarFilled, CopyOutlined, DownOutlined } from "@ant-design/icons";
 import { useZoom } from "@/contexts/ZoomContext";
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from "next/navigation";
 import MobileAthleteProfileContent from './MobileAthleteProfileContent';
 import ChooseBoardDropdown from './ChooseBoardDropdown';
 import ChooseBoardDropdownWithStatus from './ChooseBoardDropdownWithStatus';
 import SuccessPopover from './SuccessPopover';
 import HSAthleteProfileContent from './HSAthleteProfileContent';
+import { fetchSchoolsByMultipleDivisions } from "@/utils/schoolUtils";
 
 const formatDate = (dateInput: string | Date | null | undefined) => {
   if (!dateInput) return "-- na --";
@@ -58,6 +62,7 @@ interface AthleteProfileContentProps {
   onAddToBoard?: () => void;
   isInModal?: boolean;
   dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null;
+  onClose?: () => void;
 }
 
 export default function AthleteProfileContent({ 
@@ -65,8 +70,11 @@ export default function AthleteProfileContent({
   mainTpPageId,
   onAddToBoard,
   isInModal = false,
-  dataSource = null
+  dataSource = null,
+  onClose
 }: AthleteProfileContentProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -102,6 +110,16 @@ export default function AthleteProfileContent({
   const [ratings, setRatings] = useState<CustomerRating[]>([]);
   const { zoom } = useZoom();
   const [hasAdminAccess, setHasAdminAccess] = useState(false);
+  
+  // State for Mark Committed modal
+  const [isMarkCommittedModalOpen, setIsMarkCommittedModalOpen] = useState(false);
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string | null>(null);
+  const [d1Schools, setD1Schools] = useState<{ id: string; name: string }[]>([]);
+  const [d2Schools, setD2Schools] = useState<{ id: string; name: string }[]>([]);
+  const [d3Schools, setD3Schools] = useState<{ id: string; name: string }[]>([]);
+  const [naiaSchools, setNaiaSchools] = useState<{ id: string; name: string }[]>([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const [savingCommit, setSavingCommit] = useState(false);
   
   // Score tracker state
   const [isInScoreTracker, setIsInScoreTracker] = useState(false);
@@ -664,6 +682,116 @@ export default function AthleteProfileContent({
     loadRatings();
   }, [activeCustomerId]);
 
+  // Fetch schools when Mark Committed modal opens
+  useEffect(() => {
+    const fetchSchools = async () => {
+      if (!isMarkCommittedModalOpen) return;
+      
+      setSchoolsLoading(true);
+      try {
+        const [d1Data, d2Data, d3Data, naiaData] = await Promise.all([
+          fetchSchoolsByMultipleDivisions(['D1']),
+          fetchSchoolsByMultipleDivisions(['D2']),
+          fetchSchoolsByMultipleDivisions(['D3']),
+          fetchSchoolsByMultipleDivisions(['NAIA'])
+        ]);
+
+        setD1Schools(d1Data);
+        setD2Schools(d2Data);
+        setD3Schools(d3Data);
+        setNaiaSchools(naiaData);
+      } catch (error) {
+        console.error("Error fetching schools:", error);
+        message.error("Failed to load schools. Please try again.");
+      } finally {
+        setSchoolsLoading(false);
+      }
+    };
+
+    fetchSchools();
+  }, [isMarkCommittedModalOpen]);
+
+  // Handle saving the commit
+  const handleSaveCommit = async () => {
+    if (!selectedSchoolId || !actualAthleteId) {
+      message.warning("Please select a school");
+      return;
+    }
+
+    // Get the current user's UUID
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    const userId = currentSession?.user?.id || userDetails?.id;
+    
+    if (!userId) {
+      message.error('User not authenticated. Please log in and try again.');
+      return;
+    }
+
+    setSavingCommit(true);
+    try {
+      const today = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
+
+      const { error } = await supabase
+        .from('offer')
+        .insert({
+          athlete_id: actualAthleteId,
+          school_id: selectedSchoolId,
+          source: userId, // Use user UUID instead of 'college coach'
+          type: 'commit',
+          offer_date: today,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error creating commit:', error);
+        message.error('Failed to mark athlete as committed. Please try again.');
+        return;
+      }
+
+      message.success('Athlete marked as committed successfully!');
+      setIsMarkCommittedModalOpen(false);
+      setSelectedSchoolId(null);
+    } catch (error) {
+      console.error('Error in handleSaveCommit:', error);
+      message.error('An unexpected error occurred. Please try again.');
+    } finally {
+      setSavingCommit(false);
+    }
+  };
+
+  // Handle closing the modal/page
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    } else if (isInModal) {
+      // When in a modal without onClose, try to go back
+      router.back();
+    } else {
+      // When not in a modal, navigate back to the appropriate page based on dataSource
+      const params = new URLSearchParams(searchParams?.toString() || '');
+      params.delete('id');
+      params.delete('main_tp_page_id');
+      params.delete('dataSource');
+      
+      // Navigate back to the appropriate page based on dataSource
+      const queryString = params.toString();
+      if (dataSource === 'transfer_portal') {
+        router.push(queryString ? `/transfers?${queryString}` : '/transfers');
+      } else if (dataSource === 'juco') {
+        router.push(queryString ? `/juco?${queryString}` : '/juco');
+      } else if (dataSource === 'all_athletes') {
+        router.push(queryString ? `/all-athletes?${queryString}` : '/all-athletes');
+      } else {
+        // Default: go back in history, or navigate to a safe route
+        if (window.history.length > 1) {
+          router.back();
+        } else {
+          router.push('/');
+        }
+      }
+    }
+  };
+
   // Use the new HS Athlete Profile for hs_athletes dataSource
   if (dataSource === 'hs_athletes') {
     return <HSAthleteProfileContent
@@ -684,6 +812,10 @@ export default function AthleteProfileContent({
     />
   ) : (
     <div className="w-full h-full">
+      <button
+        className="close"
+        onClick={handleClose}
+      ></button>
       <div
         style={{
           transform: isInModal ? 'none' : `scale(${zoom / 100})`,
@@ -817,7 +949,7 @@ export default function AthleteProfileContent({
                 </div>
                 
                 {athlete && (athlete.roster_link || athlete.hs_highlight || athlete.highlight || 
-                  athlete.tfrrs_link || athlete.wtn_link || athlete.utr_link || athlete.stats_link) && (
+                  athlete.tfrrs_link || athlete.wtn_link || athlete.utr_link || athlete.stats_link || athlete.pff_link) && (
                   <div className="card">
                     <h4 className="mb-4 !text-[22px]">Profile Links</h4>
                     <div className="flex flex-col gap-1">
@@ -938,6 +1070,23 @@ export default function AthleteProfileContent({
                             className="mr-1"
                           />
                           Stats Link
+                        </a>
+                      )}
+                      {athlete.pff_link && (
+                        <a
+                          href={athlete.pff_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center py-1 text-[16px] hover:bg-[#f5f5f5]"
+                        >
+                          <Image
+                            src="/link-01.svg"
+                            alt="tw"
+                            width={20}
+                            height={20}
+                            className="mr-1"
+                          />
+                          PFF
                         </a>
                       )}
                     </div>
@@ -1087,6 +1236,14 @@ export default function AthleteProfileContent({
                                 />
                               </div>
                             )}
+                            
+                            {/* Mark Committed Button */}
+                            <Button
+                              onClick={() => setIsMarkCommittedModalOpen(true)}
+                              disabled={!actualAthleteId}
+                            >
+                              Mark Committed
+                            </Button>
                           </Flex>
                         </Flex>
                         <h1>
@@ -1481,6 +1638,87 @@ export default function AthleteProfileContent({
             ),
           }))}
         />
+      </Modal>
+
+      {/* Mark Committed Modal */}
+      <Modal
+        title="Mark Athlete as Committed"
+        open={isMarkCommittedModalOpen}
+        onOk={handleSaveCommit}
+        onCancel={() => {
+          setIsMarkCommittedModalOpen(false);
+          setSelectedSchoolId(null);
+        }}
+        okText="Save"
+        cancelText="Cancel"
+        confirmLoading={savingCommit}
+        okButtonProps={{ disabled: !selectedSchoolId || schoolsLoading }}
+      >
+        <div style={{ marginBottom: '16px' }}>
+          <Typography.Text type="secondary">
+            If you've become aware that this player is committed to another school please mark that here.
+          </Typography.Text>
+        </div>
+        
+        <div style={{ marginBottom: '16px' }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: '8px' }}>
+            Select School:
+          </Typography.Text>
+          
+          {schoolsLoading ? (
+            <div>Loading schools...</div>
+          ) : (
+            <Select
+              style={{ width: '100%' }}
+              placeholder="Select a school"
+              value={selectedSchoolId}
+              onChange={setSelectedSchoolId}
+              showSearch
+              filterOption={(input, option) => {
+                const label = option?.label;
+                const labelString = typeof label === 'string' ? label : String(label || '');
+                return labelString.toLowerCase().includes(input.toLowerCase());
+              }}
+            >
+              {d1Schools.length > 0 && (
+                <Select.OptGroup label="Division 1">
+                  {d1Schools.map((school) => (
+                    <Select.Option key={school.id} value={school.id} label={school.name}>
+                      {school.name}
+                    </Select.Option>
+                  ))}
+                </Select.OptGroup>
+              )}
+              {d2Schools.length > 0 && (
+                <Select.OptGroup label="Division 2">
+                  {d2Schools.map((school) => (
+                    <Select.Option key={school.id} value={school.id} label={school.name}>
+                      {school.name}
+                    </Select.Option>
+                  ))}
+                </Select.OptGroup>
+              )}
+              {d3Schools.length > 0 && (
+                <Select.OptGroup label="Division 3">
+                  {d3Schools.map((school) => (
+                    <Select.Option key={school.id} value={school.id} label={school.name}>
+                      {school.name}
+                    </Select.Option>
+                  ))}
+                </Select.OptGroup>
+              )}
+              {naiaSchools.length > 0 && (
+                <Select.OptGroup label="NAIA">
+                  {naiaSchools.map((school) => (
+                    <Select.Option key={school.id} value={school.id} label={school.name}>
+                      {school.name}
+                    </Select.Option>
+                  ))}
+                </Select.OptGroup>
+              )}
+            </Select>
+          )}
+        </div>
       </Modal>
 
     </div>

@@ -1623,6 +1623,31 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
     setSelectedAthleteId(null);
   };
 
+  // Handle closing the modal/page
+  const handleClose = () => {
+    if (isInModal) {
+      // When in a modal, try to go back
+      router.back();
+    } else {
+      // When not in a modal, navigate back to high schools list
+      const params = new URLSearchParams(searchParams?.toString() || '');
+      params.delete('schoolId');
+      params.delete('dataSource');
+      
+      const queryString = params.toString();
+      if (queryString) {
+        router.push(`/high-schools?${queryString}`);
+      } else {
+        // Default: go back in history, or navigate to a safe route
+        if (window.history.length > 1) {
+          router.back();
+        } else {
+          router.push('/high-schools');
+        }
+      }
+    }
+  };
+
   // If in modal, return just the content
   if (isInModal) {
     return (
@@ -1678,6 +1703,7 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
                   onAddToBoard={() => {}}
                   isInModal={true}
                   dataSource={selectedAthleteDataSource}
+                  onClose={handleCloseAthleteModal}
                 />
               )}
             </div>
@@ -1769,13 +1795,13 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
       `}</style>
       <Modal
         open={true}
-        onCancel={() => {}}
+        onCancel={handleClose}
         width={"90%"}
         centered
         footer={null}
         className="new-modal"
       >
-        <button className="close" onClick={() => {}}></button>
+        <button className="close" onClick={handleClose}></button>
         {content}
       </Modal>
       <AddPlayerModal

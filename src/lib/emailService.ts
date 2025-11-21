@@ -246,6 +246,110 @@ export const createAlertNotificationEmail = (alertData: {
   return { subject, htmlBody };
 };
 
+export const createInaccurateActivityEmail = (data: {
+  activityType: string;
+  schoolName: string;
+  athleteName: string;
+  athleteId: string;
+  activityId: string;
+  markedBy: string;
+  markedByEmail?: string;
+  markedAt: string;
+  offerDate?: string;
+  source?: string;
+}) => {
+  const subject = 'Activity Marked as Inaccurate - Verified Athletics';
+  
+  // Format dates
+  const markedDate = new Date(data.markedAt).toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  });
+  
+  const offerDateFormatted = data.offerDate 
+    ? new Date(data.offerDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    : 'N/A';
+  
+  const htmlBody = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Activity Marked as Inaccurate - Verified Athletics</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 700px; margin: 0 auto; padding: 20px;">
+      <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="color: rgb(28, 29, 77); margin: 0; font-size: 28px;">Verified Athletics</h1>
+        </div>
+        
+        <h2 style="color: rgb(28, 29, 77); margin-bottom: 20px;">Activity Marked as Inaccurate</h2>
+        
+        <p style="margin-bottom: 20px;">An activity has been marked as inaccurate in the Verified Athletics system.</p>
+        
+        <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+          <h3 style="color: rgb(28, 29, 77); margin-top: 0; margin-bottom: 15px;">Activity Details</h3>
+          
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Activity Type:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.activityType)}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Athlete:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.athleteName)}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">School:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.schoolName)}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Activity Date:</td>
+              <td style="padding: 10px 0;">${offerDateFormatted}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Source:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.source || 'N/A')}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Marked By:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.markedBy)}${data.markedByEmail ? ` (${escapeHtml(data.markedByEmail)})` : ''}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #e9ecef;">
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Marked At:</td>
+              <td style="padding: 10px 0;">${markedDate}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Activity ID:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.activityId)}</td>
+            </tr>
+            <tr>
+              <td style="padding: 10px 0; font-weight: bold; width: 150px; vertical-align: top;">Athlete ID:</td>
+              <td style="padding: 10px 0;">${escapeHtml(data.athleteId)}</td>
+            </tr>
+          </table>
+        </div>
+        
+        <p style="margin-top: 20px; color: #666; font-size: 14px;">
+          This activity has been marked as inaccurate and removed from the system. The activity record has been updated with an ended_at timestamp and the user who marked it as inaccurate.
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  return { subject, htmlBody };
+};
+
 // Helper function to escape HTML
 function escapeHtml(text: string): string {
   const map: { [key: string]: string } = {

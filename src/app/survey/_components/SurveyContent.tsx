@@ -78,6 +78,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
               .select('school_id, created_at')
               .eq('athlete_id', athleteId)
               .eq('source', 'survey')
+              .is('ended_at', null)
               .order('created_at', { ascending: false });
 
             if (!offerError && existingOffers && existingOffers.length > 0) {
@@ -207,6 +208,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           .eq('athlete_id', athleteId)
           .eq('school_id', sectionData.committed_school)
           .eq('source', 'survey')
+          .is('ended_at', null)
           .single();
 
         if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
@@ -290,6 +292,7 @@ export default function SurveyContent({ athleteId }: SurveyContentProps) {
           .eq('athlete_id', athleteId)
           .eq('school_id', data.committed_school)
           .eq('source', 'survey')
+          .is('ended_at', null)
           .single();
 
         if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error

@@ -957,7 +957,7 @@ export default function RecruitingBoard() {
 
   if (loading) {
     return (
-      <div className="main-container">
+      <div className="main-container" style={{ overflow: 'visible' }}>
         <div className="flex items-center justify-center h-[calc(100vh-155px)]">
           <Spin size="large" />
         </div>
@@ -967,7 +967,7 @@ export default function RecruitingBoard() {
 
   if (error) {
     return (
-      <div className="main-container">
+      <div className="main-container" style={{ overflow: 'visible' }}>
         <Alert
           message="Error"
           description={error}
@@ -980,7 +980,7 @@ export default function RecruitingBoard() {
   }
 
   return (
-    <div className="main-container">
+    <div className="main-container" style={{ overflow: 'visible' }}>
       <Flex className="card mb-4 items-center justify-between">
         <Flex>
           <Typography.Paragraph
@@ -1234,7 +1234,7 @@ export default function RecruitingBoard() {
           )}
         </Flex>
       </Flex>
-      <div className="w-[100%] overflow-auto h-[calc(100vh-155px)]">
+      <div className="w-[100%] h-[calc(100vh-155px)]">
         <div 
           className="flex"
           style={{ 

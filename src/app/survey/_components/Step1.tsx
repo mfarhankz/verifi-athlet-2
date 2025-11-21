@@ -34,6 +34,8 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
     committed_school: surveyData.committed_school || "", // Committed to Transfer to (special handling)
     // data_type_id: 70 - Consent checkbox
     "70": surveyData["70"] || "TRUE",
+    // data_type_id: 245 - Ray Reid's Portal Games opt-in (Men's Soccer only)
+    "245": surveyData["245"] || "FALSE",
   });
 
   const [positions, setPositions] = useState<{ name: string; order: number }[]>(
@@ -63,6 +65,8 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
         committed_school: surveyData.committed_school || "", // Committed to Transfer to (special handling)
         // data_type_id: 70 - Consent checkbox
         "70": surveyData["70"] || "TRUE",
+        // data_type_id: 245 - Ray Reid's Portal Games opt-in (Men's Soccer only)
+        "245": surveyData["245"] || "FALSE",
       };
 
       return newData;
@@ -118,6 +122,10 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
 
   const handleConsentChange = (checked: boolean) => {
     setFormData((prev) => ({ ...prev, "70": checked ? "TRUE" : "FALSE" }));
+  };
+
+  const handleRayReidOptInChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, "245": checked ? "TRUE" : "FALSE" }));
   };
 
   const handleSubmit = async () => {
@@ -479,6 +487,34 @@ export default function Step1({ athlete, surveyData, onComplete }: Step1Props) {
           </div>
         )}
       </Flex>
+
+      {/* Ray Reid's Portal Games Opt-in - Only visible for Men's Soccer (sport_id 3) */}
+      {athlete.sport_id === 3 && (
+        <Flex vertical className="items-center" style={{ marginTop: "30px" }}>
+          <div className="flex flex-col gap-5 mx-auto" style={{ maxWidth: "500px" }}>
+            <Flex vertical className="w-full">
+              <Flex
+                vertical
+                className="mb-5 survey-textarea"
+              >
+                <Checkbox
+                  checked={formData["245"] === "TRUE"}
+                  onChange={(e) => handleRayReidOptInChange(e.target.checked)}
+                >
+                  I would like to receive information from Ray Reid&apos;s Portal Games in New York on December 20th.{" "}
+                  <span style={{ fontSize: "12px", color: "#666" }}>
+                    (rayreidsportalcombine.com)
+                  </span>
+                </Checkbox>
+                <Typography.Text type="secondary" style={{ marginTop: "8px", fontSize: "12px" }}>
+                  Verified Athletics is not endorsing this event and does not receive any financial compensation from this event.
+                </Typography.Text>
+              </Flex>
+            </Flex>
+          </div>
+        </Flex>
+      )}
+
       <Button
         onClick={handleSubmit}
         className="next-servey save-continue-green"

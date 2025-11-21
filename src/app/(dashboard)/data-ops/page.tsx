@@ -1,18 +1,22 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Card, Input, Table, Tag, Modal, Button, Typography, message, Result, Spin, Select } from "antd";
-import { AppstoreAddOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, Suspense } from "react";
+import { Card, Input, Table, Tag, Modal, Button, Typography, message, Result, Spin, Select, Tabs } from "antd";
+import { AppstoreAddOutlined, CopyOutlined } from '@ant-design/icons';
 import { supabase } from "@/lib/supabaseClient";
-import { fetchDataOpsHsAthletes, fetchAllDataTypes, fetchAthleteDataTypes, fetchAthleteFactData, insertAthleteFact, updateAthleteBasicInfo, fetchAthleteSchoolHistory, searchSchools, updateAthleteSchoolRecord, transferAthlete, checkUserAthleteAccess, markAthleteFactInactive } from '@/lib/queries';
-import { useRouter } from 'next/navigation';
+import { fetchDataOpsHsAthletes, fetchDataOpsHighSchools, fetchAllDataTypes, fetchAthleteDataTypes, fetchAthleteFactData, insertAthleteFact, updateAthleteBasicInfo, fetchAthleteSchoolHistory, searchSchools, updateAthleteSchoolRecord, transferAthlete, checkUserAthleteAccess, markAthleteFactInactive, fetchStates, fetchCountiesByStateId, insertSchool, insertSchoolFact, fetchSports, saveNewCoach, fetchCoachDataTypesInUse } from '@/lib/queries';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 const { Text } = Typography;
 
-export default function DataOpsPage() {
+function DataOpsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(searchParams?.get('tab') || 'athletes');
+  
+  // Athlete table state
   const [athleteData, setAthleteData] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(false);
   const [searchInput, setSearchInput] = useState<string>('');
@@ -23,6 +27,20 @@ export default function DataOpsPage() {
   });
   const [sortConfig, setSortConfig] = useState<{ field: string | null; order: 'ascend' | 'descend' | null }>({
     field: 'athlete_last_name',
+    order: 'ascend',
+  });
+  
+  // High School table state
+  const [highSchoolData, setHighSchoolData] = useState<any[]>([]);
+  const [loadingHighSchoolData, setLoadingHighSchoolData] = useState(false);
+  const [highSchoolSearchInput, setHighSchoolSearchInput] = useState<string>('');
+  const [highSchoolPagination, setHighSchoolPagination] = useState({
+    current: 1,
+    pageSize: 25,
+    total: 0,
+  });
+  const [highSchoolSortConfig, setHighSchoolSortConfig] = useState<{ field: string | null; order: 'ascend' | 'descend' | null }>({
+    field: 'school_name',
     order: 'ascend',
   });
 
@@ -58,6 +76,27 @@ export default function DataOpsPage() {
   const [selectedTransferSchool, setSelectedTransferSchool] = useState<any>(null);
   const [savingSchoolChanges, setSavingSchoolChanges] = useState(false);
 
+  // Add High School form state
+  const [isAddSchoolModalVisible, setIsAddSchoolModalVisible] = useState(false);
+  const [schoolName, setSchoolName] = useState('');
+  const [selectedState, setSelectedState] = useState<number | null>(null);
+  const [selectedCounty, setSelectedCounty] = useState<number | null>(null);
+  const [states, setStates] = useState<{ id: number; abbrev: string; name: string }[]>([]);
+  const [counties, setCounties] = useState<{ id: number; name: string }[]>([]);
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingCounties, setLoadingCounties] = useState(false);
+  const [privatePublic, setPrivatePublic] = useState<string>('');
+  const [athleticDirectorFirstName, setAthleticDirectorFirstName] = useState('');
+  const [athleticDirectorLastName, setAthleticDirectorLastName] = useState('');
+  const [athleticDirectorEmail, setAthleticDirectorEmail] = useState('');
+  const [coachFirstName, setCoachFirstName] = useState('');
+  const [coachLastName, setCoachLastName] = useState('');
+  const [coachStartDate, setCoachStartDate] = useState('');
+  const [coachFacts, setCoachFacts] = useState<{[key: string]: string}>({});
+  const [coachDataTypes, setCoachDataTypes] = useState<any[]>([]);
+  const [loadingCoachDataTypes, setLoadingCoachDataTypes] = useState(false);
+  const [savingSchool, setSavingSchool] = useState(false);
+
   // Generalized debounced search hook
   const useDebouncedSearch = (searchInput: string, delay: number = 500) => {
     const [debouncedValue, setDebouncedValue] = useState(searchInput);
@@ -73,6 +112,15 @@ export default function DataOpsPage() {
   };
 
   const debouncedSearch = useDebouncedSearch(searchInput);
+  const debouncedHighSchoolSearch = useDebouncedSearch(highSchoolSearchInput);
+
+  // Sync activeTab with URL parameter
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    if (tabParam && (tabParam === 'athletes' || tabParam === 'highschools')) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
 
   // Check access on mount
   useEffect(() => {
@@ -119,11 +167,93 @@ export default function DataOpsPage() {
     }
   };
 
+  // Fetch high school data
+  const fetchHighSchoolData = async () => {
+    try {
+      setLoadingHighSchoolData(true);
+      const result = await fetchDataOpsHighSchools({
+        page: highSchoolPagination.current,
+        limit: highSchoolPagination.pageSize,
+        search: debouncedHighSchoolSearch,
+        sortField: highSchoolSortConfig.field,
+        sortOrder: highSchoolSortConfig.order,
+      });
+      setHighSchoolData(result.data);
+      setHighSchoolPagination(prev => ({ ...prev, total: result.totalCount || 0 }));
+    } catch (error) {
+      console.error('Error fetching high school data:', error);
+      message.error('Failed to load high school data');
+    } finally {
+      setLoadingHighSchoolData(false);
+    }
+  };
+
   useEffect(() => {
-    if (hasAccess) {
+    if (hasAccess && activeTab === 'athletes') {
       fetchData();
     }
-  }, [hasAccess, pagination.current, pagination.pageSize, debouncedSearch, sortConfig]);
+  }, [hasAccess, activeTab, pagination.current, pagination.pageSize, debouncedSearch, sortConfig]);
+
+  useEffect(() => {
+    if (hasAccess && activeTab === 'highschools') {
+      fetchHighSchoolData();
+    }
+  }, [hasAccess, activeTab, highSchoolPagination.current, highSchoolPagination.pageSize, debouncedHighSchoolSearch, highSchoolSortConfig]);
+
+  // Load states on mount
+  useEffect(() => {
+    const loadStates = async () => {
+      try {
+        setLoadingStates(true);
+        const statesData = await fetchStates();
+        setStates(statesData);
+      } catch (error) {
+        console.error('Error loading states:', error);
+      } finally {
+        setLoadingStates(false);
+      }
+    };
+    loadStates();
+  }, []);
+
+  // Load counties when state changes
+  useEffect(() => {
+    const loadCounties = async () => {
+      if (!selectedState) {
+        setCounties([]);
+        setSelectedCounty(null);
+        return;
+      }
+      try {
+        setLoadingCounties(true);
+        const countiesData = await fetchCountiesByStateId(selectedState);
+        setCounties(countiesData);
+        setSelectedCounty(null); // Reset county selection when state changes
+      } catch (error) {
+        console.error('Error loading counties:', error);
+      } finally {
+        setLoadingCounties(false);
+      }
+    };
+    loadCounties();
+  }, [selectedState]);
+
+  // Load coach data types when modal opens
+  useEffect(() => {
+    const loadCoachDataTypes = async () => {
+      if (!isAddSchoolModalVisible) return;
+      try {
+        setLoadingCoachDataTypes(true);
+        const dataTypes = await fetchCoachDataTypesInUse();
+        setCoachDataTypes(dataTypes);
+      } catch (error) {
+        console.error('Error loading coach data types:', error);
+      } finally {
+        setLoadingCoachDataTypes(false);
+      }
+    };
+    loadCoachDataTypes();
+  }, [isAddSchoolModalVisible]);
 
   // Function to fetch all data types and mark which ones the athlete has
   const loadAthleteDataTypes = async (athleteId: string) => {
@@ -720,6 +850,265 @@ export default function DataOpsPage() {
     }
   };
 
+  const handleHighSchoolTableChange = (pagination: any, filters: any, sorter: any) => {
+    setHighSchoolPagination({
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+      total: pagination.total,
+    });
+    
+    if (sorter.field) {
+      setHighSchoolSortConfig({
+        field: sorter.field,
+        order: sorter.order,
+      });
+    } else {
+      setHighSchoolSortConfig({ field: null, order: null });
+    }
+  };
+
+  // Function to copy school_id to clipboard
+  const copySchoolId = async (schoolId: string) => {
+    try {
+      await navigator.clipboard.writeText(schoolId);
+      message.success('School ID copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      message.error('Failed to copy School ID');
+    }
+  };
+
+  // Function to copy school name to clipboard
+  const copySchoolName = async (schoolName: string) => {
+    try {
+      await navigator.clipboard.writeText(schoolName);
+      message.success('School name copied to clipboard');
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      message.error('Failed to copy school name');
+    }
+  };
+
+  // Function to handle adding a new high school
+  const handleAddHighSchool = async () => {
+    if (!schoolName.trim()) {
+      message.error('School name is required');
+      return;
+    }
+
+    try {
+      setSavingSchool(true);
+
+      // 1. Insert school name into school table
+      const schoolId = await insertSchool(schoolName.trim());
+
+      // 2. Insert school state fact (data_type_id 253) - source: manual_admin
+      if (selectedState) {
+        const selectedStateData = states.find(s => s.id === selectedState);
+        if (selectedStateData) {
+          await insertSchoolFact(schoolId, 253, selectedStateData.abbrev);
+        }
+      }
+
+      // 3. Insert school county fact (data_type_id 966) - store county ID, source: manual_admin
+      if (selectedCounty) {
+        await insertSchoolFact(schoolId, 966, selectedCounty.toString());
+      }
+
+      // 4. Insert private/public fact (data_type_id 928) - source: manual_admin
+      if (privatePublic) {
+        await insertSchoolFact(schoolId, 928, privatePublic);
+      }
+
+      // 5. Insert athletic director facts - all with source: manual_admin
+      if (athleticDirectorFirstName.trim()) {
+        await insertSchoolFact(schoolId, 932, athleticDirectorFirstName.trim());
+      }
+      if (athleticDirectorLastName.trim()) {
+        await insertSchoolFact(schoolId, 933, athleticDirectorLastName.trim());
+      }
+      if (athleticDirectorEmail.trim()) {
+        await insertSchoolFact(schoolId, 934, athleticDirectorEmail.trim());
+      }
+
+      // 6. Create coach if provided
+      if (coachFirstName.trim() && coachLastName.trim() && coachStartDate) {
+        const sports = await fetchSports();
+        const footballSport = sports.find(sport => sport.name.toLowerCase().includes('football'));
+        
+        if (!footballSport) {
+          message.warning('Football sport not found. School created but coach not added.');
+        } else {
+          await saveNewCoach(
+            coachFirstName.trim(),
+            coachLastName.trim(),
+            schoolId,
+            footballSport.id,
+            coachStartDate,
+            null, // No end date for new coach
+            coachFacts,
+            coachDataTypes.filter(dt => dt.name)
+          );
+        }
+      }
+
+      // Reset form
+      setSchoolName('');
+      setSelectedState(null);
+      setSelectedCounty(null);
+      setPrivatePublic('');
+      setAthleticDirectorFirstName('');
+      setAthleticDirectorLastName('');
+      setAthleticDirectorEmail('');
+      setCoachFirstName('');
+      setCoachLastName('');
+      setCoachStartDate('');
+      setCoachFacts({});
+      setIsAddSchoolModalVisible(false);
+
+      // Refresh high school data
+      await fetchHighSchoolData();
+      message.success('High school added successfully');
+    } catch (error: any) {
+      console.error('Error adding high school:', error);
+      message.error(`Failed to add high school: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setSavingSchool(false);
+    }
+  };
+
+  // High School table columns
+  const highSchoolColumns = [
+    {
+      title: 'School ID',
+      dataIndex: 'school_id',
+      key: 'school_id',
+      width: 300,
+      render: (id: string) => id ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Text 
+            code 
+            style={{ cursor: 'pointer', color: '#1890ff' }}
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/data-ops/high-school-edit/${id}`);
+            }}
+          >
+            {id}
+          </Text>
+          <CopyOutlined 
+            onClick={(e) => {
+              e.stopPropagation();
+              copySchoolId(id);
+            }}
+            style={{ 
+              fontSize: '12px', 
+              cursor: 'pointer', 
+              color: '#1890ff',
+              marginLeft: 4
+            }}
+            title="Copy School ID"
+          />
+        </div>
+      ) : '-',
+      sorter: true,
+    },
+    {
+      title: 'School Name',
+      dataIndex: 'school_name',
+      key: 'school_name',
+      sorter: true,
+      defaultSortOrder: 'ascend' as const,
+      render: (name: string) => name ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Text>{name}</Text>
+          <CopyOutlined 
+            onClick={(e) => {
+              e.stopPropagation();
+              copySchoolName(name);
+            }}
+            style={{ 
+              fontSize: '12px', 
+              cursor: 'pointer', 
+              color: '#1890ff',
+              marginLeft: 4
+            }}
+            title="Copy School Name"
+          />
+        </div>
+      ) : '-',
+    },
+    {
+      title: 'City',
+      dataIndex: 'address_city',
+      key: 'address_city',
+      sorter: true,
+    },
+    {
+      title: 'School State',
+      dataIndex: 'school_state',
+      key: 'school_state',
+      sorter: true,
+    },
+    {
+      title: 'HS County',
+      dataIndex: 'hs_county',
+      key: 'hs_county',
+      sorter: true,
+    },
+    {
+      title: 'HS State',
+      dataIndex: 'hs_state',
+      key: 'hs_state',
+      sorter: true,
+    },
+    {
+      title: 'HC Name',
+      dataIndex: 'hc_name',
+      key: 'hc_name',
+      sorter: true,
+    },
+    {
+      title: 'HC Email',
+      dataIndex: 'hc_email',
+      key: 'hc_email',
+      render: (email: string) => email ? <a href={`mailto:${email}`}>{email}</a> : '-',
+      sorter: true,
+    },
+    {
+      title: 'HC Number',
+      dataIndex: 'hc_number',
+      key: 'hc_number',
+      render: (number: string) => number ? <a href={`tel:${number}`}>{number}</a> : '-',
+      sorter: true,
+    },
+    {
+      title: 'College Player Producing',
+      dataIndex: 'college_player_producing',
+      key: 'college_player_producing',
+      sorter: true,
+    },
+    {
+      title: 'D1 Player Producing',
+      dataIndex: 'd1_player_producing',
+      key: 'd1_player_producing',
+      sorter: true,
+    },
+    {
+      title: 'Academic Ranking',
+      dataIndex: 'academic_ranking',
+      key: 'academic_ranking',
+      sorter: true,
+    },
+    {
+      title: 'Private/Public',
+      dataIndex: 'private_public',
+      key: 'private_public',
+      render: (value: string) => value ? <Tag color={value.toLowerCase() === 'private' ? 'blue' : 'green'}>{value}</Tag> : '-',
+      sorter: true,
+    },
+  ];
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -747,42 +1136,103 @@ export default function DataOpsPage() {
 
   return (
     <div style={{ padding: '24px' }}>
+      <style dangerouslySetInnerHTML={{__html: `
+        .ant-tabs-nav-list {
+          justify-content: flex-start !important;
+        }
+      `}} />
       <Card 
         title={
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <AppstoreAddOutlined style={{ marginRight: 8 }} />
-            Data Ops - HS Athletes
+            Data Ops
             <Tag color="blue" style={{ marginLeft: 8 }}>
               ADMIN
             </Tag>
           </div>
         }
       >
-        <div style={{ marginBottom: 16 }}>
-          <Input
-            placeholder="Search by name, email, school, or athlete ID"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            style={{ width: 400 }}
-            allowClear
-          />
-        </div>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          tabBarStyle={{ marginBottom: 16 }}
+          items={[
+            {
+              key: 'athletes',
+              label: 'HS Athletes',
+              children: (
+                <div>
+                  <div style={{ marginBottom: 16 }}>
+                    <Input
+                      placeholder="Search by name, email, school, or athlete ID"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      style={{ width: 400 }}
+                      allowClear
+                    />
+                  </div>
 
-        <Table
-          dataSource={athleteData}
-          columns={columns}
-          rowKey="athlete_id"
-          loading={loadingData}
-          pagination={{
-            current: pagination.current,
-            pageSize: pagination.pageSize,
-            total: pagination.total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} athletes`,
-          }}
-          scroll={{ x: 'max-content' }}
-          onChange={handleTableChange}
+                  <Table
+                    dataSource={athleteData}
+                    columns={columns}
+                    rowKey="athlete_id"
+                    loading={loadingData}
+                    pagination={{
+                      current: pagination.current,
+                      pageSize: pagination.pageSize,
+                      total: pagination.total,
+                      showSizeChanger: true,
+                      showQuickJumper: true,
+                      showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} athletes`,
+                    }}
+                    scroll={{ x: 'max-content' }}
+                    onChange={handleTableChange}
+                  />
+                </div>
+              ),
+            },
+            {
+              key: 'highschools',
+              label: 'High School',
+              children: (
+                <div>
+                  <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
+                    <Input
+                      placeholder="Search by school name, city, coach name, or school ID"
+                      value={highSchoolSearchInput}
+                      onChange={(e) => setHighSchoolSearchInput(e.target.value)}
+                      style={{ width: 400 }}
+                      allowClear
+                    />
+                    <Button
+                      type="primary"
+                      icon={<AppstoreAddOutlined />}
+                      onClick={() => setIsAddSchoolModalVisible(true)}
+                    >
+                      Add New High School
+                    </Button>
+                  </div>
+
+                  <Table
+                    dataSource={highSchoolData}
+                    columns={highSchoolColumns}
+                    rowKey="school_id"
+                    loading={loadingHighSchoolData}
+                    pagination={{
+                      current: highSchoolPagination.current,
+                      pageSize: highSchoolPagination.pageSize,
+                      total: highSchoolPagination.total,
+                      showSizeChanger: true,
+                      showQuickJumper: true,
+                      showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} schools`,
+                    }}
+                    scroll={{ x: 'max-content' }}
+                    onChange={handleHighSchoolTableChange}
+                  />
+                </div>
+              ),
+            },
+          ]}
         />
       </Card>
 
@@ -1268,7 +1718,212 @@ export default function DataOpsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Add High School Modal */}
+      <Modal
+        title="Add New High School"
+        open={isAddSchoolModalVisible}
+        onCancel={() => {
+          setIsAddSchoolModalVisible(false);
+          // Reset form
+          setSchoolName('');
+          setSelectedState(null);
+          setSelectedCounty(null);
+          setPrivatePublic('');
+          setAthleticDirectorFirstName('');
+          setAthleticDirectorLastName('');
+          setAthleticDirectorEmail('');
+          setCoachFirstName('');
+          setCoachLastName('');
+          setCoachStartDate('');
+          setCoachFacts({});
+        }}
+        footer={null}
+        width={600}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* School Name */}
+          <div>
+            <Text strong>School Name *</Text>
+            <Input
+              placeholder="Enter school name"
+              value={schoolName}
+              onChange={(e) => setSchoolName(e.target.value)}
+              style={{ marginTop: 4 }}
+            />
+          </div>
+
+          {/* School State */}
+          <div>
+            <Text strong>School State</Text>
+            <Select
+              placeholder="Select state"
+              style={{ width: '100%', marginTop: 4 }}
+              loading={loadingStates}
+              value={selectedState}
+              onChange={(value) => setSelectedState(value)}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={states.map(state => ({
+                label: `${state.abbrev} - ${state.name}`,
+                value: state.id
+              }))}
+            />
+          </div>
+
+          {/* School County */}
+          <div>
+            <Text strong>School County</Text>
+            <Select
+              placeholder={selectedState ? "Select county" : "Select state first"}
+              style={{ width: '100%', marginTop: 4 }}
+              loading={loadingCounties}
+              disabled={!selectedState}
+              value={selectedCounty}
+              onChange={(value) => setSelectedCounty(value)}
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+              options={counties.map(county => ({
+                label: county.name,
+                value: county.id
+              }))}
+            />
+          </div>
+
+          {/* Private/Public */}
+          <div>
+            <Text strong>Private/Public</Text>
+            <Select
+              placeholder="Select type"
+              style={{ width: '100%', marginTop: 4 }}
+              value={privatePublic}
+              onChange={(value) => setPrivatePublic(value)}
+              options={[
+                { label: 'Public', value: 'Public' },
+                { label: 'Private', value: 'Private' }
+              ]}
+            />
+          </div>
+
+          {/* Athletic Director Section */}
+          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+            <Text strong style={{ fontSize: 16 }}>Athletic Director</Text>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>
+                <Text strong>First Name</Text>
+                <Input
+                  placeholder="Enter first name"
+                  value={athleticDirectorFirstName}
+                  onChange={(e) => setAthleticDirectorFirstName(e.target.value)}
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+              <div>
+                <Text strong>Last Name</Text>
+                <Input
+                  placeholder="Enter last name"
+                  value={athleticDirectorLastName}
+                  onChange={(e) => setAthleticDirectorLastName(e.target.value)}
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+              <div>
+                <Text strong>Email</Text>
+                <Input
+                  placeholder="Enter email"
+                  value={athleticDirectorEmail}
+                  onChange={(e) => setAthleticDirectorEmail(e.target.value)}
+                  style={{ marginTop: 4 }}
+                  type="email"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Coach Section */}
+          <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
+            <Text strong style={{ fontSize: 16 }}>Coach</Text>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>
+                <Text strong>First Name</Text>
+                <Input
+                  placeholder="Enter first name"
+                  value={coachFirstName}
+                  onChange={(e) => setCoachFirstName(e.target.value)}
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+              <div>
+                <Text strong>Last Name</Text>
+                <Input
+                  placeholder="Enter last name"
+                  value={coachLastName}
+                  onChange={(e) => setCoachLastName(e.target.value)}
+                  style={{ marginTop: 4 }}
+                />
+              </div>
+              <div>
+                <Text strong>Start Date *</Text>
+                <Input
+                  type="date"
+                  value={coachStartDate}
+                  onChange={(e) => setCoachStartDate(e.target.value)}
+                  style={{ marginTop: 4 }}
+                />
+                <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginTop: 4 }}>
+                  Required if adding a coach
+                </Text>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <Button
+              onClick={() => {
+                setIsAddSchoolModalVisible(false);
+                setSchoolName('');
+                setSelectedState(null);
+                setSelectedCounty(null);
+                setPrivatePublic('');
+                setAthleticDirectorFirstName('');
+                setAthleticDirectorLastName('');
+                setAthleticDirectorEmail('');
+                setCoachFirstName('');
+                setCoachLastName('');
+                setCoachStartDate('');
+                setCoachFacts({});
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="primary"
+              loading={savingSchool}
+              onClick={handleAddHighSchool}
+              disabled={!schoolName.trim()}
+            >
+              Add School
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
 
+export default function DataOpsPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Spin size="large" />
+      </div>
+    }>
+      <DataOpsPageContent />
+    </Suspense>
+  );
+}

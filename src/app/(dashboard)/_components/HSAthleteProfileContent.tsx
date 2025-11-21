@@ -351,18 +351,28 @@ export default function HSAthleteProfileContent({
   const handleClose = () => {
     if (onClose) {
       onClose();
-    } else if (!isInModal) {
-      // Only navigate if not in a modal and no onClose provided
-      // When in a modal, the parent modal handles closing
+    } else if (isInModal) {
+      // When in a modal without onClose, try to go back
+      router.back();
+    } else {
+      // When not in a modal, navigate back
       const params = new URLSearchParams(searchParams?.toString() || '');
       params.delete('player');
       params.delete('use_main_tp_page_id');
       
       // Navigate to /hs-athlete with remaining params (if any)
       const queryString = params.toString();
-      router.push(queryString ? `/hs-athlete?${queryString}` : '/hs-athlete');
+      if (queryString) {
+        router.push(`/hs-athlete?${queryString}`);
+      } else {
+        // Default: go back in history, or navigate to a safe route
+        if (window.history.length > 1) {
+          router.back();
+        } else {
+          router.push('/hs-athlete');
+        }
+      }
     }
-    // If isInModal is true and no onClose, do nothing - parent handles it
   };
 
   // Set userTeamId when userDetails becomes available
@@ -617,8 +627,9 @@ export default function HSAthleteProfileContent({
       try {
         const { data: offers, error } = await supabase
           .from('offer')
-          .select('id, type, athlete_id, school_id, walk_on, offer_date, created_at, source')
+          .select('id, type, athlete_id, school_id, walk_on, offer_date, created_at, source, ended_at, coach_ask_to_remove')
           .eq('athlete_id', actualAthleteId)
+          .is('ended_at', null)
           .order('offer_date', { ascending: false })
           .order('created_at', { ascending: false });
         if (error) {
@@ -1917,6 +1928,9 @@ export default function HSAthleteProfileContent({
                     athlete={athlete} 
                     useMockData={true} 
                     activityEvents={activityEvents}
+                    onActivityEventsChange={(newEvents) => {
+                      setActivityEvents(newEvents);
+                    }}
                     athleteFacts={hsSurveyFacts}
                     bioData={{
                       desiredMajor: factDesiredMajor,

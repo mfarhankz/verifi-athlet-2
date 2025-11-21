@@ -444,22 +444,55 @@ function MultipleContainers({
 
   // Function to generate rank updates for all athletes in affected containers
   const generateRankUpdates = useCallback((affectedContainers: UniqueIdentifier[]) => {
-    if (!onRankUpdate || !data) return;
+    console.log('[MultipleContainers] generateRankUpdates called:', {
+      affectedContainers,
+      hasOnRankUpdate: !!onRankUpdate,
+      hasData: !!data,
+      dataLength: data?.length
+    });
+
+    if (!onRankUpdate || !data) {
+      console.warn('[MultipleContainers] generateRankUpdates: Missing onRankUpdate or data', {
+        hasOnRankUpdate: !!onRankUpdate,
+        hasData: !!data
+      });
+      return;
+    }
 
     // Use allData if available (unfiltered), otherwise fall back to data
     const fullData = allData || data;
 
     // Use the latest items from ref to ensure we have the most current state
     const currentItems = itemsRef.current;
+    console.log('[MultipleContainers] generateRankUpdates: currentItems', currentItems);
+    
     const updates: { recruitingBoardId: string; rank: number; position?: string }[] = [];
+
+    // Create a map of athlete ID to container ID based on current items state
+    // This ensures we use the latest position from the drag operation, not the stale data prop
+    const athleteToContainerMap = new Map<string, string>();
+    Object.keys(currentItems).forEach(containerId => {
+      const containerItems = currentItems[containerId] || [];
+      containerItems.forEach(athleteId => {
+        athleteToContainerMap.set(athleteId.toString(), containerId.toString());
+      });
+    });
 
     affectedContainers.forEach(containerId => {
       const containerItems = currentItems[containerId] || [];
+      console.log(`[MultipleContainers] Processing container ${containerId}:`, {
+        containerItemsCount: containerItems.length,
+        containerItems
+      });
       
       // Get all athletes in this position from fullData (including filtered ones)
-      const allAthletesInPosition = fullData.filter(athlete => 
-        (athlete.position || 'Unassigned') === containerId.toString()
-      );
+      // Use the map to find athletes that are currently in this container (after drag)
+      const allAthletesInPosition = fullData.filter(athlete => {
+        const currentContainer = athleteToContainerMap.get(athlete.id);
+        return currentContainer === containerId.toString();
+      });
+      
+      console.log(`[MultipleContainers] Found ${allAthletesInPosition.length} athletes in position ${containerId}`);
       
       // Get visible athlete IDs in their new order
       const visibleAthleteIds = containerItems.map(id => id.toString());
@@ -506,17 +539,36 @@ function MultipleContainers({
       });
     });
 
+    console.log('[MultipleContainers] generateRankUpdates: Generated updates', {
+      updateCount: updates.length,
+      updates: updates.slice(0, 5) // Log first 5 for debugging
+    });
+
     if (updates.length > 0) {
+      console.log('[MultipleContainers] Calling onRankUpdate with', updates.length, 'updates');
       onRankUpdate(updates);
+    } else {
+      console.warn('[MultipleContainers] No updates generated, not calling onRankUpdate');
     }
   }, [onRankUpdate, data, allData]);
 
   // Process updates with debouncing to batch rapid changes
   const processRankUpdates = useCallback((containersToUpdate: UniqueIdentifier[]) => {
+    console.log('[MultipleContainers] processRankUpdates called:', {
+      containersToUpdate,
+      isUpdating: isUpdatingRef.current,
+      hasPendingUpdate: !!pendingUpdateRef.current
+    });
+
     // Merge with any pending containers
     if (pendingUpdateRef.current) {
       // Merge unique containers
       const merged = Array.from(new Set([...pendingUpdateRef.current, ...containersToUpdate]));
+      console.log('[MultipleContainers] Merging with pending containers:', {
+        pending: pendingUpdateRef.current,
+        new: containersToUpdate,
+        merged
+      });
       pendingUpdateRef.current = merged;
     } else {
       pendingUpdateRef.current = containersToUpdate;
@@ -529,19 +581,24 @@ function MultipleContainers({
     
     // If already updating, just queue and return (will be processed after current update)
     if (isUpdatingRef.current) {
+      console.log('[MultipleContainers] Update already in progress, queuing containers');
       return;
     }
 
     // Start processing
     isUpdatingRef.current = true;
+    console.log('[MultipleContainers] Starting debounced update processing');
     
     // Use a small delay to batch rapid updates
     updateTimeoutRef.current = setTimeout(() => {
       const containersToProcess = pendingUpdateRef.current;
+      console.log('[MultipleContainers] Processing queued containers:', containersToProcess);
       if (containersToProcess && containersToProcess.length > 0) {
         pendingUpdateRef.current = null;
         // Generate and send updates with the latest items state
         generateRankUpdates(containersToProcess);
+      } else {
+        console.warn('[MultipleContainers] No containers to process after timeout');
       }
       isUpdatingRef.current = false;
       updateTimeoutRef.current = null;
@@ -550,10 +607,22 @@ function MultipleContainers({
 
   // Generate rank updates when items change and we have affected containers
   useEffect(() => {
+    console.log('[MultipleContainers] useEffect triggered:', {
+      affectedContainersLength: affectedContainers.length,
+      hasOnRankUpdate: !!onRankUpdate,
+      itemsKeys: Object.keys(items)
+    });
+
     if (affectedContainers.length > 0 && onRankUpdate) {
+      console.log('[MultipleContainers] Processing rank updates for containers:', affectedContainers);
       // Process updates with debouncing
       processRankUpdates(affectedContainers);
       setAffectedContainers([]); // Clear the affected containers
+    } else if (affectedContainers.length > 0) {
+      console.warn('[MultipleContainers] Affected containers but no onRankUpdate callback:', {
+        affectedContainers,
+        hasOnRankUpdate: !!onRankUpdate
+      });
     }
   }, [items, affectedContainers, onRankUpdate, processRankUpdates]);
 
@@ -788,8 +857,12 @@ function MultipleContainers({
         const overContainer = findContainer(overId);
 
         if (overContainer) {
-          const activeIndex = items[activeContainer].indexOf(active.id);
-          const overIndex = items[overContainer].indexOf(overId);
+          console.log('[MultipleContainers] onDragEnd - Player move:', {
+            activeId: active.id,
+            activeContainer,
+            overContainer,
+            overId
+          });
 
           if (allowMultiples && activeContainer !== overContainer) {
             // Copy mode: Add item to destination without removing from source
@@ -800,6 +873,7 @@ function MultipleContainers({
               if (items[overContainer].includes(activeItemId)) {
                 // Just reorder within the destination
                 const currentIndex = items[overContainer].indexOf(activeItemId);
+                const overIndex = items[overContainer].indexOf(overId);
                 if (currentIndex !== overIndex) {
                   return {
                     ...items,
@@ -814,12 +888,13 @@ function MultipleContainers({
               }
               
               // Add to destination container
+              const overIndex = items[overContainer].indexOf(overId);
               return {
                 ...items,
                 [overContainer]: arrayMove(
                   [...items[overContainer], activeItemId],
                   items[overContainer].length,
-                  overIndex
+                  overIndex >= 0 ? overIndex : items[overContainer].length
                 ),
               };
             });
@@ -827,22 +902,37 @@ function MultipleContainers({
             setAffectedContainers([overContainer]);
           } else {
             // Move mode (default): Move item from source to destination
-            if (activeIndex !== overIndex) {
-              setItems((items) => ({
-                ...items,
-                [overContainer]: arrayMove(
-                  items[overContainer],
+            // Note: onDragOver already handles moving between containers,
+            // so we only need to handle reordering within the same container here
+            if (activeContainer === overContainer) {
+              const activeIndex = items[activeContainer].indexOf(active.id);
+              const overIndex = items[overContainer].indexOf(overId);
+              
+              if (activeIndex !== overIndex) {
+                console.log('[MultipleContainers] Reordering within same container:', {
                   activeIndex,
-                  overIndex
-                ),
-              }));
+                  overIndex,
+                  container: activeContainer
+                });
+                setItems((items) => ({
+                  ...items,
+                  [overContainer]: arrayMove(
+                    items[overContainer],
+                    activeIndex,
+                    overIndex
+                  ),
+                }));
+              }
             }
+            // If moving between containers, onDragOver already updated the items state
+            // We just need to update ranks
 
             // Update ranks for both containers if they're different
             const containersToUpdate = activeContainer === overContainer 
               ? [activeContainer] 
               : [activeContainer, overContainer];
             
+            console.log('[MultipleContainers] Setting affected containers:', containersToUpdate);
             setAffectedContainers(containersToUpdate);
           }
         }

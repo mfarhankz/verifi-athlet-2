@@ -200,7 +200,9 @@ export async function fetchActivityFeedEvents(
     };
   },
   page: number = 1,
-  pageSize: number = 25
+  pageSize: number = 25,
+  sortField?: string | null,
+  sortOrder?: 'ascend' | 'descend' | null
 ): Promise<{ data: ActivityEvent[]; hasMore: boolean; totalCount: number }> {
   try {
     // Get the appropriate view for this customer's package
@@ -561,8 +563,52 @@ export async function fetchActivityFeedEvents(
       }
     }
     
-    // Order by offer date descending (most recent first), nulls last
-    query = query.order('offer_date', { ascending: false });
+    // Map frontend field names to database column names for offer counts
+    const offerCountColumnMap: Record<string, string> = {
+      'totalOffers': 'offer_count_all',
+      'p4': 'offer_count_p4',
+      'g5': 'offer_count_g5',
+      'fcs': 'offer_count_fcs',
+      'd3': 'offer_count_d3'
+    };
+    
+    // Apply sorting if provided
+    if (sortField && sortOrder) {
+      // Special handling for d2Naia - need to sort by sum of d2 + naia
+      if (sortField === 'd2Naia') {
+        // Sort by d2 first, then naia as secondary sort
+        if (sortOrder === 'ascend') {
+          query = query.order('offer_count_d2', { ascending: true, nullsLast: true })
+                      .order('offer_count_naia', { ascending: true, nullsLast: true });
+        } else {
+          query = query.order('offer_count_d2', { ascending: false, nullsLast: true })
+                      .order('offer_count_naia', { ascending: false, nullsLast: true });
+        }
+      } else {
+        const dbColumnName = offerCountColumnMap[sortField] || sortField;
+        
+        // For offer count columns, use special sorting logic:
+        // - Ascending: nullsLast (zeros/nulls go last)
+        // - Descending: nullsLast (zeros/nulls go last)
+        if (offerCountColumnMap[sortField]) {
+          if (sortOrder === 'ascend') {
+            query = query.order(dbColumnName, { ascending: true, nullsLast: true });
+          } else {
+            query = query.order(dbColumnName, { ascending: false, nullsLast: true });
+          }
+        } else {
+          // For other columns, use default sorting
+          if (sortOrder === 'ascend') {
+            query = query.order(dbColumnName, { ascending: true, nullsLast: true });
+          } else {
+            query = query.order(dbColumnName, { ascending: false, nullsLast: true });
+          }
+        }
+      }
+    } else {
+      // Default: Order by offer date descending (most recent first), nulls last
+      query = query.order('offer_date', { ascending: false });
+    }
     
     // Get total count for pagination info using the same filtered query
     const countQuery = supabase.from(viewName).select('*', { count: 'exact', head: true });
@@ -870,7 +916,6 @@ export async function fetchActivityFeedEvents(
     // Calculate pagination info
     const totalCount = count || 0;
     const hasMore = (from + (data?.length || 0)) < totalCount;
-    
     
     // Collect school IDs for logo fetching
     const schoolIds = (data || [])

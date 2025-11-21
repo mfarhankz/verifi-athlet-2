@@ -14,6 +14,9 @@ import {
   Select,
   Switch,
   Rate,
+  Modal,
+  DatePicker,
+  Radio,
 } from "antd";
 import Image from "next/image";
 import type { TableColumnsType } from "antd";
@@ -24,6 +27,7 @@ import type { GameLog } from "@/types/database";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useUser } from "@/contexts/CustomerContext";
+import dayjs from "dayjs";
 import type { SportStatConfig } from "@/types/database";
 import type { StatCategory } from "@/types/database";
 import { formatStatDecimal, formatPhoneNumber } from "@/utils/utils";
@@ -2563,9 +2567,19 @@ const DateRangeFilter = ({
 };
 
 // Dynamic Activity for HS profiles using offers table
-const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: any[] }) => {
+const Activity = ({ athlete, events, onEventsChange }: { athlete: AthleteData | null; events?: any[]; onEventsChange?: (newEvents: any[]) => void }) => {
   // State for date range filter (only affects the table, not the offers logo section)
   const [dateRange, setDateRange] = useState<[string, string]>(['', '']);
+  
+  // State to track updating activities
+  const [updatingActivities, setUpdatingActivities] = useState<Set<string>>(new Set());
+  const userDetails = useUser();
+  
+  // State for commit inaccurate modal
+  const [commitModalVisible, setCommitModalVisible] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<any>(null);
+  const [commitOption, setCommitOption] = useState<'never_committed' | 'decommitted'>('decommitted');
+  const [decommitDate, setDecommitDate] = useState<dayjs.Dayjs | null>(null);
   
   // All events - unfiltered (used for offers logo section)
   const allEventsRaw = events || [];
@@ -2723,6 +2737,255 @@ const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: a
   const athleteName = athlete?.name_first && athlete?.name_last 
     ? `${athlete.name_first} ${athlete.name_last}` 
     : 'Athlete';
+
+  // Function to handle marking activity as inaccurate (opens modal for commits)
+  const handleMarkInaccurate = (activityId: string, activity: any) => {
+    if (!activityId || !userDetails?.id) {
+      alert('You must be logged in to mark activities as inaccurate.');
+      return;
+    }
+    
+    const activityType = (activity?.type || '').toString().toLowerCase();
+    
+    // If it's a commit, show the modal with options
+    if (activityType === 'commit') {
+      setSelectedCommit(activity);
+      setCommitOption('decommitted');
+      setDecommitDate(dayjs());
+      setCommitModalVisible(true);
+    } else {
+      // For non-commits, mark as inaccurate directly
+      markAsInaccurate(activityId, activity);
+    }
+  };
+  
+  // Function to mark activity as inaccurate (sets ended_at and coach_ask_to_remove)
+  const markAsInaccurate = async (activityId: string, activity?: any) => {
+    if (!activityId || !userDetails?.id) {
+      console.error('markAsInaccurate: Missing activityId or userDetails.id', { activityId, userId: userDetails?.id });
+      return;
+    }
+    
+    setUpdatingActivities(prev => new Set(prev).add(activityId));
+    
+    try {
+      const endedAt = new Date().toISOString();
+      const coachAskToRemove = userDetails.id;
+      
+      console.log('markAsInaccurate: Attempting update', { 
+        activityId, 
+        endedAt, 
+        coachAskToRemove 
+      });
+      
+      const { data, error } = await supabase
+        .from('offer')
+        .update({ 
+          ended_at: endedAt,
+          coach_ask_to_remove: coachAskToRemove
+        })
+        .eq('id', activityId)
+        .select();
+      
+      if (error) {
+        console.error('Error marking activity as inaccurate:', error);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        alert(`Failed to mark activity as inaccurate: ${error.message || 'Unknown error'}`);
+        setUpdatingActivities(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(activityId);
+          return newSet;
+        });
+        return;
+      }
+      
+      // Verify the update was successful
+      if (!data || data.length === 0) {
+        console.error('markAsInaccurate: Update returned no data', { activityId, data });
+        alert('Failed to mark activity as inaccurate: No data returned from update');
+        setUpdatingActivities(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(activityId);
+          return newSet;
+        });
+        return;
+      }
+      
+      console.log('markAsInaccurate: Update successful', { data });
+      
+      // Send email notification
+      try {
+        // Get activity details from the record or from allEventsRaw
+        const activityRecord = activity || allEventsRaw.find((e: any) => e.id === activityId);
+        
+        if (activityRecord) {
+          const activityType = formatType(activityRecord.type) || 'Unknown';
+          const schoolName = activityRecord.school_name || 'Unknown School';
+          const athleteNameForEmail = athlete?.name_first && athlete?.name_last 
+            ? `${athlete.name_first} ${athlete.name_last}`
+            : athleteName || 'Unknown Athlete';
+          const athleteId = activityRecord.athlete_id || '';
+          const offerDate = activityRecord.offer_date || activityRecord.created_at || null;
+          const source = activityRecord.source || 'Unknown';
+          
+          // Get user's name and email
+          const markedByName = userDetails.name_first && userDetails.name_last 
+            ? `${userDetails.name_first} ${userDetails.name_last}`
+            : userDetails.email || 'Unknown User';
+          const markedByEmail = userDetails.email || undefined;
+          
+          const emailResponse = await fetch('/api/inaccurate-activity-notification', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              activityType,
+              schoolName,
+              athleteName: athleteNameForEmail,
+              athleteId,
+              activityId,
+              markedBy: markedByName,
+              markedByEmail,
+              markedAt: endedAt,
+              offerDate,
+              source,
+            }),
+          });
+          
+          if (!emailResponse.ok) {
+            const errorData = await emailResponse.json();
+            console.error('Failed to send inaccurate activity notification email:', errorData);
+            // Don't show error to user, just log it
+          } else {
+            console.log('Inaccurate activity notification email sent successfully');
+          }
+        }
+      } catch (emailError) {
+        console.error('Error sending inaccurate activity notification email:', emailError);
+        // Don't show error to user, just log it
+      }
+      
+      // Only remove from UI after successful database update
+      const updatedEvents = (allEventsRaw || []).filter((e: any) => e.id !== activityId);
+      
+      // Notify parent component of the change
+      if (onEventsChange) {
+        onEventsChange(updatedEvents);
+      }
+    } catch (error) {
+      console.error('Error in markAsInaccurate:', error);
+      alert(`An unexpected error occurred: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setUpdatingActivities(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(activityId);
+        return newSet;
+      });
+    }
+  };
+  
+  // Function to handle commit modal actions
+  const handleCommitModalOk = async () => {
+    if (!selectedCommit || !userDetails?.id) {
+      return;
+    }
+    
+    setUpdatingActivities(prev => new Set(prev).add(selectedCommit.id));
+    
+    try {
+      if (commitOption === 'never_committed') {
+        // Mark as inaccurate (same as regular mark inaccurate)
+        await markAsInaccurate(selectedCommit.id, selectedCommit);
+        // Close modal after marking as inaccurate
+        setCommitModalVisible(false);
+        setSelectedCommit(null);
+        setCommitOption('decommitted');
+        setDecommitDate(null);
+        setUpdatingActivities(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(selectedCommit.id);
+          return newSet;
+        });
+        return;
+      } else if (commitOption === 'decommitted') {
+        // Create a decommit row (do NOT mark original as inaccurate)
+        const decommitDateValue = decommitDate ? decommitDate.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD');
+        
+        const { data: newDecommit, error: decommitError } = await supabase
+          .from('offer')
+          .insert({
+            athlete_id: selectedCommit.athlete_id,
+            school_id: selectedCommit.school_id,
+            type: 'de-commit',
+            offer_date: decommitDateValue,
+            created_at: new Date().toISOString(),
+            source: selectedCommit.source || 'manual',
+            walk_on: selectedCommit.walk_on || false
+          })
+          .select()
+          .single();
+        
+        if (decommitError) {
+          console.error('Error creating decommit:', decommitError);
+          alert('Failed to create decommit. Please try again.');
+          setUpdatingActivities(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(selectedCommit.id);
+            return newSet;
+          });
+          return;
+        }
+        
+        console.log('handleCommitModalOk: Decommit created successfully', { newDecommit });
+        
+        // Keep the original commit and add the new decommit to the events array
+        const updatedEvents = [...(allEventsRaw || [])];
+        
+        // Add the new decommit to the events array
+        if (newDecommit) {
+          // Enrich the decommit with school data from the original commit
+          const enrichedDecommit = {
+            ...newDecommit,
+            school_name: selectedCommit.school_name,
+            school_logo_url: selectedCommit.school_logo_url,
+            school_rank: selectedCommit.school_rank
+          };
+          updatedEvents.push(enrichedDecommit);
+        }
+        
+        // Notify parent component of the change
+        if (onEventsChange) {
+          onEventsChange(updatedEvents);
+        }
+      }
+      
+      setCommitModalVisible(false);
+      setSelectedCommit(null);
+      setCommitOption('decommitted');
+      setDecommitDate(null);
+    } catch (error) {
+      console.error('Error in handleCommitModalOk:', error);
+      alert('An unexpected error occurred. Please try again.');
+      setUpdatingActivities(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(selectedCommit.id);
+        return newSet;
+      });
+    }
+  };
+  
+  const handleCommitModalCancel = () => {
+    setCommitModalVisible(false);
+    setSelectedCommit(null);
+    setCommitOption('never_committed');
+    setDecommitDate(null);
+  };
 
   return (
     <div className="activity">
@@ -3049,12 +3312,354 @@ const Activity = ({ athlete, events }: { athlete: AthleteData | null; events?: a
                   );
                 },
               },
+              {
+                title: "Source",
+                dataIndex: "source",
+                key: "source",
+                width: 100,
+                render: (source: string) => {
+                  if (!source) return <span style={{ fontSize: 12, color: "#d9d9d9" }}>Unknown</span>;
+                  
+                  const sourceLower = source.toLowerCase();
+                  
+                  if (sourceLower.includes('247sports.com')) {
+                    const href = source.startsWith('http') ? source : `https://${source}`;
+                    return (
+                      <a 
+                        href={href} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          fontSize: 12, 
+                          color: "#1890ff",
+                          textDecoration: "none"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+                        onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+                      >
+                        247
+                      </a>
+                    );
+                  }
+                  
+                  if (sourceLower.includes('on3.com')) {
+                    const href = source.startsWith('http') ? source : `https://${source}`;
+                    return (
+                      <a 
+                        href={href} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          fontSize: 12, 
+                          color: "#1890ff",
+                          textDecoration: "none"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+                        onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+                      >
+                        ON3
+                      </a>
+                    );
+                  }
+                  
+                  if (sourceLower.includes('twitter.com') || sourceLower.includes('x.com/')) {
+                    const href = source.startsWith('http') ? source : `https://${source}`;
+                    return (
+                      <a 
+                        href={href} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          fontSize: 12, 
+                          color: "#1890ff",
+                          textDecoration: "none"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+                        onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+                      >
+                        Twitter
+                      </a>
+                    );
+                  }
+                  
+                  if (sourceLower.includes('rivals.com')) {
+                    const href = source.startsWith('http') ? source : `https://${source}`;
+                    return (
+                      <a 
+                        href={href} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          fontSize: 12, 
+                          color: "#1890ff",
+                          textDecoration: "none"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+                        onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+                      >
+                        Rivals
+                      </a>
+                    );
+                  }
+                  
+                  if (sourceLower.includes('espn.com')) {
+                    const href = source.startsWith('http') ? source : `https://${source}`;
+                    return (
+                      <a 
+                        href={href} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ 
+                          fontSize: 12, 
+                          color: "#1890ff",
+                          textDecoration: "none"
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseEnter={(e) => e.currentTarget.style.textDecoration = "underline"}
+                        onMouseLeave={(e) => e.currentTarget.style.textDecoration = "none"}
+                      >
+                        ESPN
+                      </a>
+                    );
+                  }
+                  
+                  // Handle "tp" source as "Matriculated"
+                  if (sourceLower === 'tp') {
+                    return (
+                      <span style={{ 
+                        fontSize: 12, 
+                        color: "#666",
+                        fontWeight: 500
+                      }}>
+                        Matriculated
+                      </span>
+                    );
+                  }
+                  
+                  return (
+                    <span style={{ 
+                      fontSize: 12, 
+                      color: "#666",
+                      textTransform: "capitalize"
+                    }}>
+                      {source}
+                    </span>
+                  );
+                },
+              },
+              {
+                title: "Inaccurate",
+                key: "inaccurate",
+                width: 120,
+                render: (_: any, record: any) => {
+                  const activityId = record.id;
+                  if (!activityId) return null;
+                  
+                  // If already ended, don't show the button (shouldn't happen since we filter these out)
+                  if (record.ended_at) {
+                    return null;
+                  }
+                  
+                  const isUpdating = updatingActivities.has(activityId);
+                  
+                  return (
+                    <Button
+                      type="dashed"
+                      danger
+                      size="small"
+                      loading={isUpdating}
+                      onClick={() => handleMarkInaccurate(activityId, record)}
+                      style={{
+                        minWidth: '80px'
+                      }}
+                    >
+                      Mark Inaccurate
+                    </Button>
+                  );
+                },
+              },
             ]}
             pagination={false}
             scroll={{ x: "max-content" }}
           />
         )}
     </div>
+    
+    {/* Commit Inaccurate Modal */}
+    <Modal
+      title={
+        <div style={{ 
+          fontSize: '20px', 
+          fontWeight: 600, 
+          color: '#1c1d4d',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>Mark Commit as Inaccurate</span>
+        </div>
+      }
+      open={commitModalVisible}
+      onOk={handleCommitModalOk}
+      onCancel={handleCommitModalCancel}
+      okText="Confirm"
+      cancelText="Cancel"
+      width={520}
+      okButtonProps={{
+        style: {
+          backgroundColor: '#1c1d4d',
+          borderColor: '#1c1d4d',
+          fontWeight: 500,
+          minWidth: '100px'
+        }
+      }}
+      cancelButtonProps={{
+        style: {
+          fontWeight: 500,
+          minWidth: '100px'
+        }
+      }}
+      styles={{
+        body: {
+          padding: '24px'
+        }
+      }}
+    >
+      <style dangerouslySetInnerHTML={{__html: `
+        .commit-inaccurate-radio-group.ant-radio-group {
+          border: none !important;
+        }
+      `}} />
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ 
+          marginBottom: '20px', 
+          fontSize: '14px', 
+          color: '#666',
+          fontWeight: 500,
+          lineHeight: '1.5'
+        }}>
+          Please select how to handle this inaccurate commit:
+        </div>
+        <Radio.Group
+          value={commitOption}
+          onChange={(e) => {
+            setCommitOption(e.target.value);
+            if (e.target.value === 'decommitted' && !decommitDate) {
+              setDecommitDate(dayjs());
+            }
+          }}
+          style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', border: 'none' }}
+          className="commit-inaccurate-radio-group"
+        >
+          <label
+            style={{
+              display: 'block',
+              padding: '16px',
+              border: `2px solid ${commitOption === 'decommitted' ? '#1c1d4d' : '#e8e8e8'}`,
+              borderRadius: '8px',
+              backgroundColor: commitOption === 'decommitted' ? '#f0f7ff' : '#fff',
+              transition: 'all 0.2s',
+              cursor: 'pointer',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
+            onClick={() => {
+              setCommitOption('decommitted');
+              if (!decommitDate) {
+                setDecommitDate(dayjs());
+              }
+            }}
+          >
+            <Radio 
+              value="decommitted"
+              style={{ marginRight: '12px' }}
+            >
+              <span style={{ 
+                fontSize: '15px',
+                fontWeight: commitOption === 'decommitted' ? 600 : 500,
+                color: commitOption === 'decommitted' ? '#1c1d4d' : '#333'
+              }}>
+                Athlete Decommitted
+              </span>
+            </Radio>
+            <div style={{ 
+              marginLeft: '28px',
+              marginTop: '6px',
+              fontSize: '13px',
+              color: '#666',
+              lineHeight: '1.4'
+            }}>
+            </div>
+          </label>
+          <label
+            style={{
+              display: 'block',
+              padding: '16px',
+              border: `2px solid ${commitOption === 'never_committed' ? '#1c1d4d' : '#e8e8e8'}`,
+              borderRadius: '8px',
+              backgroundColor: commitOption === 'never_committed' ? '#f0f7ff' : '#fff',
+              transition: 'all 0.2s',
+              cursor: 'pointer',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}
+            onClick={() => setCommitOption('never_committed')}
+          >
+            <Radio 
+              value="never_committed"
+              style={{ marginRight: '12px' }}
+            >
+              <span style={{ 
+                fontSize: '15px',
+                fontWeight: commitOption === 'never_committed' ? 600 : 500,
+                color: commitOption === 'never_committed' ? '#1c1d4d' : '#333'
+              }}>
+                Athlete Never Committed to School
+              </span>
+            </Radio>
+            <div style={{ 
+              marginLeft: '28px',
+              marginTop: '6px',
+              fontSize: '13px',
+              color: '#666',
+              lineHeight: '1.4'
+            }}>
+            </div>
+          </label>
+        </Radio.Group>
+      </div>
+      
+      {commitOption === 'decommitted' && (
+        <div style={{ 
+          marginTop: '20px',
+          padding: '16px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '8px',
+          border: '1px solid #e8e8e8'
+        }}>
+          <div style={{ 
+            marginBottom: '12px',
+            fontSize: '14px',
+            fontWeight: 500,
+            color: '#1c1d4d'
+          }}>
+            Decommitment Date
+          </div>
+          <DatePicker
+            value={decommitDate}
+            onChange={(date) => setDecommitDate(date)}
+            format="MM/DD/YYYY"
+            style={{ width: '100%', height: '40px' }}
+            placeholder="Select date"
+            size="large"
+          />
+        </div>
+      )}
+    </Modal>
   </div>
 );
 };
@@ -4551,6 +5156,7 @@ const items = (
   dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null,
   useMockData?: boolean,
   activityEvents?: any[],
+  onActivityEventsChange?: (newEvents: any[]) => void,
   bioData?: {
     desiredMajor: string | null;
     predictedGPA: string | null;
@@ -4625,7 +5231,7 @@ const items = (
       {
         key: "1",
         label: "Activity",
-        children: <Activity athlete={athlete} events={activityEvents} />,
+        children: <Activity athlete={athlete} events={activityEvents} onEventsChange={onActivityEventsChange} />,
       },
       {
         key: "2",
@@ -4733,6 +5339,7 @@ export default function PlayerInformation({
   dataSource = null,
   useMockData = false,
   activityEvents,
+  onActivityEventsChange,
   bioData,
   coachData,
   schoolName,
@@ -4742,6 +5349,7 @@ export default function PlayerInformation({
   dataSource?: 'transfer_portal' | 'all_athletes' | 'juco' | 'high_schools' | 'hs_athletes' | null;
   useMockData?: boolean;
   activityEvents?: any[];
+  onActivityEventsChange?: (newEvents: any[]) => void;
   bioData?: {
     desiredMajor: string | null;
     predictedGPA: string | null;
@@ -4788,7 +5396,7 @@ export default function PlayerInformation({
       `}</style>
       <Tabs
         defaultActiveKey="1"
-        items={items(athlete, config, dataSource, useMockData, activityEvents, bioData, coachData, schoolName, athleteFacts)}
+        items={items(athlete, config, dataSource, useMockData, activityEvents, onActivityEventsChange, bioData, coachData, schoolName, athleteFacts)}
         onChange={onChange}
         className={`player-information ${dataSource === 'juco' ? 'juco-tabs' : ''}`}
       />
