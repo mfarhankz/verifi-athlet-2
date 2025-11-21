@@ -5326,7 +5326,7 @@ export function TableSearchContent({
                                 />
                                 {/* Count text on top */}
                                 <span
-                                  className="text-white font-bold relative"
+                                  className="text-primery font-bold relative"
                                   style={{
                                     zIndex: 2001,
                                     fontSize: `${textSize}px`,
@@ -5806,7 +5806,7 @@ export function TableSearchContent({
                                         )}
                                       </Flex>
                                     </Flex>
-                                    <h4 className="!text-[24px] mt-2 font-semibold text-sm mb-3 flex items-center justify-between">
+                                    <h4 className="!text-[24px] mt-2 font-semibold mb-3 flex items-center justify-between">
                                       <span
                                         className="cursor-pointer hover:text-blue-600 hover:underline"
                                         onClick={(e) => {
@@ -5890,21 +5890,23 @@ export function TableSearchContent({
                                         </>
                                       )}
                                       <div className="w-[100%] flex flex-col items-center justify-between">
-                                        <h6 className="flex flex-col items-center justify-between">
-                                          <small>Current Projection</small>
-                                          <span className="font-medium">
+                                        <h6 className="flex flex-col items-center justify-between mb-3">
+                                          <small className="!text-[18px] mt-2 font-normal">Current Projection</small>
+                                          <span className="!text-[24px] mt-2 font-semibold">
                                             D3 - TOPHALF
                                           </span>
                                         </h6>
                                         <ProgressBar
                                           value={55}
-                                          height={30}
+                                          height={35}
                                           color="#2BB650"
                                           label=""
                                           labelSize="12"
                                           labelWeight={400}
                                           labelWidth={110}
+                                          className="!w-[60%]"
                                         />
+
                                       </div>
                                       <div className="w-[95%] flex items-center justify-between mt-5 mx-auto">
                                         <Button
@@ -6097,19 +6099,19 @@ export function TableSearchContent({
                                     {school.school || ""}
                                   </span>
                                 </h6>
-                                <button
+                                <a
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleRemoveSchool(schoolId);
                                   }}
-                                  className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                  className="ml-2 flex items-center justify-center w-7 h-7 bg-none transition-colors flex-shrink-0"
                                   title="Remove from road plan"
                                   aria-label="Remove school from road plan"
                                 >
                                   <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     viewBox="0 0 24 24"
-                                    className="w-5 h-5"
+                                    className="w-4 h-4"
                                     style={{
                                       fill: "white",
                                       stroke: "white",
@@ -6125,7 +6127,7 @@ export function TableSearchContent({
                                       fill="none"
                                     />
                                   </svg>
-                                </button>
+                                </a>
                               </div>
                             </div>
                           );
