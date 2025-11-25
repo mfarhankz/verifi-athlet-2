@@ -1839,6 +1839,7 @@ def build_view_statements(config):
         " m_designated_student_athlete",
         " school_name",
         " division",
+        " fbs_conf_group",
         f" {conf_field}",
         *starter_select_lines
     ])

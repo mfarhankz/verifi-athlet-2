@@ -20,7 +20,7 @@ import { Flex } from "antd";
 import { fetchSchoolWithFacts, fetchHighSchoolAthletes, fetchAthleteRatings, fetchSchoolFacts, fetchCoachInfo } from "@/lib/queries";
 import { fetchUserDetails } from "@/utils/utils";
 import { supabase } from "@/lib/supabaseClient";
-import { useUser } from "@/contexts/CustomerContext";
+import { useUser, useCustomer } from "@/contexts/CustomerContext";
 import { preparePrintRequestData, sendPrintRequest, convertSchoolId } from "@/utils/printUtils";
 import AddPlayerModal from "./AddPlayerModal";
 import EditSchoolModal from "./EditSchoolModal";
@@ -45,6 +45,7 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
   const searchParams = useSearchParams();
   const [schoolName, setSchoolName] = useState<string>('ABERNATHY HS');
   const userDetails = useUser();
+  const { activeCustomerId } = useCustomer();
   const [prospectsData, setProspectsData] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -822,10 +823,9 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
       setLoading(true);
       setError(null); // Clear any previous errors
       
-      // Fetch user details to get customer ID
-      const userDetails = await fetchUserDetails();
-      if (userDetails?.customer_id) {
-        setCustomerId(userDetails.customer_id);
+      // Use activeCustomerId from CustomerContext for package-based filtering
+      if (activeCustomerId) {
+        setCustomerId(activeCustomerId);
       }
       
       // Fetch school data
@@ -836,11 +836,11 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
         setSchoolName(cleanName);
       }
       
-      // Fetch prospects data
+      // Fetch prospects data - use activeCustomerId for package-based filtering
       const prospectsResult = await fetchHighSchoolAthletes(
         schoolId,
         'fb', // Default to football, could be made dynamic based on dataSource
-        userDetails?.customer_id,
+        activeCustomerId || undefined, // Use activeCustomerId for package-based view selection
         {
           page: 1,
           limit: 50
@@ -863,8 +863,8 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
       
       // Fetch ratings for the loaded athletes
       const athleteIds = prospectsResult.data?.map(athlete => athlete.athlete_id).filter(id => id) || [];
-      if (athleteIds.length > 0 && userDetails?.customer_id) {
-        const ratings = await fetchAthleteRatings(athleteIds, userDetails.customer_id);
+      if (athleteIds.length > 0 && activeCustomerId) {
+        const ratings = await fetchAthleteRatings(athleteIds, activeCustomerId);
         setAthleteRatings(ratings);
       }
       
@@ -887,7 +887,7 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
 
   useEffect(() => {
     fetchData();
-  }, [schoolId]);
+  }, [schoolId, activeCustomerId]); // Re-fetch when activeCustomerId changes to update package-based filtering
 
 
   // Modal handlers
@@ -930,10 +930,9 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
         return;
       }
 
-      // Fetch user details to get customer ID
-      const userDetails = await fetchUserDetails();
-      if (!userDetails?.customer_id) {
-        alert("Unable to print: Missing user details. Please try refreshing the page.");
+      // Use activeCustomerId from CustomerContext
+      if (!activeCustomerId) {
+        alert("Unable to print: Missing customer ID. Please try refreshing the page.");
         setIsPrinting(false);
         return;
       }
@@ -950,6 +949,14 @@ export default function SchoolProfileContent({ schoolId, dataSource, isInModal =
 
       // Get email from the authentication session
       const coachEmail = session.user.email || "";
+
+      // Fetch user details for print request
+      const userDetails = await fetchUserDetails();
+      if (!userDetails) {
+        alert("Unable to print: Missing user details. Please try refreshing the page.");
+        setIsPrinting(false);
+        return;
+      }
 
       // Prepare the request data (without cover_page)
       const requestData = await preparePrintRequestData(

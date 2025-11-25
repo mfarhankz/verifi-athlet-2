@@ -1,11 +1,35 @@
 import { supabase } from "@/lib/supabaseClient";
+import type { DataSourceType } from "@/app/(dashboard)/_components/filters/GenericFilterConfig";
 
 export interface School {
   id: string;
   name: string;
 }
 
-export type DivisionType = 'D1' | 'D2' | 'D3' | 'NAIA' | 'HIGH_SCHOOL' | 'JUNIOR_COLLEGE' | 'ALL';
+export type DivisionType = 'D1' | 'D2' | 'D3' | 'NAIA' | 'HIGH_SCHOOL' | 'JUNIOR_COLLEGE' | 'ALL' | 'NJCAA' | 'CCCAA' | 'NWAC';
+
+/**
+ * Helper function to get available divisions based on data source
+ * @param dataSource - The data source type
+ * @returns Array of division types available for the data source
+ */
+export function getAvailableDivisions(dataSource?: DataSourceType): DivisionType[] {
+  switch (dataSource) {
+    case 'transfer_portal':
+    case 'all_athletes':
+      return ['D1', 'D2', 'D3', 'NAIA', 'NJCAA', 'CCCAA', 'NWAC'];
+    case 'juco':
+      return ['NJCAA', 'CCCAA', 'NWAC'];
+    case 'high_schools':
+    case 'hs_athletes':
+      return []; // No division filtering for high schools
+    case 'activity_feed':
+    case 'recruiting_board':
+      return []; // No division filtering for activity feed or recruiting board
+    default:
+      return ['D1', 'D2', 'D3', 'NAIA', 'NJCAA', 'CCCAA', 'NWAC'];
+  }
+}
 
 export interface SchoolFilterOptions {
   division?: DivisionType;
@@ -46,11 +70,15 @@ export async function fetchSchoolsByDivision(options: SchoolFilterOptions = {}):
     const divisionConditions = targetDivisions.map(div => {
       if (div === 'NAIA') {
         return { data_type_id: 118, value: 'NAIA' };
+      } else if (div === 'NJCAA' || div === 'CCCAA' || div === 'NWAC') {
+        // NJCAA, CCCAA, and NWAC are stored in athletic_association (data_type_id 118)
+        return { data_type_id: 118, value: div };
       } else if (div === 'HIGH_SCHOOL') {
         return { data_type_id: 117, value: 'High School' };
       } else if (div === 'JUNIOR_COLLEGE') {
         return { data_type_id: 117, value: 'Junior College' };
       } else {
+        // D1, D2, D3 are stored in division (data_type_id 119)
         return { data_type_id: 119, value: div };
       }
     });

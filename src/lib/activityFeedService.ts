@@ -103,14 +103,15 @@ function processOfferCounts(offerCountsByGroup: any): {
  */
 export async function getActivityFeedView(customerId: string): Promise<string> {
   try {
-    const packageDetails = await fetchCustomerPackageDetails(customerId);
+    // Activity feed is only for football, so filter by sport
+    const packageDetails = await fetchCustomerPackageDetails(customerId, 'fb');
     
     if (!packageDetails) {
       // No package found - no access
       return 'none';
     }
 
-    // Only football packages can grant access
+    // Only football packages can grant access (should already be filtered, but double-check)
     if (packageDetails.sport !== 'fb') {
       return 'none';
     }

@@ -3,6 +3,7 @@ import { AthleteData, RecruitingBoardData, SportStatConfig, RecruitingBoardPosit
 import { FilterState } from '../types/filters';
 import { fetchUserDetails } from '../utils/utils';
 import { US_STATE_ABBREVIATIONS } from '@/utils/constants';
+import { fetchSchoolsByMultipleDivisions } from '@/utils/schoolUtils';
 
 // ============================================================================
 // UNIFIED PACKAGE DEFINITION SYSTEM
@@ -340,8 +341,9 @@ function getHsViewSuffixForSport(sport: string, userPackageIds: number[]): strin
 /**
  * Fetch customer package details from the database
  * Returns the package information for a specific customer
+ * Uses priority map to select the best package when multiple packages exist
  */
-export async function fetchCustomerPackageDetails(customerId: string): Promise<PackageDefinition | null> {
+export async function fetchCustomerPackageDetails(customerId: string, sport?: string): Promise<PackageDefinition | null> {
   try {
     // Get the customer's package information
     const { data: customerPackages, error: packageError } = await supabase
@@ -371,20 +373,41 @@ export async function fetchCustomerPackageDetails(customerId: string): Promise<P
       .map((row) => getPackageById(row.customer_package.id))
       .filter((pkg): pkg is PackageDefinition => !!pkg);
 
-    // Prefer football packages that grant activity feed access
-    const allowedSuffixes = new Set(['platinum', 'gold', 'silver_plus']);
-    const footballEligible = packageDefinitions
-      .filter(p => p.sport === 'fb' && allowedSuffixes.has(p.hs_suffix));
-
-    if (footballEligible.length > 0) {
-      // Rank by hs_suffix priority: platinum > gold > silver_plus
-      const priority: Record<string, number> = { platinum: 1, gold: 2, silver_plus: 3 };
-      footballEligible.sort((a, b) => (priority[a.hs_suffix] || 99) - (priority[b.hs_suffix] || 99));
-      return footballEligible[0];
+    // Filter by sport if provided
+    let filteredPackages = packageDefinitions;
+    if (sport) {
+      filteredPackages = packageDefinitions.filter(p => p.sport === sport);
     }
 
-    // Otherwise, return the first known package definition (backward compatible)
-    return packageDefinitions[0] || null;
+    if (filteredPackages.length === 0) {
+      return null;
+    }
+
+    // Use priority map to select the best package (lower number = higher priority)
+    const priorityMap: Record<string, number> = {
+      'ultra': 1,
+      'platinum': 1,
+      'elite': 2,
+      'gold': 2,
+      'pg_gold': 2,
+      'silver_plus': 3,
+      'naia_silver_plus': 3,
+      'silver': 4,
+      'pg_silver': 4,
+      'starter': 4,
+      'naia': 5,
+      'juco': 6,
+      'camp_data': 7,
+    };
+
+    // Sort by priority and return the best one
+    filteredPackages.sort((a, b) => {
+      const priorityA = priorityMap[a.package_type] || 99;
+      const priorityB = priorityMap[b.package_type] || 99;
+      return priorityA - priorityB;
+    });
+
+    return filteredPackages[0];
   } catch (error) {
     console.error('Error in fetchCustomerPackageDetails:', error);
     return null;
@@ -397,28 +420,21 @@ export async function fetchCustomerPackageDetails(customerId: string): Promise<P
  */
 export async function getCustomerHsView(customerId: string, sport: string): Promise<string> {
   try {
-    // Debug log removed('Fetching package details for customer:', customerId);
-    const packageDetails = await fetchCustomerPackageDetails(customerId);
-    // Debug log removed('Package details:', packageDetails);
+    const packageDetails = await fetchCustomerPackageDetails(customerId, sport);
     
     if (!packageDetails) {
-      // Debug log removed('No package details found, defaulting to platinum view');
       // Default to platinum view if no package found
       return `vw_hs_athletes_wide_${sport}_platinum`;
     }
 
     const hsSuffix = packageDetails.hs_suffix;
-    // Debug log removed('HS suffix from package:', hsSuffix);
     
     if (!hsSuffix) {
-      // Debug log removed('No hs_suffix found, defaulting to platinum view');
       // For non-football sports or packages without hs_suffix, default to platinum
       return `vw_hs_athletes_wide_${sport}_platinum`;
     }
 
-    const viewName = `vw_hs_athletes_wide_${sport}_${hsSuffix}`;
-    // Debug log removed('Final view name:', viewName);
-    return viewName;
+    return `vw_hs_athletes_wide_${sport}_${hsSuffix}`;
   } catch (error) {
     console.error('Error in getCustomerHsView:', error);
     // Default to platinum view on error
@@ -449,16 +465,11 @@ export async function fetchHighSchoolAthletes(
     // Get the appropriate view based on customer's package
     let viewName: string;
     if (customerId) {
-      // Debug log removed('Getting view for customer:', customerId, 'sport:', sport);
       viewName = await getCustomerHsView(customerId, sport);
-      // Debug log removed('Customer view determined:', viewName);
     } else {
       // Default to platinum view if no customer ID provided
       viewName = `vw_hs_athletes_wide_${sport}_platinum`;
-      // Debug log removed('No customer ID provided, using default view:', viewName);
     }
-
-    // Debug log removed('Fetching high school athletes from view:', viewName);
 
     // Build the query
     let query = supabase
@@ -619,30 +630,40 @@ export async function fetchAthleteRatings(
   }
 
   try {
-    const { data: ratingData, error } = await supabase
-      .from('athlete_rating')
-      .select(`
-        athlete_id,
-        customer_rating_scale_id,
-        customer_rating_scale:customer_rating_scale_id(name, color)
-      `)
-      .in('athlete_id', athleteIds);
-
-    if (error) {
-      console.error('Error fetching athlete ratings:', error);
-      return {};
-    }
-
+    // Batch queries to avoid URL length limits (typically 2048 chars)
+    // Each UUID is ~36 chars, so 100 IDs = ~3600 chars in list, but with encoding and other params, 100 is safe
+    const BATCH_SIZE = 100;
     const ratingsMap: Record<string, { name: string; color: string }> = {};
-    ratingData?.forEach((rating: any) => {
-      const ratingScale = rating.customer_rating_scale as unknown as { name: string; color: string } | null;
-      if (ratingScale) {
-        ratingsMap[rating.athlete_id] = {
-          name: ratingScale.name,
-          color: ratingScale.color
-        };
+    
+    // Process in batches
+    for (let i = 0; i < athleteIds.length; i += BATCH_SIZE) {
+      const batch = athleteIds.slice(i, i + BATCH_SIZE);
+      
+      const { data: ratingData, error } = await supabase
+        .from('athlete_rating')
+        .select(`
+          athlete_id,
+          customer_rating_scale_id,
+          customer_rating_scale:customer_rating_scale_id(name, color)
+        `)
+        .in('athlete_id', batch);
+
+      if (error) {
+        console.error('Error fetching athlete ratings:', error);
+        // Continue with other batches even if one fails
+        continue;
       }
-    });
+
+      ratingData?.forEach((rating: any) => {
+        const ratingScale = rating.customer_rating_scale as unknown as { name: string; color: string } | null;
+        if (ratingScale) {
+          ratingsMap[rating.athlete_id] = {
+            name: ratingScale.name,
+            color: ratingScale.color
+          };
+        }
+      });
+    }
 
     return ratingsMap;
   } catch (error) {
@@ -4592,23 +4613,39 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
     // Timer for athlete sport data fetch
     const athleteDataStart = performance.now();
     
-    let athleteQuery = supabase
-      .from('athlete')
-      .select('id, sport_id')
-      .in('id', athleteIds);
+    // Batch queries to avoid URL length limits (typically 2048 chars)
+    // Each UUID is ~36 chars, so 100 IDs = ~3600 chars in list, but with encoding and other params, 100 is safe
+    const BATCH_SIZE = 100;
+    const allAthleteData: any[] = [];
+    
+    // Process in batches
+    for (let i = 0; i < athleteIds.length; i += BATCH_SIZE) {
+      const batch = athleteIds.slice(i, i + BATCH_SIZE);
+      
+      let athleteQuery = supabase
+        .from('athlete')
+        .select('id, sport_id')
+        .in('id', batch);
 
-    // Filter by sport if sportId is provided
-    if (sportId) {
-      athleteQuery = athleteQuery.eq('sport_id', sportId);
+      // Filter by sport if sportId is provided
+      if (sportId) {
+        athleteQuery = athleteQuery.eq('sport_id', sportId);
+      }
+
+      const { data: batchData, error: athleteError } = await athleteQuery;
+
+      if (athleteError) {
+        console.error('[fetchRecruitingBoardData] Error fetching athlete sport data:', athleteError);
+        throw new Error('Failed to fetch athlete sport data');
+      }
+
+      if (batchData) {
+        allAthleteData.push(...batchData);
+      }
     }
-
-    const { data: athleteData, error: athleteError } = await athleteQuery;
+    
+    const athleteData = allAthleteData;
     const athleteDataEnd = performance.now();
-
-    if (athleteError) {
-      console.error('[fetchRecruitingBoardData] Error fetching athlete sport data:', athleteError);
-      throw new Error('Failed to fetch athlete sport data');
-    }
 
     // Debug log removed('[fetchRecruitingBoardData] Athlete sport data retrieved:', athleteData?.map((a: any) => ({ id: a.id, sport_id: a.sport_id })));
     
@@ -4746,38 +4783,51 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
           // Debug log removed(`[fetchRecruitingBoardData] Querying ${source.name} (${source.viewName}) for ${remainingAthleteIds.length} remaining athletes`);
 
           try {
-            const { data: sportAthleteData, error: sportAthleteError } = await supabase
-              .from(source.viewName)
-              .select(`
-                athlete_id,
-                athlete_first_name,
-                athlete_last_name,
-                initiated_date,
-                year,
-                school_id,
-                school_name,
-                is_receiving_athletic_aid,
-                high_school,
-                address_state,
-                image_url,
-                height_feet,
-                height_inch,
-                weight,
-                division,
-                primary_position,
-                m_status,
-                survey_completed,
-                ${conferenceColumn}
-              `)
-              .in('athlete_id', remainingAthleteIds);
+            // Batch the query to avoid URL length limits
+            const BATCH_SIZE = 100;
+            const allSportAthleteData: any[] = [];
+            
+            for (let i = 0; i < remainingAthleteIds.length; i += BATCH_SIZE) {
+              const batch = remainingAthleteIds.slice(i, i + BATCH_SIZE);
+              
+              const { data: sportAthleteData, error: sportAthleteError } = await supabase
+                .from(source.viewName)
+                .select(`
+                  athlete_id,
+                  athlete_first_name,
+                  athlete_last_name,
+                  initiated_date,
+                  year,
+                  school_id,
+                  school_name,
+                  is_receiving_athletic_aid,
+                  high_school,
+                  address_state,
+                  image_url,
+                  height_feet,
+                  height_inch,
+                  weight,
+                  division,
+                  primary_position,
+                  m_status,
+                  survey_completed,
+                  ${conferenceColumn}
+                `)
+                .in('athlete_id', batch);
 
-            if (sportAthleteError) {
-              console.error(`[fetchRecruitingBoardData] Error fetching data from ${source.viewName}:`, sportAthleteError);
-            } else if (sportAthleteData && sportAthleteData.length > 0) {
-              // Debug log removed(`[fetchRecruitingBoardData] Successfully fetched ${sportAthleteData.length} athletes from ${source.name}`);
+              if (sportAthleteError) {
+                console.error(`[fetchRecruitingBoardData] Error fetching data from ${source.viewName} (batch ${Math.floor(i / BATCH_SIZE) + 1}):`, sportAthleteError);
+                continue; // Continue processing other batches even if one fails
+              } else if (sportAthleteData && sportAthleteData.length > 0) {
+                allSportAthleteData.push(...sportAthleteData);
+              }
+            }
+
+            if (allSportAthleteData.length > 0) {
+              // Debug log removed(`[fetchRecruitingBoardData] Successfully fetched ${allSportAthleteData.length} athletes from ${source.name}`);
               
               // Add data source information to each athlete record
-              sportAthleteData.forEach((athlete: any) => {
+              allSportAthleteData.forEach((athlete: any) => {
                 if (!athleteDetailsMap[athlete.athlete_id]) {
                   // Normalize the conference column - map sport-specific column to 'conference'
                   const normalizedAthlete = {
@@ -4845,14 +4895,29 @@ export async function fetchRecruitingBoardData(sportId?: string, cachedUserDetai
       if (session?.user?.id) {
         const athleteIds = recruitingBoardDataTransformed.map((item: any) => item.athlete_id).filter(Boolean);
         if (athleteIds.length > 0) {
-          const { data: trackingData, error: trackingError } = await supabase
-            .from('player_tracking')
-            .select('athlete_id, text_alert')
-            .eq('user_id', session.user.id)
-            .in('athlete_id', athleteIds);
+          // Batch the query to avoid URL length limits
+          const BATCH_SIZE = 100;
+          const allTrackingData: any[] = [];
           
-          if (!trackingError && trackingData) {
-            trackingData.forEach((tracking: any) => {
+          for (let i = 0; i < athleteIds.length; i += BATCH_SIZE) {
+            const batch = athleteIds.slice(i, i + BATCH_SIZE);
+            
+            const { data: trackingData, error: trackingError } = await supabase
+              .from('player_tracking')
+              .select('athlete_id, text_alert')
+              .eq('user_id', session.user.id)
+              .in('athlete_id', batch);
+            
+            if (trackingError) {
+              console.error(`[fetchRecruitingBoardData] Error fetching player tracking data (batch ${Math.floor(i / BATCH_SIZE) + 1}):`, trackingError);
+              continue; // Continue processing other batches even if one fails
+            } else if (trackingData) {
+              allTrackingData.push(...trackingData);
+            }
+          }
+          
+          if (allTrackingData.length > 0) {
+            allTrackingData.forEach((tracking: any) => {
               trackingMap.set(tracking.athlete_id, { text_alert: tracking.text_alert || false });
             });
           }
@@ -7340,7 +7405,9 @@ export async function searchAthletes(
   sportId?: number,
   sortField?: string | null,
   sortOrder?: 'ascend' | 'descend' | null,
-  lastNameOnly?: boolean
+  lastNameOnly?: boolean,
+  divisions?: ('D1' | 'D2' | 'D3' | 'NAIA')[],
+  schoolId?: string
 ): Promise<{ data: any[]; total: number }> {
   // Map table type to actual table name
   const tableMap = {
@@ -7364,6 +7431,7 @@ export async function searchAthletes(
       athlete_first_name,
       athlete_last_name,
       sport_id,
+      school_id,
       school_name,
       roster_link
     `, { count: 'exact' });
@@ -7371,6 +7439,11 @@ export async function searchAthletes(
   // Filter by sport if provided
   if (sportId !== undefined && sportId !== null) {
     query = query.eq('sport_id', sportId);
+  }
+
+  // Filter by school ID if provided (only for college athletes)
+  if (schoolId && tableType === 'college') {
+    query = query.eq('school_id', schoolId);
   }
 
   if (searchTerm.trim()) {
@@ -7552,60 +7625,73 @@ export async function fetchDataOpsHsAthletes(options?: {
     // Add search filter if provided
     if (search && search.trim().length >= 2) {
       const searchTerm = search.trim();
-      const searchTerms = searchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
       
-      // Check if the search term looks like a complete UUID (36 characters with hyphens)
-      const isCompleteUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(searchTerm);
+      // Check for comma-separated UUIDs (for multiple athlete ID search)
+      const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const commaSeparatedIds = searchTerm.split(',').map(id => id.trim()).filter(id => id.length > 0);
+      const validUuids = commaSeparatedIds.filter(id => uuidPattern.test(id));
       
-      if (isCompleteUUID) {
-        // For complete UUID, use exact match on athlete_id
-        query = query.eq('athlete_id', searchTerm);
-      } else if (searchTerms.length === 1) {
-        // Single word: search in all fields
-        const term = searchTerms[0];
-        query = query.or(`athlete_first_name.ilike.%${term}%,athlete_last_name.ilike.%${term}%,athlete_email.ilike.%${term}%,school_name.ilike.%${term}%`);
-      } else if (searchTerms.length === 2) {
-        // Two words: most likely first name and last name
-        const [firstTerm, secondTerm] = searchTerms;
-        
-        const conditions = [
-          // Exact order: first term in first name AND second term in last name
-          `and(athlete_first_name.ilike.%${firstTerm}%,athlete_last_name.ilike.%${secondTerm}%)`,
-          // Reverse order: second term in first name AND first term in last name
-          `and(athlete_first_name.ilike.%${secondTerm}%,athlete_last_name.ilike.%${firstTerm}%)`,
-          // Full search term in first name only
-          `athlete_first_name.ilike.%${firstTerm} ${secondTerm}%`,
-          // Full search term in last name only
-          `athlete_last_name.ilike.%${firstTerm} ${secondTerm}%`,
-          // Full search term in email
-          `athlete_email.ilike.%${firstTerm} ${secondTerm}%`,
-          // Full search term in school name
-          `school_name.ilike.%${firstTerm} ${secondTerm}%`
-        ];
-        
-        query = query.or(conditions.join(','));
+      // If we have multiple comma-separated UUIDs and all are valid, use OR logic with .in()
+      if (commaSeparatedIds.length > 1 && validUuids.length === commaSeparatedIds.length && validUuids.length > 0) {
+        // All comma-separated values are valid UUIDs - use OR logic
+        query = query.in('athlete_id', validUuids);
       } else {
-        // More than 2 words: try different combinations
-        const fullSearchTerm = searchTerms.join(' ');
-        const firstTerm = searchTerms[0];
-        const lastTerm = searchTerms[searchTerms.length - 1];
+        // Continue with existing search logic
+        const searchTerms = searchTerm.toLowerCase().split(/\s+/).filter(term => term.length > 0);
         
-        const conditions = [
-          // First word in first name, rest in last name
-          `and(athlete_first_name.ilike.%${firstTerm}%,athlete_last_name.ilike.%${searchTerms.slice(1).join(' ')}%)`,
-          // All but last word in first name, last word in last name
-          `and(athlete_first_name.ilike.%${searchTerms.slice(0, -1).join(' ')}%,athlete_last_name.ilike.%${lastTerm}%)`,
-          // Full term in first name
-          `athlete_first_name.ilike.%${fullSearchTerm}%`,
-          // Full term in last name
-          `athlete_last_name.ilike.%${fullSearchTerm}%`,
-          // Full term in email
-          `athlete_email.ilike.%${fullSearchTerm}%`,
-          // Full term in school name
-          `school_name.ilike.%${fullSearchTerm}%`
-        ];
+        // Check if the search term looks like a complete UUID (36 characters with hyphens)
+        const isCompleteUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(searchTerm);
         
-        query = query.or(conditions.join(','));
+        if (isCompleteUUID) {
+          // For complete UUID, use exact match on athlete_id
+          query = query.eq('athlete_id', searchTerm);
+        } else if (searchTerms.length === 1) {
+          // Single word: search in all fields
+          const term = searchTerms[0];
+          query = query.or(`athlete_first_name.ilike.%${term}%,athlete_last_name.ilike.%${term}%,athlete_email.ilike.%${term}%,school_name.ilike.%${term}%`);
+        } else if (searchTerms.length === 2) {
+          // Two words: most likely first name and last name
+          const [firstTerm, secondTerm] = searchTerms;
+          
+          const conditions = [
+            // Exact order: first term in first name AND second term in last name
+            `and(athlete_first_name.ilike.%${firstTerm}%,athlete_last_name.ilike.%${secondTerm}%)`,
+            // Reverse order: second term in first name AND first term in last name
+            `and(athlete_first_name.ilike.%${secondTerm}%,athlete_last_name.ilike.%${firstTerm}%)`,
+            // Full search term in first name only
+            `athlete_first_name.ilike.%${firstTerm} ${secondTerm}%`,
+            // Full search term in last name only
+            `athlete_last_name.ilike.%${firstTerm} ${secondTerm}%`,
+            // Full search term in email
+            `athlete_email.ilike.%${firstTerm} ${secondTerm}%`,
+            // Full search term in school name
+            `school_name.ilike.%${firstTerm} ${secondTerm}%`
+          ];
+          
+          query = query.or(conditions.join(','));
+        } else {
+          // More than 2 words: try different combinations
+          const fullSearchTerm = searchTerms.join(' ');
+          const firstTerm = searchTerms[0];
+          const lastTerm = searchTerms[searchTerms.length - 1];
+          
+          const conditions = [
+            // First word in first name, rest in last name
+            `and(athlete_first_name.ilike.%${firstTerm}%,athlete_last_name.ilike.%${searchTerms.slice(1).join(' ')}%)`,
+            // All but last word in first name, last word in last name
+            `and(athlete_first_name.ilike.%${searchTerms.slice(0, -1).join(' ')}%,athlete_last_name.ilike.%${lastTerm}%)`,
+            // Full term in first name
+            `athlete_first_name.ilike.%${fullSearchTerm}%`,
+            // Full term in last name
+            `athlete_last_name.ilike.%${fullSearchTerm}%`,
+            // Full term in email
+            `athlete_email.ilike.%${fullSearchTerm}%`,
+            // Full term in school name
+            `school_name.ilike.%${fullSearchTerm}%`
+          ];
+          
+          query = query.or(conditions.join(','));
+        }
       }
     }
 

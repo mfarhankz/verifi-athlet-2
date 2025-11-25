@@ -1164,7 +1164,7 @@ function DataOpsPageContent() {
                 <div>
                   <div style={{ marginBottom: 16 }}>
                     <Input
-                      placeholder="Search by name, email, school, or athlete ID"
+                      placeholder="Search by name, email, school, athlete ID, or comma-separated IDs"
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
                       style={{ width: 400 }}

@@ -6,7 +6,7 @@ import { createGenericFilterConfig, DataSourceType } from './filters/GenericFilt
 import { FilterState } from '@/types/filters';
 import { SportStatConfig } from '@/types/database';
 import { fetchHSReligiousAffiliations, fetchPositionsBySportId, fetchSchools, fetchConferences, getUserPackagesForSport } from '@/lib/queries';
-import { fetchSchoolsByMultipleDivisions } from '@/utils/schoolUtils';
+import { fetchSchoolsByMultipleDivisions, getAvailableDivisions } from '@/utils/schoolUtils';
 import { useCustomer, useUser } from '@/contexts/CustomerContext';
 
 // ============================================================================
@@ -125,28 +125,13 @@ export default function GenericFilters({
     const loadSchools = async () => {
       setSchoolsLoading(true);
       try {
-        // Helper function to get available divisions based on data source
-        const getAvailableDivisions = () => {
-          switch (dataSource) {
-            case 'transfer_portal':
-            case 'all_athletes':
-              return ['D1', 'D2', 'D3', 'NAIA', 'NJCAA', 'CCCAA'];
-            case 'juco':
-              return ['NJCAA', 'CCCAA'];
-            case 'high_schools':
-            case 'hs_athletes':
-              return []; // No division filtering for high schools
-            default:
-              return ['D1', 'D2', 'D3', 'NAIA', 'NJCAA', 'CCCAA'];
-          }
-        };
-
-        const availableDivisions = getAvailableDivisions();
+        // Use helper function to get available divisions based on data source
+        const availableDivisions = getAvailableDivisions(dataSource);
         let schoolsData;
         
         // Fetch schools for all available divisions for this data source
         if (availableDivisions.length > 0) {
-          schoolsData = await fetchSchoolsByMultipleDivisions(availableDivisions as any);
+          schoolsData = await fetchSchoolsByMultipleDivisions(availableDivisions);
         }
         
         // Fallback to fetch all schools if no schools found with division filtering

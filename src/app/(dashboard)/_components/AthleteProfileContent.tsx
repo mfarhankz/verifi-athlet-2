@@ -1656,7 +1656,7 @@ export default function AthleteProfileContent({
       >
         <div style={{ marginBottom: '16px' }}>
           <Typography.Text type="secondary">
-            If you've become aware that this player is committed to another school please mark that here.
+            If you&apos;ve become aware that this player is committed to another school please mark that here.
           </Typography.Text>
         </div>
         

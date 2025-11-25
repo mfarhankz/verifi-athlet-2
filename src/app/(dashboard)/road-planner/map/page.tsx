@@ -1443,9 +1443,10 @@ export default function MapPage() {
                                             left: "-3px",
                                             top: "50%",
                                             transform: "translateY(-50%)",
-                                            width: "24px",
-                                            height: "24px",
+                                            width: "26px",
+                                            height: "26px",
                                             zIndex: iconZIndex,
+                                              background:"#1c1d4d",
                                           }}
                                         >
                                           <img
@@ -1454,7 +1455,7 @@ export default function MapPage() {
                                             className="w-full h-full object-cover rounded-full"
                                           />
                                         </div>
-                                        <h6 className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap" style={{ width: "130px", marginLeft: "26px" }}>
+                                        <h6 className="flex items-center mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap" style={{ width: "130px", marginLeft: "26px" }}>
                                           <span className="truncate block">
                                             {athleteData.athlete_name || location.school}
                                           </span>
@@ -1710,9 +1711,10 @@ export default function MapPage() {
                                               left: "-3px",
                                               top: "50%",
                                               transform: "translateY(-50%)",
-                                              width: "24px",
-                                              height: "24px",
+                                              width: "26px",
+                                              height: "26px",
                                               zIndex: 1001,
+                                              background:"#1c1d4d",
                                             }}
                                           >
                                             <img
@@ -1721,7 +1723,7 @@ export default function MapPage() {
                                               className="w-full h-full object-contain p-0.5"
                                             />
                                           </div>
-                                          <h6 className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap" style={{ width: "130px", marginLeft: "26px" }}>
+                                          <h6 className="flex items-center mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap" style={{ width: "130px", marginLeft: "26px" }}>
                                             <span className="truncate block">
                                               {location.school}
                                             </span>

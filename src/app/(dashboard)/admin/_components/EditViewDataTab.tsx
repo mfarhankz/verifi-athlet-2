@@ -4,8 +4,9 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Card, Select, Input, Table, Tag, Modal, Button, Typography, message } from "antd";
 
 const { Text } = Typography;
-import { AppstoreAddOutlined, TeamOutlined } from '@ant-design/icons';
+import { AppstoreAddOutlined, TeamOutlined, CopyOutlined } from '@ant-design/icons';
 import { fetchAllDataTypes, fetchAthleteDataTypes, fetchAthleteFactData, insertAthleteFact, searchAthletes, fetchAthletesFromSportView, updateAthleteBasicInfo, fetchAthleteSchoolHistory, searchSchools, updateAthleteSchoolRecord, transferAthlete, fetchSchoolDataTypesInUse, fetchSchoolDataTypes, fetchSchoolFactData, insertSchoolFact, updateSchoolBasicInfo, fetchCustomerDataTypesInUse, fetchCustomerDataTypes, fetchCustomerFactData, insertCustomerFact, updateCustomerBasicInfo, searchCustomers, fetchSports, searchCoaches, fetchCoachDataTypes, fetchCoachFactData, insertCoachFact, updateCoachBasicInfo, fetchCoachSchoolHistory, updateCoachSchoolRecord, fetchCoachDataTypesInUse, endCoachSchoolRecord, transferCoach, saveNewCoach } from '@/lib/queries';
+import { fetchSchoolsByMultipleDivisions } from '@/utils/schoolUtils';
 
 interface EditViewDataTabProps {
   selectedDataType: string;
@@ -23,6 +24,9 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
   const [athleteLastNameSearchInput, setAthleteLastNameSearchInput] = useState<string>('');
   const [athletePagination, setAthletePagination] = useState({ current: 1, pageSize: 25, total: 0 });
   const [selectedAthleteSearchSport, setSelectedAthleteSearchSport] = useState<number | undefined>(undefined);
+  const [selectedAthleteSchool, setSelectedAthleteSchool] = useState<string | undefined>(undefined);
+  const [collegeSchools, setCollegeSchools] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingCollegeSchools, setLoadingCollegeSchools] = useState(false);
   const [athleteSortField, setAthleteSortField] = useState<string | null>(null);
   const [athleteSortOrder, setAthleteSortOrder] = useState<'ascend' | 'descend' | null>(null);
   
@@ -204,6 +208,27 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
     if (selectedDataType === 'customer') {
       loadSports();
     }
+  }, [selectedDataType]);
+
+  // Load college schools (D1, D2, D3, NAIA) when athlete data type is selected
+  useEffect(() => {
+    const loadCollegeSchools = async () => {
+      if (selectedDataType === 'athlete') {
+        setLoadingCollegeSchools(true);
+        try {
+          const schools = await fetchSchoolsByMultipleDivisions(['D1', 'D2', 'D3', 'NAIA']);
+          setCollegeSchools(schools);
+        } catch (error) {
+          console.error('Error loading college schools:', error);
+          setCollegeSchools([]);
+        } finally {
+          setLoadingCollegeSchools(false);
+        }
+      } else {
+        setCollegeSchools([]);
+      }
+    };
+    loadCollegeSchools();
   }, [selectedDataType]);
 
 
@@ -484,13 +509,38 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                        dataType === 'hs_athlete' ? hsAthleteSortOrder :
                        jucoAthleteSortOrder;
       
-      // Use last name search if it has a value, otherwise use general search
-      const searchTerm = dataType === 'athlete' && debouncedAthleteLastNameSearch.trim() 
-        ? debouncedAthleteLastNameSearch 
-        : debouncedAthleteSearch;
-      const lastNameOnly = dataType === 'athlete' && debouncedAthleteLastNameSearch.trim().length > 0;
+      // Determine search strategy: if both searches are provided, use general search and filter by last name client-side
+      // If only last name is provided, use lastNameOnly mode
+      // Otherwise use general search
+      const hasGeneralSearch = debouncedAthleteSearch.trim().length > 0;
+      const hasLastNameSearch = dataType === 'athlete' && debouncedAthleteLastNameSearch.trim().length > 0;
       
-      const result = await searchAthletes(searchTerm, 25, tableType, page, selectedSport, sortField, sortOrder, lastNameOnly);
+      let searchTerm: string;
+      let lastNameOnly: boolean;
+      
+      if (hasLastNameSearch && !hasGeneralSearch) {
+        // Only last name search provided - use lastNameOnly mode
+        searchTerm = debouncedAthleteLastNameSearch;
+        lastNameOnly = true;
+      } else {
+        // General search provided (with or without last name) - use general search
+        searchTerm = debouncedAthleteSearch;
+        lastNameOnly = false;
+      }
+      
+      // Get school filter for college athletes
+      const schoolId = dataType === 'athlete' ? selectedAthleteSchool : undefined;
+      
+      const result = await searchAthletes(searchTerm, 25, tableType, page, selectedSport, sortField, sortOrder, lastNameOnly, undefined, schoolId);
+      
+      // If both searches are provided, filter results by last name client-side
+      let filteredData = result.data;
+      if (hasGeneralSearch && hasLastNameSearch && dataType === 'athlete') {
+        const lastNameLower = debouncedAthleteLastNameSearch.toLowerCase().trim();
+        filteredData = result.data.filter((athlete: any) => 
+          athlete.athlete_last_name?.toLowerCase().includes(lastNameLower)
+        );
+      }
 
       // Map sport_id to sport name for display
       const sportIdToName: Record<number, string> = {
@@ -518,7 +568,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       };
 
       // Map sport_id to sport name
-      const dataWithSportNames = (result.data || []).map((athlete: any) => ({
+      const dataWithSportNames = (filteredData || []).map((athlete: any) => ({
         ...athlete,
         sport_name: sportIdToName[athlete.sport_id as keyof typeof sportIdToName] || `Sport ID: ${athlete.sport_id}`
       }));
@@ -1042,6 +1092,8 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       setSelectedAthleteSearchSport(undefined);
       setSelectedHsAthleteSearchSport(undefined);
       setSelectedJucoAthleteSearchSport(undefined);
+      // Reset school filter
+      setSelectedAthleteSchool(undefined);
       // Reset sorting
       setAthleteSortField(null);
       setAthleteSortOrder(null);
@@ -1050,7 +1102,7 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
       setJucoAthleteSortField(null);
       setJucoAthleteSortOrder(null);
     }
-  }, [selectedDataType, debouncedAthleteSearch, debouncedAthleteLastNameSearch, debouncedSchoolSearch, debouncedCustomerSearch, debouncedCoachSearch, selectedCustomerSport, selectedCoachSport, selectedAthleteSearchSport, selectedHsAthleteSearchSport, selectedJucoAthleteSearchSport, athleteSortField, athleteSortOrder, hsAthleteSortField, hsAthleteSortOrder, jucoAthleteSortField, jucoAthleteSortOrder]);
+  }, [selectedDataType, debouncedAthleteSearch, debouncedAthleteLastNameSearch, debouncedSchoolSearch, debouncedCustomerSearch, debouncedCoachSearch, selectedCustomerSport, selectedCoachSport, selectedAthleteSearchSport, selectedHsAthleteSearchSport, selectedJucoAthleteSearchSport, selectedAthleteSchool, athleteSortField, athleteSortOrder, hsAthleteSortField, hsAthleteSortOrder, jucoAthleteSortField, jucoAthleteSortOrder]);
 
   // Load athletes when sport changes
   useEffect(() => {
@@ -1080,6 +1132,30 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
              schoolState.includes(query);
     });
   }, [allAthletes, debouncedAthleteSearch]);
+
+  // Handle copying athlete ID to clipboard
+  const handleCopyId = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent row click
+    try {
+      await navigator.clipboard.writeText(id);
+      message.success('ID copied to clipboard!');
+    } catch (error) {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = id;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        message.success('ID copied to clipboard!');
+      } catch (err) {
+        message.error('Failed to copy ID');
+      }
+      document.body.removeChild(textArea);
+    }
+  };
 
   // Athletes table columns
   const athleteColumns = [
@@ -1198,29 +1274,17 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                 <Input
                   placeholder="Search by name, school, or athlete ID"
                   value={athleteSearchInput}
-                  onChange={(e) => {
-                    setAthleteSearchInput(e.target.value);
-                    // Clear last name search when using general search
-                    if (e.target.value.trim()) {
-                      setAthleteLastNameSearchInput('');
-                    }
-                  }}
+                  onChange={(e) => setAthleteSearchInput(e.target.value)}
                   style={{ width: 400 }}
                   allowClear
                 />
                 {selectedDataType === 'athlete' && (
                   <>
-                    <Text strong>Last Name Only:</Text>
+                    <Text strong>Last Name:</Text>
                     <Input
-                      placeholder="Search last name only"
+                      placeholder="Filter by last name"
                       value={athleteLastNameSearchInput}
-                      onChange={(e) => {
-                        setAthleteLastNameSearchInput(e.target.value);
-                        // Clear general search when using last name search
-                        if (e.target.value.trim()) {
-                          setAthleteSearchInput('');
-                        }
-                      }}
+                      onChange={(e) => setAthleteLastNameSearchInput(e.target.value)}
                       style={{ width: 250 }}
                       allowClear
                     />
@@ -1257,6 +1321,27 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                     }))
                   ]}
                 />
+                {selectedDataType === 'athlete' && (
+                  <>
+                    <Text strong>School Filter:</Text>
+                    <Select
+                      placeholder="All Schools"
+                      value={selectedAthleteSchool}
+                      onChange={(value) => setSelectedAthleteSchool(value)}
+                      allowClear
+                      style={{ width: 300 }}
+                      showSearch
+                      loading={loadingCollegeSchools}
+                      filterOption={(input, option) =>
+                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                      }
+                      options={collegeSchools.map(school => ({
+                        value: school.id,
+                        label: school.name
+                      }))}
+                    />
+                  </>
+                )}
               </div>
               
               <Table
@@ -1374,7 +1459,21 @@ export default function EditViewDataTab({ selectedDataType, setSelectedDataType,
                      key: 'athlete_id',
                      width: 300,
                      render: (id: string) => (
-                       <Text code>{id}</Text>
+                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                         <Text code>{id}</Text>
+                         {selectedDataType === 'athlete' && (
+                           <CopyOutlined 
+                             onClick={(e) => handleCopyId(id, e)}
+                             style={{ 
+                               fontSize: '12px', 
+                               cursor: 'pointer', 
+                               color: '#1890ff',
+                               marginLeft: 4
+                             }}
+                             title="Copy ID"
+                           />
+                         )}
+                       </div>
                      ),
                      sorter: true,
                      sortOrder: selectedDataType === 'athlete' ? (athleteSortField === 'athlete_id' ? athleteSortOrder : null) :

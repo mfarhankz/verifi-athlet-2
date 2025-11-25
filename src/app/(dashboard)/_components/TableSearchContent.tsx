@@ -1673,7 +1673,7 @@ export function TableSearchContent({
 
       // Add fields for recruiting area filter
       if (filters.location && filters.location.type === "recruiting_area") {
-        filterColumns.add("address_state");
+        filterColumns.add("school_state");
         filterColumns.add("hs_county");
         filterColumns.add("school_id");
       }
@@ -1753,17 +1753,17 @@ export function TableSearchContent({
 
               const orConditions = [];
 
-              // Add state conditions (convert state IDs to abbreviations and search address_state)
+              // Add state conditions (convert state IDs to abbreviations and search school_state)
               if (recruitingAreas.stateIds.length > 0) {
                 const stateAbbrevs = await convertStateIdsToAbbrevs(
                   recruitingAreas.stateIds
                 );
                 if (stateAbbrevs.length > 0) {
-                  orConditions.push(
-                    `address_state.in.(${stateAbbrevs
-                      .map((s) => `"${s}"`)
-                      .join(",")})`
-                  );
+                  // Use .in() method instead of string format for better URL encoding
+                  orConditions.push({
+                    type: 'state',
+                    values: stateAbbrevs
+                  });
                 }
               }
 
@@ -1773,24 +1773,49 @@ export function TableSearchContent({
                   recruitingAreas.countyIds
                 );
                 if (countyNames.length > 0) {
-                  orConditions.push(
-                    `hs_county.in.(${countyNames
-                      .map((c) => `"${c}"`)
-                      .join(",")})`
-                  );
+                  orConditions.push({
+                    type: 'county',
+                    values: countyNames
+                  });
                 }
               }
 
               // Add school conditions
               if (recruitingAreas.schoolIds.length > 0) {
-                orConditions.push(
-                  `school_id.in.(${recruitingAreas.schoolIds.join(",")})`
-                );
+                orConditions.push({
+                  type: 'school',
+                  values: recruitingAreas.schoolIds
+                });
               }
 
               // Apply OR conditions if any exist
+              // Build the or filter string properly for Supabase PostgREST
               if (orConditions.length > 0) {
-                query = query.or(orConditions.join(","));
+                const orFilterParts: string[] = [];
+                
+                orConditions.forEach(condition => {
+                  if (condition.type === 'state' && condition.values.length > 0) {
+                    // Format: school_state.in.("AZ","CA",...)
+                    orFilterParts.push(
+                      `school_state.in.(${condition.values.map(v => `"${v}"`).join(',')})`
+                    );
+                  } else if (condition.type === 'county' && condition.values.length > 0) {
+                    // Format: hs_county.in.("County Name",...)
+                    // Escape quotes in county names if needed
+                    orFilterParts.push(
+                      `hs_county.in.(${condition.values.map(v => `"${v.replace(/"/g, '\\"')}"`).join(',')})`
+                    );
+                  } else if (condition.type === 'school' && condition.values.length > 0) {
+                    // Format: school_id.in.(uuid1,uuid2,...)
+                    orFilterParts.push(
+                      `school_id.in.(${condition.values.join(',')})`
+                    );
+                  }
+                });
+                
+                if (orFilterParts.length > 0) {
+                  query = query.or(orFilterParts.join(','));
+                }
               }
             } catch (error) {
               console.error("❌ Error applying recruiting area filter:", error);
@@ -4329,6 +4354,18 @@ export function TableSearchContent({
               Showing {filteredRecords} of {totalRecords} records
               {isAnyFilterActive && ` (filtered)`}
             </Typography.Text>
+            {seasonData && dataSource === "transfer_portal" && (
+              <Typography.Text
+                type="secondary"
+                style={{
+                  fontSize: 12,
+                  fontStyle: "italic",
+                  color: "#666",
+                }}
+              >
+                Stats on Display from the {seasonData} season
+              </Typography.Text>
+            )}
           </Flex>
           <div
             className="mb-3 search-row"
@@ -4418,7 +4455,7 @@ export function TableSearchContent({
                     Print School Packets ({selectedHighSchools.length})
                   </Button>
 
-                  <Button
+                  <Button className="ant-btn-variant-outlined"
                     type={highSchoolViewMode === "map" ? "primary" : "text"}
                     onClick={() => setHighSchoolViewMode("map")}
                   >
@@ -4435,7 +4472,7 @@ export function TableSearchContent({
               )}
               {dataSource === "hs_athletes" && (
                 <div className="flex gap-2">
-                  <Button
+                  <Button className="ant-btn-variant-outlined"
                     type={hsAthleteViewMode === "map" ? "primary" : "text"}
                     onClick={() => setHsAthleteViewMode("map")}
                   >
@@ -4443,6 +4480,7 @@ export function TableSearchContent({
                   </Button>
 
                   <Button
+                  
                     type={hsAthleteViewMode === "list" ? "primary" : "text"}
                     onClick={() => setHsAthleteViewMode("list")}
                   >
@@ -4454,50 +4492,36 @@ export function TableSearchContent({
             {(dataSource === "transfer_portal" ||
               dataSource === "all_athletes" ||
               dataSource === "juco" ||
-              dataSource === "high_schools") && (
+              dataSource === "high_schools" ||
+              (dataSource === "hs_athletes" && hsAthleteViewMode === "list")) && (
               <div
                 style={{
                   display: "flex",
-                  alignItems: "center",
+                  flexDirection: "column",
                   gap: "12px",
                 }}
               >
-                {seasonData && (
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      fontStyle: "italic",
-                      color: "#666",
-                    }}
-                  >
-                    Stats on Display from the {seasonData} season
-                  </div>
-                )}
-                <Button
-                  onClick={loadMoreData}
-                  disabled={loading || !hasMore}
-                  loading={loading}
-                  size="small"
-                  type="default"
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                  }}
                 >
-                  Load More (
-                  {(() => {
-                    const currentDataSource = dataSource as
-                      | "transfer_portal"
-                      | "all_athletes"
-                      | "juco"
-                      | "high_schools"
-                      | "hs_athletes"
-                      | undefined;
-                    const isMapView =
-                      (currentDataSource === "high_schools" &&
-                        highSchoolViewMode === "map") ||
-                      (currentDataSource === "hs_athletes" &&
-                        hsAthleteViewMode === "map");
-                    return isMapView ? 100 : ITEMS_PER_PAGE;
-                  })()}
-                  )
-                </Button>
+                  <Button
+                    onClick={loadMoreData}
+                    disabled={loading || !hasMore}
+                    loading={loading}
+                    size="small"
+                    type="default"
+                  >
+                    Load More ({(() => {
+                      const currentDataSource = dataSource as "transfer_portal" | "all_athletes" | "juco" | "high_schools" | "hs_athletes" | undefined;
+                      const isMapView = (currentDataSource === "high_schools" && highSchoolViewMode === "map") ||
+                        (currentDataSource === "hs_athletes" && hsAthleteViewMode === "map");
+                      return isMapView ? 100 : ITEMS_PER_PAGE;
+                    })()})
+                  </Button>
 
                 <Space>
                   <div
@@ -4979,132 +5003,111 @@ export function TableSearchContent({
                                           col.sanitized_column_name ||
                                           "";
 
-                                        // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
-                                        if (
-                                          isOfferColumn &&
-                                          currentDataSource === "hs_athletes"
-                                        ) {
-                                          return [
-                                            "Best Offer",
-                                            "Number of Offers",
-                                          ];
-                                        }
-                                        return [displayName];
-                                      }),
-                                    // Add additional CSV export column headers for hs_athletes
-                                    ...(currentDataSource === "hs_athletes"
-                                      ? [
-                                          "HS County",
-                                          "School State",
-                                          "All Position",
-                                          "Athlete Cell",
-                                          "HS Highlight",
-                                          "Parent Name",
-                                          "Parent Email",
-                                          "Parent Phone",
-                                          "Major",
-                                          "Athlete Address Street",
-                                          "Athlete Address City",
-                                          "Address State",
-                                          "Athlete Address Zip",
-                                          "Birthday",
-                                          "HS NCAA ID",
-                                        ]
-                                      : []),
-                                  ];
-                                })()
-                          }
-                          filename={(() => {
-                            const ds = dataSource as
-                              | "transfer_portal"
-                              | "all_athletes"
-                              | "juco"
-                              | "high_schools"
-                              | "hs_athletes";
-                            return ds === "hs_athletes"
-                              ? "hs-athletes"
-                              : ds === "high_schools"
-                              ? "high-schools"
-                              : ds === "transfer_portal"
-                              ? "transfers"
-                              : ds === "all_athletes"
-                              ? "pre-portal"
-                              : ds === "juco"
-                              ? "juco"
-                              : "high-schools";
-                          })()}
-                          maxRows={(() => {
-                            const ds = dataSource as
-                              | "transfer_portal"
-                              | "all_athletes"
-                              | "juco"
-                              | "high_schools"
-                              | "hs_athletes";
-                            return ds === "hs_athletes"
-                              ? 1000
-                              : ds === "high_schools"
-                              ? 500
-                              : ds === "transfer_portal"
-                              ? 25
-                              : ds === "all_athletes"
-                              ? 25
-                              : ds === "juco"
-                              ? 25
-                              : 25;
-                          })()}
-                          disabled={
-                            dataSource === "high_schools"
-                              ? false
-                              : !activeCustomerId || !activeCustomer?.sport_id
-                          }
-                          userId={userDetails?.id}
-                          customerId={activeCustomerId || undefined}
-                          tableName={
-                            dataSource === "high_schools"
-                              ? "high-schools"
-                              : dataSource === "transfer_portal"
-                              ? "transfers"
-                              : dataSource === "all_athletes"
-                              ? "pre-portal"
-                              : dataSource === "juco"
-                              ? "juco"
-                              : (dataSource as "hs_athletes") === "hs_athletes"
-                              ? "hs-athletes"
-                              : "unknown"
-                          }
-                          filterDetails={activeFilters}
-                          buttonProps={{ style: { marginRight: "12px" } }}
-                          emailColumnName={
-                            dataSource === "high_schools"
-                              ? (() => {
-                                  const emailColumn = hsColumns.find(
-                                    (col) =>
-                                      col.display_name
-                                        ?.toLowerCase()
-                                        .includes("email") ||
-                                      col.dataIndex
-                                        ?.toLowerCase()
-                                        .includes("email")
-                                  );
-                                  return emailColumn?.dataIndex;
-                                })()
-                              : undefined
-                          }
-                          sortField={sortField}
-                          sortOrder={sortOrder}
-                          userPackages={userDetails?.packages}
-                        />
-                      ) : null;
+                                // For hs_athletes, change "Offer" to "Best Offer" and add "Number of Offers" after it
+                                if (
+                                  isOfferColumn &&
+                                        currentDataSource === "hs_athletes"
+                                ) {
+                                        return [
+                                          "Best Offer",
+                                          "Number of Offers",
+                                        ];
+                                }
+                                return [displayName];
+                              }),
+                            // Add additional CSV export column headers for hs_athletes
+                            ...(currentDataSource === 'hs_athletes' ? [
+                              'HS County',
+                              'School State',
+                              'All Position',
+                              'Athlete Cell',
+                              'HS Highlight',
+                              'Parent Name',
+                              'Parent Email',
+                              'Parent Phone',
+                              'Major',
+                              'Athlete Address Street',
+                              'Athlete Address City',
+                              'Address State',
+                              'Athlete Address Zip',
+                              'Birthday',
+                              'HS NCAA ID'
+                            ] : [])
+                          ];
+                            })()
+                    }
+                    filename={(() => {
+                      const ds = dataSource as "transfer_portal" | "all_athletes" | "juco" | "high_schools" | "hs_athletes";
+                      return ds === "hs_athletes" ? "hs-athletes"
+                        : ds === "high_schools" ? "high-schools"
+                        : ds === "transfer_portal" ? "transfers"
+                        : ds === "all_athletes" ? "pre-portal"
+                        : ds === "juco" ? "juco"
+                        : "high-schools";
                     })()}
-                    <Filters
-                      onApplyFilters={applyFilters}
-                      onResetFilters={resetFilters}
-                      dynamicColumns={dynamicColumns}
-                      filterColumns={filterColumns}
-                      dataSource={dataSource}
-                    />
-                  </div>
-                </Space>
+                    maxRows={(() => {
+                      const ds = dataSource as "transfer_portal" | "all_athletes" | "juco" | "high_schools" | "hs_athletes";
+                      return ds === 'hs_athletes' ? 1000
+                        : ds === 'high_schools' ? 500
+                        : ds === 'transfer_portal' ? 25
+                        : ds === 'all_athletes' ? 25
+                        : ds === 'juco' ? 25
+                        : 25;
+                    })()}
+                    disabled={
+                      dataSource === "high_schools"
+                        ? false
+                        : !activeCustomerId || !activeCustomer?.sport_id
+                    }
+                    userId={userDetails?.id}
+                    customerId={activeCustomerId || undefined}
+                    tableName={
+                          dataSource === "high_schools"
+                            ? "high-schools"
+                            : dataSource === "transfer_portal"
+                        ? "transfers"
+                        : dataSource === "all_athletes"
+                        ? "pre-portal"
+                        : dataSource === "juco"
+                        ? "juco"
+                            : (dataSource as "hs_athletes") === "hs_athletes"
+                            ? "hs-athletes"
+                        : "unknown"
+                    }
+                    filterDetails={activeFilters}
+                    buttonProps={{ style: { marginRight: "12px" } }}
+                    emailColumnName={
+                      dataSource === "high_schools"
+                        ? (() => {
+                            const emailColumn = hsColumns.find(
+                              (col) =>
+                                col.display_name
+                                  ?.toLowerCase()
+                                  .includes("email") ||
+                                    col.dataIndex
+                                      ?.toLowerCase()
+                                      .includes("email")
+                            );
+                            return emailColumn?.dataIndex;
+                          })()
+                        : undefined
+                    }
+                    sortField={sortField}
+                    sortOrder={sortOrder}
+                    userPackages={userDetails?.packages}
+                  />
+                  ) : null;
+                })()}
+                <Filters
+                  onApplyFilters={applyFilters}
+                  onResetFilters={resetFilters}
+                  dynamicColumns={dynamicColumns}
+                  filterColumns={filterColumns}
+                  dataSource={dataSource}
+                />
+              </div>
+            </Space>
+                </div>
               </div>
             )}
             {/* Show Filters for hs_athletes even in map view */}
@@ -5692,9 +5695,10 @@ export function TableSearchContent({
                                             left: "-3px",
                                             top: "50%",
                                             transform: "translateY(-50%)",
-                                            width: "24px",
-                                            height: "24px",
+                                            width: "26px",
+                                            height: "26px",
                                             zIndex: 1001,
+                                            backgroundColor: "#1C1D4D",
                                           }}
                                         >
                                           <img
@@ -5704,7 +5708,7 @@ export function TableSearchContent({
                                           />
                                         </div>
                                         <h6
-                                          className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap"
+                                          className="flex items-center  mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap"
                                           style={{
                                             width: "130px",
                                             marginLeft: "26px",
@@ -5787,86 +5791,97 @@ export function TableSearchContent({
                           >
                             <Popover
                               content={
-                                <div className="space-y-2 min-w-[400px] 4455">
+                                <div className="space-y-2 min-w-[320px] max-w-[450px] pt-4 pb-2 4455">
                                   <div className="mb-4">
-                                    <div className="flex items-start justify-start gap-2">
+                                    <div className="flex items-start justify-start gap-3">
                                     <Flex
                                       className="user-image"
-                                      style={{ width: "88px", margin: 0 }}
+                                      style={{ width: "140px", margin: 0 }}
                                     >
                                       <Flex className="gray-scale">
                                         <Image
-                                          src={"/blank-user.svg"}
-                                          alt={"name"}
-                                          width={88}
-                                          height={88}
+                                          src={athlete.image_url || "/blank-user.svg"}
+                                          alt={athlete.athlete_name || "name"}
+                                          width={140}
+                                          height={140}
                                         />
-                                        {1 > 0 && (
+                                        {/* {1 > 0 && (
                                           <span className="yellow">{5.9}</span>
-                                        )}
+                                        )} */}
                                       </Flex>
                                     </Flex>
-                                    <h4 className="!text-[24px] mt-2 font-semibold mb-3 flex items-center justify-between">
-                                      <span
-                                        className="cursor-pointer hover:text-blue-600 hover:underline"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          // Open HS athlete profile modal using URL params (same as table view)
-                                          const athleteId = String(
-                                            athlete.id || athlete.athlete_id
+                                    <div className="flex-1">
+                                      <h4 className="!text-[24px] mt-2 font-semibold mb-2">
+                                        <span
+                                          className="cursor-pointer hover:text-blue-600 hover:underline"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            // Open HS athlete profile modal using URL params (same as table view)
+                                            const athleteId = String(
+                                              athlete.id || athlete.athlete_id
+                                            );
+                                            if (athleteId) {
+                                              const params = new URLSearchParams(
+                                                searchParams?.toString() || ""
+                                              );
+                                              params.set("player", athleteId);
+                                              params.set(
+                                                "dataSource",
+                                                "hs_athletes"
+                                              );
+                                              const newUrl = params.toString()
+                                                ? `${baseRoute}?${params.toString()}`
+                                                : baseRoute;
+                                              router.push(newUrl);
+                                            }
+                                          }}
+                                        >
+                                          {athlete.athlete_name || ""}
+                                        </span>
+                                      </h4>
+                                      {(() => {
+                                        // Check multiple possible property names for high school name
+                                        // User confirmed that name_name and high_name are available keys
+                                        const highSchoolName = 
+                                          (athlete as any).name_name;
+                                        
+                                        // Only show if the value exists and is not empty
+                                        if (highSchoolName && String(highSchoolName).trim() !== "") {
+                                          return (
+                                            <div className="text-[16px] font-normal text-gray-600 mb-3">
+                                              {highSchoolName}
+                                            </div>
                                           );
-                                          if (athleteId) {
-                                            const params = new URLSearchParams(
-                                              searchParams?.toString() || ""
-                                            );
-                                            params.set("player", athleteId);
-                                            params.set(
-                                              "dataSource",
-                                              "hs_athletes"
-                                            );
-                                            const newUrl = params.toString()
-                                              ? `${baseRoute}?${params.toString()}`
-                                              : baseRoute;
-                                            router.push(newUrl);
-                                          }
-                                        }}
-                                      >
-                                        {athlete.athlete_name || ""}
-                                      </span>
-
-                                      {/* <a
-                                        href="#"
-                                        className="text-[14px] text-blue-600 hover:underline"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          // Add athlete to road map selection if not already selected
-                                          const isAlreadySelected =
-                                            roadMapSelectedAthletes.some(
-                                              (selected) =>
-                                                selected.id === athlete.id
-                                            );
-                                          if (!isAlreadySelected) {
-                                            setRoadMapSelectedAthletes(
-                                              (prev) => [...prev, athlete]
-                                            );
-                                          }
-                                        }}
-                                      >
-                                        Add to Road Plan
-                                      </a> */}
-                                    </h4>
+                                        }
+                                        return null;
+                                      })()}
+                                      <div className="text-[18px] font-semibold italic text-gray-700 !leading-[24px] mb-2">
+                                        {(() => {
+                                          const gradYear = athlete.gradYear || (athlete as any).grad_year;
+                                          const position = athlete.primary_position || athlete.position;
+                                          const gpa = athlete.gpa;
+                                          
+                                          return (
+                                            <>
+                                              {gradYear != null && gradYear !== "" && (
+                                                <div>{gradYear}</div>
+                                              )}
+                                              {position && (
+                                                <div>{position}</div>
+                                              )}
+                                              {gpa != null && gpa !== "" && (
+                                                <div>GPA {gpa}</div>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    </div>
                                     </div>
                                     <div className="text-[14px] text-gray-600 !leading-[20px] w-[100%]">
-                                      {athlete.high_name && (
-                                        <span>{athlete.high_name}</span>
-                                      )}
                                       {athlete.hometown && (
-                                        <>
-                                          {athlete.high_name && <br />}
-                                          <span>{athlete.hometown}</span>
-                                        </>
+                                        <span>{athlete.hometown}</span>
                                       )}
                                       {athlete.hometown_state && (
                                         <>
@@ -5889,14 +5904,14 @@ export function TableSearchContent({
                                           </a>
                                         </>
                                       )}
-                                      <div className="w-[100%] flex flex-col items-center justify-between">
-                                        <h6 className="flex flex-col items-center justify-between mb-3">
-                                          <small className="!text-[18px] mt-2 font-normal">Current Projection</small>
-                                          <span className="!text-[24px] mt-2 font-semibold">
-                                            D3 - TOPHALF
+                                      <div className="w-[100%] flex flex-col items-center justify-between my-2">
+                                        <h6 className="flex flex-col items-center justify-between mb-2">
+                                          <small className="!text-[18px] mt-1 font-normal">Athletic Projection</small>
+                                          <span className="!text-[24px] mt-1 font-semibold">
+                                            {(athlete as any).athleticProjection || (athlete as any).athletic_projection || "-"}
                                           </span>
                                         </h6>
-                                        <ProgressBar
+                                        {/* <ProgressBar
                                           value={55}
                                           height={35}
                                           color="#2BB650"
@@ -5905,13 +5920,34 @@ export function TableSearchContent({
                                           labelWeight={400}
                                           labelWidth={110}
                                           className="!w-[60%]"
-                                        />
+                                        /> */}
 
                                       </div>
-                                      <div className="w-[95%] flex items-center justify-between mt-5 mx-auto">
+                                      <div className="w-[95%] flex items-center justify-between mt-4 mb-1 mx-auto">
                                         <Button
                                           type="primary"
-                                          onClick={() => ""}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            // Open HS athlete profile modal using URL params (same as table view)
+                                            const athleteId = String(
+                                              athlete.id || athlete.athlete_id
+                                            );
+                                            if (athleteId) {
+                                              const params = new URLSearchParams(
+                                                searchParams?.toString() || ""
+                                              );
+                                              params.set("player", athleteId);
+                                              params.set(
+                                                "dataSource",
+                                                "hs_athletes"
+                                              );
+                                              const newUrl = params.toString()
+                                                ? `${baseRoute}?${params.toString()}`
+                                                : baseRoute;
+                                              router.push(newUrl);
+                                            }
+                                          }}
                                         >
                                           View Profile
                                         </Button>
@@ -5934,7 +5970,7 @@ export function TableSearchContent({
                                             }
                                           }}
                                         >
-                                          + Road Map
+                                          + Road Plan
                                         </Button>
                                       </div>
                                     </div>
@@ -6022,9 +6058,10 @@ export function TableSearchContent({
                                         left: "-3px",
                                         top: "50%",
                                         transform: "translateY(-50%)",
-                                        width: "24px",
-                                        height: "24px",
+                                        width: "26px",
+                                        height: "26px",
                                         zIndex: iconZIndex,
+                                          backgroundColor: "#1C1D4D",
                                       }}
                                     >
                                       <img
@@ -6036,9 +6073,9 @@ export function TableSearchContent({
                                       />
                                     </div>
                                     <h6
-                                      className="flex items-center text-white mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap"
+                                      className="flex items-center  mb-0 !text-[12px] !font-semibold !leading-[1] whitespace-nowrap"
                                       style={{
-                                        width: "130px",
+                                       // width: "130px",
                                         marginLeft: "26px",
                                       }}
                                     >
@@ -6087,7 +6124,8 @@ export function TableSearchContent({
                                 className="flex items-center justify-start border-[4px] border-solid border-[#1C1D4D] rounded-full bg-gray-500 pr-3 !text-base italic font-medium text-[#fff] cursor-pointer hover:opacity-90 transition-opacity relative group"
                                 style={{ minWidth: "max-content" }}
                               >
-                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden">
+                                <div className="flex items-center justify-center relative left-[-3px] top-[0] border-[4px] border-solid border-[#1C1D4D] rounded-full w-[40px] h-[40px] overflow-hidden"
+                                style={{backgroundColor: "#1C1D4D"}}>
                                   <img
                                     src="/blank-hs.svg"
                                     alt="School"
@@ -6153,28 +6191,36 @@ export function TableSearchContent({
                                     {athlete.athlete_name || ""}
                                   </span>
                                 </h6>
-                                <button
+                                 <a
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    handleRemoveAthlete(athleteId);
+                                    handleRemoveSchool(schoolId);
                                   }}
-                                  className="ml-2 flex items-center justify-center w-7 h-7 rounded-full bg-white/30 hover:bg-red-500/50 transition-colors flex-shrink-0 border border-white/50"
+                                  className="ml-2 flex items-center justify-center w-7 h-7 bg-none transition-colors flex-shrink-0"
                                   title="Remove from road plan"
-                                  aria-label="Remove athlete from road plan"
+                                  aria-label="Remove school from road plan"
                                 >
                                   <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     viewBox="0 0 24 24"
-                                    className="w-5 h-5"
+                                    className="w-4 h-4"
                                     style={{
                                       fill: "white",
                                       stroke: "white",
                                       strokeWidth: 0,
                                     }}
                                   >
-                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                                    <path
+                                      d="M6 18L18 6M6 6l12 12"
+                                      stroke="white"
+                                      strokeWidth="3.5"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      fill="none"
+                                    />
                                   </svg>
-                                </button>
+                                </a>
+
                               </div>
                             </div>
                           );

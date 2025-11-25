@@ -1565,7 +1565,7 @@ export default function RoadPlannerPage() {
             <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-md px-4 pt-3 pb-3 z-20">
               <div className="flex flex-row justify-between items-center max-w-full">
                 <div className="flex-1 flex flex-col items-start overflow-hidden">
-                  <h4>Road Map</h4>
+                  <h4>Road Plan</h4>
                   <div className="flex-1 flex flex-wrap gap-2 min-h-[36px] overflow-x-auto">
                     {selectedAddresses.length === 0 ? (
                       <span className="text-gray-400 italic">

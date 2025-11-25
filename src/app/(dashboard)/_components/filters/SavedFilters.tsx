@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button, Input, Popconfirm, message } from 'antd';
 import { HeartOutlined, HeartFilled, SearchOutlined, DeleteOutlined } from '@ant-design/icons';
 import { FilterConfig } from './FilterConfig';
@@ -41,6 +41,7 @@ export function SavedFilters({
   const [filterName, setFilterName] = useState("");
   const [searchFilter, setSearchFilter] = useState("");
   const [showSavedFilters, setShowSavedFilters] = useState(false);
+  const [showFilterSavedMessage, setShowFilterSavedMessage] = useState(false);
 
   // Check if current filter configuration is already saved
   const isCurrentFilterSaved = (): boolean => {
@@ -66,8 +67,20 @@ export function SavedFilters({
 
     onSaveFilter(newFilter);
     setFilterName("");
+    setShowSavedFilters(true); // Open My Filters after saving
+    setShowFilterSavedMessage(true); // Show "Filter Saved" message
     message.success('Filter saved successfully');
   };
+
+  // Hide "Filter Saved" message after 3 seconds
+  useEffect(() => {
+    if (showFilterSavedMessage) {
+      const timer = setTimeout(() => {
+        setShowFilterSavedMessage(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showFilterSavedMessage]);
 
   // Handle loading a saved filter
   const handleLoadFilter = (filter: SavedFilter) => {
@@ -104,21 +117,34 @@ export function SavedFilters({
         />
         <Button
           type="text"
-          icon={isCurrentFilterSaved() ? 
-            <HeartFilled style={{ color: "#ff4d4f", fontSize: '16px' }} /> : 
-            <HeartOutlined style={{ color: "#ff4d4f", fontSize: '16px' }} />
-          }
           onClick={handleSaveFilter}
           disabled={isCurrentFilterSaved()}
           title={isCurrentFilterSaved() ? "Filter is already saved" : "Save filter"}
-        />
+        >
+          Save Filter
+        </Button>
         <Button
           type="text"
-          icon={<SearchOutlined />}
           onClick={() => setShowSavedFilters(!showSavedFilters)}
           title={showSavedFilters ? "Hide saved filters" : "Show saved filters"}
-        />
+        >
+          My Filters
+        </Button>
       </div>
+
+      {/* Filter Saved Message */}
+      {showFilterSavedMessage && (
+        <div style={{
+          color: '#52c41a',
+          fontSize: '14px',
+          fontWeight: 500,
+          marginBottom: '8px',
+          textAlign: 'center',
+          transition: 'opacity 0.3s'
+        }}>
+          Filter Saved
+        </div>
+      )}
 
       {/* Saved Filters List */}
       {showSavedFilters && (
