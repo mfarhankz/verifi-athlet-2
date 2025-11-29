@@ -28,9 +28,10 @@ export default function NewPage3() {
   const [conditions, setConditions] = useState<Condition[]>([
     { id: "1", ifValue: "", thenValue: "" },
   ]);
+  const [activeTabIndex, setActiveTabIndex] = useState(0);
 
   const pipelineSteps: PipelineStep[] = [
-    { id: "1", name: "Jason March", role: "Team Coach", isActive: true },
+    { id: "1", name: "Jason March", role: "Team Coach" },
     { id: "2", name: "Alex Bizzard", role: "Assistant Coach" },
     { id: "3", name: "Hazzel Woods", role: "Assistant Coach" },
     { id: "4", name: "Mark Stone", role: "Chief Selector" },
@@ -73,18 +74,33 @@ export default function NewPage3() {
     router.back();
   };
 
+  const handleBack = () => {
+    if (activeTabIndex > 0) {
+      setActiveTabIndex(activeTabIndex - 1);
+    }
+  };
+
+  const handleNext = () => {
+    if (activeTabIndex < pipelineSteps.length - 1) {
+      setActiveTabIndex(activeTabIndex + 1);
+    }
+  };
+
   const handleRemove = () => {
     console.log("Removed");
   };
+
+  const isFirstTab = activeTabIndex === 0;
+  const isLastTab = activeTabIndex === pipelineSteps.length - 1;
 
   return (
     <div className="min-h-screen bg-white p-8 text-left">
       <div className="mb-6 flex items-start gap-2">
         <button
           onClick={handleCancel}
-          className="!border-none !bg-transparent !h-[20px] !min-h-[20px]"
+          className="!border-none !bg-transparent !h-[20px] !min-h-[20px] !p-0"
         >
-          <i className="icon-arrow-left-2 font-bold text-[20px] flex items-center"></i>
+          <i className="icon-svg-left-arrow"></i>
         </button>
         <div>
           <h4 className="!text-[22px] font-medium italic">
@@ -117,9 +133,10 @@ export default function NewPage3() {
             {pipelineSteps.map((step, index) => (
               <React.Fragment key={step.id}>
                 <div
-                  className={`relative tab-item ${
-                    step.isActive ? "active-tab" : ""
+                  className={`relative tab-item cursor-pointer ${
+                    activeTabIndex === index ? "active-tab" : ""
                   }`}
+                  onClick={() => setActiveTabIndex(index)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-center">
@@ -137,169 +154,236 @@ export default function NewPage3() {
           </div>
 
           <div className="tab-content">
-            <div className="tab-content-item">
-              {/* Task Section */}
-              <div className="grid grid-cols-2 gap-12 mb-6">
-                <div>
-                  <label className="block mb-2 text-gray-700 text-sm">
-                    Task
-                  </label>
-                  <Input
-                    value={task}
-                    onChange={(e) => setTask(e.target.value)}
-                    placeholder="Film Evaluation"
-                  />
+            {/* Tab Content 1 */}
+            {activeTabIndex === 0 && (
+              <div className="tab-content-item">
+                {/* Task Section */}
+                <div className="grid grid-cols-2 gap-12 mb-6">
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Task
+                    </label>
+                    <Input
+                      value={task}
+                      onChange={(e) => setTask(e.target.value)}
+                      placeholder="Film Evaluation"
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Select Person
+                    </label>
+                    <Select
+                      value={selectedPerson || undefined}
+                      onChange={(value) => setSelectedPerson(value)}
+                      placeholder="Select"
+                      className="w-full"
+                    >
+                      <Select.Option value="jason">Jason March</Select.Option>
+                      <Select.Option value="alex">Alex Bizzard</Select.Option>
+                      <Select.Option value="hazzel">Hazzel Woods</Select.Option>
+                      <Select.Option value="mark">Mark Stone</Select.Option>
+                    </Select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block mb-2 text-gray-700 text-sm">
-                    Select Person
-                  </label>
-                  <Select
-                    value={selectedPerson || undefined}
-                    onChange={(value) => setSelectedPerson(value)}
-                    placeholder="Select"
-                    className="w-full"
-                  >
-                    <Select.Option value="jason">Jason March</Select.Option>
-                    <Select.Option value="alex">Alex Bizzard</Select.Option>
-                    <Select.Option value="hazzel">Hazzel Woods</Select.Option>
-                    <Select.Option value="mark">Mark Stone</Select.Option>
-                  </Select>
-                </div>
-              </div>
 
-              {/* Choose Conditions */}
-              <div className="mb-8">
-                <h4 className="mb-4 !text-[22px] font-medium italic">
-                  Choose Conditions
-                </h4>
+                {/* Choose Conditions */}
+                <div className="mb-8">
+                  <h4 className="mb-4 !text-[22px] font-medium italic">
+                    Choose Conditions
+                  </h4>
 
-                <div className="space-y-3">
-                  {conditions.map((condition) => (
-                    <div key={condition.id} className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <label className="block mb-2 text-gray-700 text-sm">
-                          If
-                        </label>
-                        <Select
-                          value={condition.ifValue || undefined}
-                          onChange={(value) =>
-                            updateCondition(condition.id, "ifValue", value)
-                          }
-                          placeholder="Select"
-                          className="w-full"
-                        >
-                          <Select.Option value="condition1">
-                            Condition 1
-                          </Select.Option>
-                          <Select.Option value="condition2">
-                            Condition 2
-                          </Select.Option>
-                          <Select.Option value="condition3">
-                            Condition 3
-                          </Select.Option>
-                        </Select>
-                      </div>
-
-                      <div className="flex items-end pb-2.5">
-                        <i className="icon-arrow-right-2 text-gray-400 text-[20px]"></i>
-                      </div>
-
-                      <div className="flex-1">
-                        <label className="block mb-2 text-gray-700 text-sm">
-                          Then
-                        </label>
-                        <Select
-                          value={condition.thenValue || undefined}
-                          onChange={(value) =>
-                            updateCondition(condition.id, "thenValue", value)
-                          }
-                          placeholder="Select"
-                          className="w-full"
-                        >
-                          <Select.Option value="action1">
-                            Action 1
-                          </Select.Option>
-                          <Select.Option value="action2">
-                            Action 2
-                          </Select.Option>
-                          <Select.Option value="action3">
-                            Action 3
-                          </Select.Option>
-                        </Select>
-                      </div>
-
-                      {conditions.length > 1 && (
-                        <div className="flex items-end pb-2.5">
-                          <Button
-                            type="text"
-                            onClick={() => removeCondition(condition.id)}
-                            className="min-w-[50px] !border-none"
-                            style={{
-                              backgroundColor: "rgba(28, 29, 77, 0.05)",
-                            }}
-                            aria-label="Delete condition"
+                  <div className="space-y-3">
+                    {conditions.map((condition) => (
+                      <div key={condition.id} className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <label className="block mb-2 text-gray-700 text-sm">
+                            If
+                          </label>
+                          <Select
+                            value={condition.ifValue || undefined}
+                            onChange={(value) =>
+                              updateCondition(condition.id, "ifValue", value)
+                            }
+                            placeholder="Select"
+                            className="w-full"
                           >
-                            <i className="icon-svg-delete-black" />
-                          </Button>
+                            <Select.Option value="condition1">
+                              Condition 1
+                            </Select.Option>
+                            <Select.Option value="condition2">
+                              Condition 2
+                            </Select.Option>
+                            <Select.Option value="condition3">
+                              Condition 3
+                            </Select.Option>
+                          </Select>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
 
-                <Button
-                  type="link"
-                  onClick={addCondition}
-                  className="mt-3 !text-[#126DB8] !text-sm !border-none"
-                  icon={<PlusOutlined />}
-                >
-                  Another Condition
-                </Button>
-              </div>
-            </div>
-            <div className="tab-content-item">
-              <div className="grid grid-cols-2 gap-12 mb-6">
-                <div>
-                  <label className="block mb-2 text-gray-700 text-sm">
-                    Task 2
-                  </label>
+                        <div className="flex items-end pt-9">
+                        <i className="icon-svg-right-arrow"></i>
+                        </div>
+
+                        <div className="flex-1">
+                          <label className="block mb-2 text-gray-700 text-sm">
+                            Then
+                          </label>
+                          <Select
+                            value={condition.thenValue || undefined}
+                            onChange={(value) =>
+                              updateCondition(condition.id, "thenValue", value)
+                            }
+                            placeholder="Select"
+                            className="w-full"
+                          >
+                            <Select.Option value="action1">
+                              Action 1
+                            </Select.Option>
+                            <Select.Option value="action2">
+                              Action 2
+                            </Select.Option>
+                            <Select.Option value="action3">
+                              Action 3
+                            </Select.Option>
+                          </Select>
+                        </div>
+
+                        {conditions.length > 1 && (
+                          <div className="flex items-end pb-2.5">
+                            <Button
+                              type="text"
+                              onClick={() => removeCondition(condition.id)}
+                              className="min-w-[50px] !border-none"
+                              style={{
+                                backgroundColor: "rgba(28, 29, 77, 0.05)",
+                              }}
+                              aria-label="Delete condition"
+                            >
+                              <i className="icon-svg-delete-black" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button
+                    type="link"
+                    onClick={addCondition}
+                    className="mt-3 !text-[#126DB8] !text-sm !border-none"
+                    icon={<PlusOutlined />}
+                  >
+                    Another Condition
+                  </Button>
                 </div>
               </div>
-            </div>
-            <div className="tab-content-item">
-              <div className="grid grid-cols-2 gap-12 mb-6">
-                <div>
-                  <label className="block mb-2 text-gray-700 text-sm">
-                    Task 3
-                  </label>
+            )}
+
+            {/* Tab Content 2 */}
+            {activeTabIndex === 1 && (
+              <div className="tab-content-item">
+                <div className="grid grid-cols-2 gap-12 mb-6">
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Task 2
+                    </label>
+                    <Input placeholder="Enter task 2..." />
+                  </div>
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Select Person
+                    </label>
+                    <Select placeholder="Select" className="w-full">
+                      <Select.Option value="jason">Jason March</Select.Option>
+                      <Select.Option value="alex">Alex Bizzard</Select.Option>
+                      <Select.Option value="hazzel">Hazzel Woods</Select.Option>
+                      <Select.Option value="mark">Mark Stone</Select.Option>
+                    </Select>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="tab-content-item">
-              <div className="grid grid-cols-2 gap-12 mb-6">
-                <div>
-                  <label className="block mb-2 text-gray-700 text-sm">
-                    Task 4
-                  </label>
+            )}
+
+            {/* Tab Content 3 */}
+            {activeTabIndex === 2 && (
+              <div className="tab-content-item">
+                <div className="grid grid-cols-2 gap-12 mb-6">
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Task 3
+                    </label>
+                    <Input placeholder="Enter task 3..." />
+                  </div>
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Select Person
+                    </label>
+                    <Select placeholder="Select" className="w-full">
+                      <Select.Option value="jason">Jason March</Select.Option>
+                      <Select.Option value="alex">Alex Bizzard</Select.Option>
+                      <Select.Option value="hazzel">Hazzel Woods</Select.Option>
+                      <Select.Option value="mark">Mark Stone</Select.Option>
+                    </Select>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Tab Content 4 */}
+            {activeTabIndex === 3 && (
+              <div className="tab-content-item">
+                <div className="grid grid-cols-2 gap-12 mb-6">
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Task 4
+                    </label>
+                    <Input placeholder="Enter task 4..." />
+                  </div>
+                  <div>
+                    <label className="block mb-2 text-gray-700 text-sm">
+                      Select Person
+                    </label>
+                    <Select placeholder="Select" className="w-full">
+                      <Select.Option value="jason">Jason March</Select.Option>
+                      <Select.Option value="alex">Alex Bizzard</Select.Option>
+                      <Select.Option value="hazzel">Hazzel Woods</Select.Option>
+                      <Select.Option value="mark">Mark Stone</Select.Option>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4">
             <div className="flex gap-3">
-              <Button type="text" onClick={handleCancel}>
-                Cancel
-              </Button>
-              <Button
-                type="primary"
-                htmlType="submit"
-                className="!px-4 !italic"
-              >
-                Submit
-              </Button>
+              {isFirstTab ? (
+                <Button type="text" onClick={handleCancel}>
+                  Cancel
+                </Button>
+              ) : (
+                <Button type="text" onClick={handleBack}>
+                  Back
+                </Button>
+              )}
+              {isLastTab ? (
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  className="!px-4 !italic"
+                >
+                  Submit
+                </Button>
+              ) : (
+                <Button
+                  type="primary"
+                  onClick={handleNext}
+                  className="!px-4 !italic"
+                >
+                  Next
+                </Button>
+              )}
             </div>
 
             <Button

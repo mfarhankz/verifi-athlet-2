@@ -569,7 +569,7 @@ table {
           height: 100%;
           top: 0;
           left: 0;
-          background: #78ff98;
+          background: #f4f4f6;
         }
       }
       &:last-child{
@@ -597,6 +597,11 @@ table {
             background: #bbff37;
           }
         }
+        &:first-child{
+          &:after {
+            background: #78ff98;
+          }
+        }
       }
     
   }
@@ -609,4 +614,22 @@ table {
     margin: 0;
     z-index: 99;
   }
+}
+
+.icon-svg-left-arrow {
+  width: 15px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px !important;
+  background: url(/svgicons/left-arrow.svg) no-repeat center center;
+}
+
+.icon-svg-right-arrow {
+  width: 15px;
+  height: 25px;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0px !important;
+  background: url(/svgicons/right-arrow.svg) no-repeat center center;
 }
