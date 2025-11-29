@@ -592,6 +592,11 @@ table {
         &:before {
           background: linear-gradient(90deg, #6AFFAB 0%, #C8FF24 104.31%);
         }
+        &:last-child{
+          &:after {
+            background: #bbff37;
+          }
+        }
       }
     
   }
