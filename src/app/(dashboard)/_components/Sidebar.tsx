@@ -156,6 +156,8 @@ function SidebarContent() {
         newSelectedKey = '19';
     } else if (pathname === '/data-ops') {
       newSelectedKey = '20';
+    } else if (pathname === '/new-page') {
+      newSelectedKey = '15';
     } else if (pathname === '/cap-manager') {
       newIsCapManagerSelected = true;
       // Handle Cap Manager and its submenus
@@ -371,6 +373,11 @@ function SidebarContent() {
       key: "13",
       icon: <i className="icon-setting-2" />,
       label: <StyledLink href="/admin">Admin</StyledLink>,
+    },
+    {
+      key: "15",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-page">New Page</StyledLink>,
     },
     {
       key: "20",

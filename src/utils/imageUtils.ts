@@ -6,20 +6,23 @@ const REMOVE_BG_API_KEY = 'DRB1YD5Pnvn4JWNmMSQtT5nd';
 export const isValidImageUrl = (url: string | null | undefined): boolean => {
   if (!url) return false;
   
-  // Check if it's a valid URL
-  try {
-    new URL(url);
-  } catch {
-    return false;
-  }
-
   // Check if it's a relative path starting with "/"
   if (url.startsWith('/')) {
     return true;
   }
 
   // Check if it's an HTTP(S) URL
-  return url.startsWith('http://') || url.startsWith('https://');
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    // Validate it's a proper URL
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 };
 const MAX_MEGAPIXELS = 25; // Set to your desired limit (25 for paid remove.bg, 0.25 for free)
 
