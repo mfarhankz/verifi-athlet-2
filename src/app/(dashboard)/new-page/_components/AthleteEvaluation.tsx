@@ -137,11 +137,27 @@ export default function AthleteEvaluation() {
   );
 
   const handleCheckboxChange = (categoryKey: string, optionKey: string, checked: boolean) => {
-    const key = `${categoryKey}-${optionKey}`;
-    setCheckedItems((prev) => ({
-      ...prev,
-      [key]: checked,
-    }));
+    // Find the category to get all its options
+    const category = evaluationData.find((cat) => cat.key === categoryKey);
+    if (!category) return;
+
+    // Create a new state object
+    const newCheckedItems = { ...checkedItems };
+
+    if (checked) {
+      // If checking: uncheck all other options in this category, then check the clicked one
+      category.options.forEach((option) => {
+        const optionKeyToCheck = `${categoryKey}-${option.key}`;
+        newCheckedItems[optionKeyToCheck] = false;
+      });
+      // Now check the clicked option
+      newCheckedItems[`${categoryKey}-${optionKey}`] = true;
+    } else {
+      // If unchecking: just uncheck this option
+      newCheckedItems[`${categoryKey}-${optionKey}`] = false;
+    }
+
+    setCheckedItems(newCheckedItems);
   };
 
   const renderCheckbox = (category: Category, option: CheckboxOption) => {

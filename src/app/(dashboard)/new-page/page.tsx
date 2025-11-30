@@ -483,7 +483,10 @@ export default function NewPage() {
   return (
     <div className="p-4 bg-white shadow-sm new-table">
       <div className="text-left">
-            <h4 className="flex items-center"><i className="icon-arrow-left-2 font-bold mr-2 flex items-center"></i>Athletes for You to Evaluate</h4>
+            <h4 className="flex items-center">
+            <i className="icon-svg-left-arrow"></i>
+
+              Athletes for You to Evaluate</h4>
                     </div>
       <div className="mb-8">
         <div className="flex justify-between items-center mb-3">

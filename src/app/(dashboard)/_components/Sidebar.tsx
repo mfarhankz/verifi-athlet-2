@@ -158,6 +158,10 @@ function SidebarContent() {
       newSelectedKey = '20';
     } else if (pathname === '/new-page') {
       newSelectedKey = '15';
+    } else if (pathname === '/new-page-2') {
+      newSelectedKey = '154';
+    } else if (pathname === '/new-page-3') {
+      newSelectedKey = '155';
     } else if (pathname === '/cap-manager') {
       newIsCapManagerSelected = true;
       // Handle Cap Manager and its submenus
@@ -378,6 +382,16 @@ function SidebarContent() {
       key: "15",
       icon: <i className="icon-setting-2" />,
       label: <StyledLink href="/new-page">New Page</StyledLink>,
+    },
+    {
+      key: "154",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-page-2">New Page 2</StyledLink>,
+    },
+    {
+      key: "155",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-page-3">New Page 3</StyledLink>,
     },
     {
       key: "20",
