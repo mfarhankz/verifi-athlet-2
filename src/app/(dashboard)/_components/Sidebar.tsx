@@ -358,6 +358,21 @@ function SidebarContent() {
       label: <StyledLink href="/road-planner">Road Planner</StyledLink>,
     },
     {
+      key: "15",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-page">New Page</StyledLink>,
+    },
+    {
+      key: "154",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-page-2">New Page 2</StyledLink>,
+    },
+    {
+      key: "155",
+      icon: <i className="icon-setting-2" />,
+      label: <StyledLink href="/new-page-3">New Page 3</StyledLink>,
+    },
+    {
       key: "7",
       icon: <i className="icon-dollar-square" />,
       label: <StyledLink href="/cap-manager?view=positional-ranking">Cap Manager</StyledLink>,
@@ -377,21 +392,6 @@ function SidebarContent() {
       key: "13",
       icon: <i className="icon-setting-2" />,
       label: <StyledLink href="/admin">Admin</StyledLink>,
-    },
-    {
-      key: "15",
-      icon: <i className="icon-setting-2" />,
-      label: <StyledLink href="/new-page">New Page</StyledLink>,
-    },
-    {
-      key: "154",
-      icon: <i className="icon-setting-2" />,
-      label: <StyledLink href="/new-page-2">New Page 2</StyledLink>,
-    },
-    {
-      key: "155",
-      icon: <i className="icon-setting-2" />,
-      label: <StyledLink href="/new-page-3">New Page 3</StyledLink>,
     },
     {
       key: "20",
