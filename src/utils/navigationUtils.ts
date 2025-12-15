@@ -68,6 +68,7 @@ export const menuRoutes = [
   { key: '15', route: '/new-page', packageIds: all_customers_with_admin, title: 'New Page' },
   { key: '154', route: '/new-page-2', packageIds: all_customers_with_admin, title: 'New Page 2' },
   { key: '155', route: '/new-page-3', packageIds: all_customers_with_admin, title: 'New Page 3' },
+  { key: '156', route: '/mapchart-example', packageIds: all_customers_with_admin, title: 'Map Chart Example' },
   { key: '21', route: '/verified-game', packageIds: [3, 4, 5, 78], title: 'Verified Game' },
   { key: '18', route: '/activity-feed', packageIds: football_packages, title: 'Activity Feed' },
   { key: '19', route: '/score-tracker', packageIds: football_packages, title: 'Score Tracker' },

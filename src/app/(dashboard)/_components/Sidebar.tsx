@@ -162,6 +162,8 @@ function SidebarContent() {
       newSelectedKey = '154';
     } else if (pathname === '/new-page-3') {
       newSelectedKey = '155';
+    } else if (pathname === '/mapchart-example') {
+      newSelectedKey = '156';
     } else if (pathname === '/cap-manager') {
       newIsCapManagerSelected = true;
       // Handle Cap Manager and its submenus
@@ -371,6 +373,11 @@ function SidebarContent() {
       key: "155",
       icon: <i className="icon-setting-2" />,
       label: <StyledLink href="/new-page-3">New Page 3</StyledLink>,
+    },
+    {
+      key: "156",
+      icon: <i className="icon-map" />,
+      label: <StyledLink href="/mapchart-example">Map Chart Example</StyledLink>,
     },
     {
       key: "7",
