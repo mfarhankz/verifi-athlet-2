@@ -549,24 +549,34 @@ export default function InteractiveUSMap({
 
   return (
     <Card
-      title={title}
+      title={
+        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <i className="icon-svg-left-arrow"></i>
+          {title}
+        </span>
+      }
       extra={
         <Space>
-          <Button 
+          {/* <Button 
             type={showCountiesLayer ? "primary" : "default"}
             size="small"
             onClick={() => setShowCountiesLayer(!showCountiesLayer)}
           >
             {showCountiesLayer ? "Hide" : "Show"} Counties
+          </Button> */}
+          <Button icon={<i className="icon-printer" />} onClick={() => ('')} size="small">
+              Print
           </Button>
+
           {(selectedStates.size > 0 || selectedCounties.size > 0) && (
             <Button icon={<ReloadOutlined />} onClick={handleReset} size="small">
               Clear All
             </Button>
           )}
+          
         </Space>
       }
-      style={{ width }}
+      style={{ width, textAlign: "left" }}
       bodyStyle={{ padding: 0, height: typeof height === "number" ? `${height}px` : height }}
     >
       <div style={{ height: typeof height === "number" ? `${height}px` : height, width: "100%" }}>
@@ -939,7 +949,7 @@ export default function InteractiveUSMap({
 
       {/* Display selected data */}
       {(selectedStates.size > 0 || selectedCounties.size > 0) && (
-        <div style={{ marginTop: "16px", padding: "16px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
+        <div>
           {(() => {
             // Group selected counties by state (normalize state names for matching)
             const countiesByState = new Map<string, CountyData[]>();
@@ -966,24 +976,25 @@ export default function InteractiveUSMap({
                   const countiesForState = countiesByState.get(normalizedStateName) || [];
                   
                   return (
-                    <div key={state.id} style={{ marginBottom: "20px" }}>
-                      <Text strong style={{ display: "block", marginBottom: "8px", fontSize: "16px" }}>
-                        {state.name}
-                      </Text>
-                      {countiesForState.length > 0 ? (
-                        <div style={{ marginLeft: "16px" }}>
-                          {countiesForState.map((county) => (
-                            <div key={county.id} style={{ marginBottom: "4px" }}>
-                              <Text>{county.name}</Text>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <Text type="secondary" style={{ marginLeft: "16px", fontSize: "12px" }}>
-                          No counties selected
-                        </Text>
-                      )}
-                    </div>
+                    <div></div>
+                    // <div key={state.id} style={{ marginBottom: "20px" }}>
+                    //   <Text strong style={{ display: "block", marginBottom: "8px", fontSize: "16px" }}>
+                    //     {state.name}
+                    //   </Text>
+                    //   {countiesForState.length > 0 ? (
+                    //     <div style={{ marginLeft: "16px" }}>
+                    //       {countiesForState.map((county) => (
+                    //         <div key={county.id} style={{ marginBottom: "4px" }}>
+                    //           <Text>{county.name}</Text>
+                    //         </div>
+                    //       ))}
+                    //     </div>
+                    //   ) : (
+                    //     <Text type="secondary" style={{ marginLeft: "16px", fontSize: "12px" }}>
+                    //       No counties selected
+                    //     </Text>
+                    //   )}
+                    // </div>
                   );
                 })}
               </div>

@@ -3,13 +3,23 @@
 import { useState } from "react";
 import MapChart from "@/components/MapChart";
 import InteractiveUSMap from "@/components/InteractiveUSMap";
-import { Card, Space, Input, Button, Divider, Typography } from "antd";
+import {
+  Card,
+  Space,
+  Input,
+  Button,
+  Divider,
+  Typography,
+  Tabs,
+  Collapse,
+  Checkbox,
+} from "antd";
 
 const { Title, Text } = Typography;
 
 /**
  * Example page demonstrating how to use the MapChart component
- * 
+ *
  * To use MapChart in your app:
  * 1. Create a map on mapchart.net
  * 2. Download the map as an image
@@ -41,27 +51,49 @@ export default function MapChartExamplePage() {
   };
 
   return (
-    <div style={{ padding: "0", maxWidth: "100%", margin: "0 auto", height: "100vh", display: "flex", flexDirection: "column" }}>
-      
+    <div
+      style={{
+        padding: "0",
+        maxWidth: "100%",
+        margin: "0 auto",
+        height: "100vh",
+        display: "flex",
+        flexDirection: "row",
+      }}
+    >
       {/* Interactive US Map */}
-      <Card style={{ marginBottom: "24px", flex: 1, display: "flex", flexDirection: "column", height: "100%" }}>
-      
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+        }}
+      >
         <InteractiveUSMap
           onStateSelect={handleStateSelect}
           onCountySelect={handleCountySelect}
           height="calc(90vh - 20px)"
-          title="US States and Counties Map"
+          title="Assign Coaches"
         />
-        
+
         {/* Display selected data */}
         {(selectedStatesData.length > 0 || selectedCountiesData.length > 0) && (
-          <Card 
-            style={{ marginTop: "16px", backgroundColor: "#f0f2f5" }}
-            title="Selected Data (from callbacks)"
+          <div
+            style={{
+              textAlign: "left",
+              display: "block",
+              backgroundColor: "#fff",
+              padding: "16px",
+              marginTop: "16px",
+            }}
           >
             {(() => {
               // Group selected counties by state
-              const countiesByState = new Map<string, typeof selectedCountiesData>();
+              const countiesByState = new Map<
+                string,
+                typeof selectedCountiesData
+              >();
               selectedCountiesData.forEach((county) => {
                 if (county && county.state) {
                   const stateName = county.state.trim();
@@ -71,30 +103,43 @@ export default function MapChartExamplePage() {
                   countiesByState.get(stateName)!.push(county);
                 }
               });
-              
+
               return (
                 <div>
                   {selectedStatesData.map((state) => {
                     const stateName = state.name.trim();
-                    const countiesForState = countiesByState.get(stateName) || [];
-                    
+                    const countiesForState =
+                      countiesByState.get(stateName) || [];
+
                     return (
-                      <div key={state.id} style={{ marginBottom: "20px" }}>
-                        <Text strong style={{ display: "block", marginBottom: "8px", fontSize: "16px" }}>
-                          {state.name}
-                        </Text>
+                      <div key={state.id} className="state-county-list-item">
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "10px",
+                          }}
+                        >
+                          <h4 className="!text-[40px] font-bold !mb-0 leading-[40px]">
+                            {state.name}
+                          </h4>
+                          <Checkbox>
+                            <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1">
+                              Select Entire State
+                            </h6>
+                          </Checkbox>
+                        </div>
                         {countiesForState.length > 0 ? (
-                          <div style={{ marginLeft: "16px" }}>
+                          <div className="flex gap-1">
                             {countiesForState.map((county, index) => (
-                              <div key={index} style={{ marginBottom: "4px" }}>
-                                <Text>{county.name}</Text>
-                              </div>
+                              <h6 key={index} className="county-list-item">
+                                {county.name}
+                              </h6>
                             ))}
                           </div>
                         ) : (
-                          <Text type="secondary" style={{ marginLeft: "16px", fontSize: "12px" }}>
-                            No counties selected
-                          </Text>
+                          <Text type="secondary">No counties selected</Text>
                         )}
                       </div>
                     );
@@ -102,16 +147,89 @@ export default function MapChartExamplePage() {
                 </div>
               );
             })()}
-            <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #d9d9d9" }}>
-              <Text type="secondary" style={{ fontSize: "12px" }}>
-                This data is received from the onStateSelect and onCountySelect callbacks. 
-                You can use this data to filter your database, fetch records, etc.
-              </Text>
-            </div>
-          </Card>
+          </div>
         )}
-      </Card>
+      </div>
+      <div className="w-[340px] ml-3">
+        <div
+          style={{
+            marginBottom: "24px",
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            height: "100%",
+          }}
+        >
+          <Tabs
+            defaultActiveKey="1"
+            items={[
+              {
+                key: "1",
+                label: "US States & County",
+                children: (
+                  <Collapse
+                    items={[
+                      {
+                        key: "1",
+                        label: "State Information",
+                        children: (
+                          <div>
+                            <Text>
+                              State selection and county information will be
+                              displayed here.
+                            </Text>
+                          </div>
+                        ),
+                      },
+                      {
+                        key: "2",
+                        label: "County Details",
+                        children: (
+                          <div>
+                            <Text>
+                              Detailed county information will be shown here.
+                            </Text>
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                ),
+              },
+              {
+                key: "2",
+                label: "Coaches",
+                children: (
+                  <Collapse
+                    items={[
+                      {
+                        key: "1",
+                        label: "Coach List",
+                        children: (
+                          <div>
+                            <Text>List of coaches will be displayed here.</Text>
+                          </div>
+                        ),
+                      },
+                      {
+                        key: "2",
+                        label: "Coach Details",
+                        children: (
+                          <div>
+                            <Text>
+                              Detailed coach information will be shown here.
+                            </Text>
+                          </div>
+                        ),
+                      },
+                    ]}
+                  />
+                ),
+              },
+            ]}
+          />
+        </div>
+      </div>
     </div>
   );
 }
-
