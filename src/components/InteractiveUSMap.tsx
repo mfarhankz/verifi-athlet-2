@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import {
   ComposableMap,
   Geographies,
@@ -137,13 +137,18 @@ interface InteractiveUSMapProps {
   title?: string;
 }
 
+export interface InteractiveUSMapRef {
+  selectAllCountiesForState: (stateName: string, stateId: string) => void;
+  deselectCounty: (countyId: string) => void;
+}
+
 /**
  * Interactive US Map Component
  * 
  * Displays an interactive map of the United States with states and counties.
  * Users can click on states to see counties and get data about the selection.
  */
-export default function InteractiveUSMap({
+const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(({
   onStateSelect,
   onCountySelect,
   initialSelectedState,
@@ -152,7 +157,7 @@ export default function InteractiveUSMap({
   width = "100%",
   title = "Interactive US Map",
   multiSelect = true,
-}: InteractiveUSMapProps) {
+}, ref) => {
   const [selectedStates, setSelectedStates] = useState<Set<string>>(
     initialSelectedState ? new Set([initialSelectedState]) : new Set()
   );
@@ -261,7 +266,15 @@ export default function InteractiveUSMap({
         const allSelectedStatesData = Array.from(newSelectedStates)
           .map(id => newStatesData.get(id))
           .filter(Boolean) as StateData[];
-        const allCounties = Array.from(updatedCountiesData.values());
+        
+        // Only include counties from currently selected states
+        const selectedStateNames = new Set(allSelectedStatesData.map(s => s.name.trim()));
+        const allCounties = Array.from(updatedCountiesData.values()).filter(county => {
+          if (!county || !county.state) return false;
+          const countyStateName = county.state.trim();
+          return selectedStateNames.has(countyStateName);
+        });
+        
         onStateSelect(allSelectedStatesData, allCounties);
       }
     },
@@ -419,6 +432,47 @@ export default function InteractiveUSMap({
     },
     [allCountiesByState, selectedCounties, countiesData, onCountySelect]
   );
+
+  // Handle deselecting a specific county
+  const handleDeselectCounty = useCallback(
+    (countyId: string) => {
+      const newSelectedCounties = new Set(selectedCounties);
+      const newCountiesData = new Map(countiesData);
+      
+      if (newSelectedCounties.has(countyId)) {
+        const county = newCountiesData.get(countyId);
+        newSelectedCounties.delete(countyId);
+        newCountiesData.delete(countyId);
+        
+        setSelectedCounties(newSelectedCounties);
+        setCountiesData(newCountiesData);
+        setRenderKey(prev => prev + 1); // Force re-render to update state colors
+        
+        // Call the callback
+        if (onCountySelect) {
+          const allSelectedCountiesData = Array.from(newSelectedCounties)
+            .map(id => newCountiesData.get(id))
+            .filter(Boolean) as CountyData[];
+          onCountySelect(allSelectedCountiesData);
+        }
+        
+        if (county) {
+          message.info(`Deselected: ${county.name}, ${county.state}`);
+        }
+      }
+    },
+    [selectedCounties, countiesData, onCountySelect]
+  );
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    selectAllCountiesForState: (stateName: string, stateId: string) => {
+      handleSelectAllCountiesForState(stateName, stateId);
+    },
+    deselectCounty: (countyId: string) => {
+      handleDeselectCounty(countyId);
+    },
+  }), [handleSelectAllCountiesForState, handleDeselectCounty]);
 
   // Remove a specific state
   const handleRemoveState = (stateId: string) => {
@@ -1004,5 +1058,9 @@ export default function InteractiveUSMap({
       )}
     </Card>
   );
-}
+});
+
+InteractiveUSMap.displayName = "InteractiveUSMap";
+
+export default InteractiveUSMap;
 

@@ -1078,7 +1078,10 @@ button:hover{
   color: #fff;
   padding: 6px 8px 6px 0;
   margin-bottom: 15px;
-  
+  flex-wrap: wrap;
+  &:last-child {
+    margin-bottom: 0;
+  }
 }
 
 .county-list-item {
@@ -1087,7 +1090,9 @@ button:hover{
   color: #fff !important;
   padding: 6px 10px;
   font-size: 16px !important;
-  font-weight: 400 !important;
+  font-weight: 500 !important;
+  white-space: nowrap;
+  margin-bottom: 0 !important;
   div {
     color: #fff !important;
   }
