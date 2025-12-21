@@ -666,7 +666,7 @@ button.alert-gradient-btn span {
   padding: 5px 0;
 }
 a{
-color:#126db8 !important
+color:#126db8
 }
 p{
   letter-spacing: 0.5px;
@@ -1095,5 +1095,14 @@ button:hover{
   margin-bottom: 0 !important;
   div {
     color: #fff !important;
+  }
+}
+
+.map-chart-tabs {
+  .ant-tabs-tab-btn {
+    white-space: break-spaces !important;
+    line-height: 22px;
+    font-weight: 500 !important;
+    font-size: 20px !important;
   }
 }

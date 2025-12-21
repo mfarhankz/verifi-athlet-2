@@ -2,7 +2,9 @@
 
 import { useState, useRef } from "react";
 import MapChart from "@/components/MapChart";
-import InteractiveUSMap, { InteractiveUSMapRef } from "@/components/InteractiveUSMap";
+import InteractiveUSMap, {
+  InteractiveUSMapRef,
+} from "@/components/InteractiveUSMap";
 import {
   Card,
   Space,
@@ -13,14 +15,19 @@ import {
   Tabs,
   Collapse,
   Checkbox,
+  Modal,
+  Select,
+  Radio,
+  Avatar,
+  Tag,
 } from "antd";
-import { 
-  CloseOutlined, 
-  SearchOutlined, 
-  UpOutlined, 
-  DownOutlined, 
-  CaretRightOutlined, 
-  CaretDownOutlined 
+import {
+  CloseOutlined,
+  SearchOutlined,
+  UpOutlined,
+  DownOutlined,
+  CaretRightOutlined,
+  CaretDownOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
@@ -46,27 +53,194 @@ export default function MapChartExamplePage() {
 
   const [selectedStatesData, setSelectedStatesData] = useState<any[]>([]);
   const [selectedCountiesData, setSelectedCountiesData] = useState<any[]>([]);
-  const [allCountiesByState, setAllCountiesByState] = useState<Map<string, any[]>>(new Map());
-  const [entireStateSelected, setEntireStateSelected] = useState<Set<string>>(new Set());
+  const [allCountiesByState, setAllCountiesByState] = useState<
+    Map<string, any[]>
+  >(new Map());
+  const [entireStateSelected, setEntireStateSelected] = useState<Set<string>>(
+    new Set()
+  );
   const mapRef = useRef<InteractiveUSMapRef>(null);
-  
+
   // UI state for the right panel
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedStates, setExpandedStates] = useState<Set<string>>(new Set());
-  const [countiesToShow, setCountiesToShow] = useState<Map<string, number>>(new Map());
+  const [countiesToShow, setCountiesToShow] = useState<Map<string, number>>(
+    new Map()
+  );
   const [statesToShow, setStatesToShow] = useState(10);
   // Mock coach assignments - in real app, this would come from API
-  const [coachAssignments, setCoachAssignments] = useState<Map<string, string>>(new Map());
+  const [coachAssignments, setCoachAssignments] = useState<Map<string, string>>(
+    new Map()
+  );
+
+  // Modal state for coach assignment
+  const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
+  const [selectedCountyForAssignment, setSelectedCountyForAssignment] =
+    useState<{ id: string; name: string; state: string } | null>(null);
+  const [selectedCoach, setSelectedCoach] = useState<string>("");
+  const [coachSearchQuery, setCoachSearchQuery] = useState("");
+  const [selectedCountiesInModal, setSelectedCountiesInModal] = useState<
+    Array<{ id: string; name: string; state: string }>
+  >([]);
+  const [expandedCoachAreas, setExpandedCoachAreas] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Mock coaches list - in real app, this would come from API
+  const mockCoaches = [
+    {
+      id: "1",
+      name: "Cody Fisher",
+      email: "crusader@yahoo.com",
+      avatar: "/c1.svg",
+      color: "Red",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "2",
+      name: "Jenny Wilson",
+      email: "jginspace@mac.com",
+      avatar: null,
+      color: "Blue",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "3",
+      name: "Devon Lane",
+      email: "fwitness@yahoo.ca",
+      avatar: null,
+      color: "Green",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "4",
+      name: "Floyd Miles",
+      email: "smallpaul@me.com",
+      avatar: null,
+      color: "Yellow",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "5",
+      name: "Eleanor Pena",
+      email: "plover@aol.com",
+      avatar: null,
+      color: "Purple",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "6",
+      name: "Ronald Richards",
+      email: "mccurley@yahoo.ca",
+      avatar: null,
+      color: "Red",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "7",
+      name: "Brooklyn Simmons",
+      email: "pkplex@optonline.net",
+      avatar: null,
+      color: "Blue",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "8",
+      name: "Courtney Henry",
+      email: "dieman@live.com",
+      avatar: null,
+      color: "Green",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "9",
+      name: "Savannah Nguyen",
+      email: "amichalo@msn.com",
+      avatar: null,
+      color: "Yellow",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "10",
+      name: "Jeffrey Epstein",
+      email: "jason_mark@hotmail.com",
+      avatar: null,
+      color: "Red",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "11",
+      name: "Alex Rock",
+      email: "alex.rock@example.com",
+      avatar: null,
+      color: "Blue",
+      position: "Position",
+      assignedAreas: [
+        "AL, AR, CT, FL, GA (Appling, Atkinson, Bacon, Baker, Ben Hill, Berrien, Bibb, Bleckley, Brantley, Brooks, Bryan, Bulloch, Burke, Calhoun, Camden, Candler, Charlton, Chatham, Chattahoochee, Clay, Clinch, Coffee, Colquitt, Cook, Crawford, Crisp, Decatur, Dodge, Dooly, Dougherty, Early, Echols, Effingham, Emanuel, Evans, Glynn, Grady, Harris, Houston, Irwin, Jeff Davis, Jefferson)",
+      ],
+      positions: [] as string[],
+    },
+    {
+      id: "12",
+      name: "Mario Kingman",
+      email: "mario.kingman@example.com",
+      avatar: null,
+      color: "Green",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+    {
+      id: "13",
+      name: "Guermeo Ammea",
+      email: "guermeo.ammea@example.com",
+      avatar: null,
+      color: "Yellow",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: ["QB", "RB", "WR"],
+    },
+    {
+      id: "14",
+      name: "Alex Jason",
+      email: "alex.jason@example.com",
+      avatar: null,
+      color: "Purple",
+      position: "Position",
+      assignedAreas: [] as string[],
+      positions: [] as string[],
+    },
+  ];
 
   const handleStateSelect = (states: any[], allCounties: any[]) => {
     // Create a set of currently selected state names for quick lookup
-    const selectedStateNames = new Set(states.map(s => s.name.trim()));
-    
+    const selectedStateNames = new Set(states.map((s) => s.name.trim()));
+
     setSelectedStatesData(states);
-    
+
     // Completely rebuild the counties map - don't merge with old data
     const newCountiesMap = new Map<string, any[]>();
-    
+
     // Only process counties that belong to currently selected states
     allCounties.forEach((county) => {
       if (county && county.state) {
@@ -80,15 +254,15 @@ export default function MapChartExamplePage() {
         }
       }
     });
-    
+
     // Set the new map (this completely replaces the old one)
     setAllCountiesByState(newCountiesMap);
-    
+
     // Auto-expand first state if none are expanded
     if (states.length > 0 && expandedStates.size === 0) {
       setExpandedStates(new Set([states[0].name.trim()]));
     }
-    
+
     console.log("Selected States:", states);
     console.log("All Counties from selected states:", allCounties);
     console.log("New Counties Map:", Array.from(newCountiesMap.entries()));
@@ -96,28 +270,37 @@ export default function MapChartExamplePage() {
 
   const handleCountySelect = (counties: any[]) => {
     // Filter counties to only include those from currently selected states
-    const selectedStateNames = new Set(selectedStatesData.map(s => s.name.trim()));
-    const filteredCounties = counties.filter(county => 
-      county && county.state && selectedStateNames.has(county.state.trim())
+    const selectedStateNames = new Set(
+      selectedStatesData.map((s) => s.name.trim())
+    );
+    const filteredCounties = counties.filter(
+      (county) =>
+        county && county.state && selectedStateNames.has(county.state.trim())
     );
     setSelectedCountiesData(filteredCounties);
     // Don't automatically update checkbox state - only user clicks should control it
   };
 
-  const handleSelectEntireState = (stateName: string, stateId: string, checked: boolean) => {
+  const handleSelectEntireState = (
+    stateName: string,
+    stateId: string,
+    checked: boolean
+  ) => {
     const normalizedStateName = stateName.trim();
-    
+
     if (!mapRef.current) {
       return;
     }
-    
+
     // Always call the map method - it handles the toggle logic internally
     // The method checks if all are selected and toggles accordingly
     mapRef.current.selectAllCountiesForState(normalizedStateName, stateId);
-    
+
     // Update checkbox state based on user action
     if (checked) {
-      setEntireStateSelected(new Set([...entireStateSelected, normalizedStateName]));
+      setEntireStateSelected(
+        new Set([...entireStateSelected, normalizedStateName])
+      );
     } else {
       const newEntireStateSelected = new Set(entireStateSelected);
       newEntireStateSelected.delete(normalizedStateName);
@@ -152,22 +335,133 @@ export default function MapChartExamplePage() {
   // Show more counties for a state
   const showMoreCounties = (stateName: string, totalCount: number) => {
     const current = countiesToShow.get(stateName) || 10;
-    setCountiesToShow(new Map(countiesToShow.set(stateName, Math.min(current + 10, totalCount))));
+    setCountiesToShow(
+      new Map(countiesToShow.set(stateName, Math.min(current + 10, totalCount)))
+    );
   };
 
-  // Handle coach assignment
+  // Handle coach assignment - open modal
   const handleAssignCoach = (countyId: string, countyName: string) => {
-    // In real app, this would open a modal to select a coach
-    // For now, we'll use mock data
-    const mockCoaches = ["Joe Smith", "Alex D'cock", "John Doe"];
-    const randomCoach = mockCoaches[Math.floor(Math.random() * mockCoaches.length)];
-    setCoachAssignments(new Map(coachAssignments.set(countyId, randomCoach)));
+    // Get the county's state
+    const county = selectedCountiesData.find((c) => c.id === countyId);
+    const stateName = county?.state || "";
+
+    // Initialize with the clicked county
+    setSelectedCountiesInModal([
+      { id: countyId, name: countyName, state: stateName },
+    ]);
+    setSelectedCountyForAssignment({
+      id: countyId,
+      name: countyName,
+      state: stateName,
+    });
+    setSelectedCoach("");
+    setCoachSearchQuery("");
+    setIsAssignModalVisible(true);
   };
+
+  // Handle removing county from modal selection
+  const handleRemoveCountyFromModal = (countyId: string) => {
+    setSelectedCountiesInModal((prev) => prev.filter((c) => c.id !== countyId));
+  };
+
+  // Handle coach selection in modal
+  const handleConfirmCoachAssignment = () => {
+    if (selectedCountiesInModal.length > 0 && selectedCoach) {
+      const coachName =
+        mockCoaches.find((c) => c.id === selectedCoach)?.name || selectedCoach;
+      // Assign coach to all selected counties
+      const newAssignments = new Map(coachAssignments);
+      selectedCountiesInModal.forEach((county) => {
+        newAssignments.set(county.id, coachName);
+      });
+      setCoachAssignments(newAssignments);
+      setIsAssignModalVisible(false);
+      setSelectedCountyForAssignment(null);
+      setSelectedCountiesInModal([]);
+      setSelectedCoach("");
+      setCoachSearchQuery("");
+    }
+  };
+
+  // Handle modal cancel
+  const handleCancelCoachAssignment = () => {
+    setIsAssignModalVisible(false);
+    setSelectedCountyForAssignment(null);
+    setSelectedCountiesInModal([]);
+    setSelectedCoach("");
+    setCoachSearchQuery("");
+  };
+
+  // Get state abbreviation helper
+  const getStateAbbreviation = (stateName: string): string => {
+    const stateAbbrMap: Record<string, string> = {
+      Alabama: "AL",
+      Alaska: "AK",
+      Arizona: "AZ",
+      Arkansas: "AR",
+      California: "CA",
+      Colorado: "CO",
+      Connecticut: "CT",
+      Delaware: "DE",
+      Florida: "FL",
+      Georgia: "GA",
+      Hawaii: "HI",
+      Idaho: "ID",
+      Illinois: "IL",
+      Indiana: "IN",
+      Iowa: "IA",
+      Kansas: "KS",
+      Kentucky: "KY",
+      Louisiana: "LA",
+      Maine: "ME",
+      Maryland: "MD",
+      Massachusetts: "MA",
+      Michigan: "MI",
+      Minnesota: "MN",
+      Mississippi: "MS",
+      Missouri: "MO",
+      Montana: "MT",
+      Nebraska: "NE",
+      Nevada: "NV",
+      "New Hampshire": "NH",
+      "New Jersey": "NJ",
+      "New Mexico": "NM",
+      "New York": "NY",
+      "North Carolina": "NC",
+      "North Dakota": "ND",
+      Ohio: "OH",
+      Oklahoma: "OK",
+      Oregon: "OR",
+      Pennsylvania: "PA",
+      "Rhode Island": "RI",
+      "South Carolina": "SC",
+      "South Dakota": "SD",
+      Tennessee: "TN",
+      Texas: "TX",
+      Utah: "UT",
+      Vermont: "VT",
+      Virginia: "VA",
+      Washington: "WA",
+      "West Virginia": "WV",
+      Wisconsin: "WI",
+      Wyoming: "WY",
+      "District of Columbia": "DC",
+    };
+    return stateAbbrMap[stateName] || stateName.substring(0, 2).toUpperCase();
+  };
+
+  // Filter coaches based on search
+  const filteredCoaches = mockCoaches.filter(
+    (coach) =>
+      coach.name.toLowerCase().includes(coachSearchQuery.toLowerCase()) ||
+      coach.email.toLowerCase().includes(coachSearchQuery.toLowerCase())
+  );
 
   // Handle delete all assignments for a state
   const handleDeleteAllAssignments = (stateName: string, counties: any[]) => {
     const newAssignments = new Map(coachAssignments);
-    counties.forEach(county => {
+    counties.forEach((county) => {
       newAssignments.delete(county.id);
     });
     setCoachAssignments(newAssignments);
@@ -176,7 +470,7 @@ export default function MapChartExamplePage() {
   // Get coach count for a state
   const getCoachCountForState = (counties: any[]) => {
     const uniqueCoaches = new Set<string>();
-    counties.forEach(county => {
+    counties.forEach((county) => {
       const coach = coachAssignments.get(county.id);
       if (coach) {
         uniqueCoaches.add(coach);
@@ -186,11 +480,11 @@ export default function MapChartExamplePage() {
   };
 
   // Filter states and counties based on search
-  const filteredStatesData = selectedStatesData.filter(state => {
+  const filteredStatesData = selectedStatesData.filter((state) => {
     if (!searchQuery) return true;
     const stateName = state.name.toLowerCase();
     const counties = allCountiesByState.get(state.name.trim()) || [];
-    const countyMatches = counties.some(county => 
+    const countyMatches = counties.some((county) =>
       county.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
     return stateName.includes(searchQuery.toLowerCase()) || countyMatches;
@@ -222,6 +516,7 @@ export default function MapChartExamplePage() {
           onCountySelect={handleCountySelect}
           height="calc(90vh - 20px)"
           title="Assign Coaches"
+          coachAssignments={coachAssignments}
         />
 
         {/* Display selected data */}
@@ -266,26 +561,31 @@ export default function MapChartExamplePage() {
                             alignItems: "center",
                             gap: "8px",
                             marginBottom: "10px",
-                            
                           }}
                         >
                           <h4 className="!text-[40px] font-bold !mb-0 leading-[40px]">
                             {state.name}
                           </h4>
-                           <Checkbox
-                             checked={entireStateSelected.has(stateName)}
-                             onChange={(e) => handleSelectEntireState(stateName, state.id, e.target.checked)}
-                           >
-                             <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1">
-                               Select Entire State
-                             </h6>
-                           </Checkbox>
+                          <Checkbox
+                            checked={entireStateSelected.has(stateName)}
+                            onChange={(e) =>
+                              handleSelectEntireState(
+                                stateName,
+                                state.id,
+                                e.target.checked
+                              )
+                            }
+                          >
+                            <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1">
+                              Select Entire State
+                            </h6>
+                          </Checkbox>
                         </div>
                         {countiesForState.length > 0 ? (
                           <div className="flex gap-1 flex-wrap mb-0">
                             {countiesForState.map((county, index) => (
-                              <h6 
-                                key={index} 
+                              <h6
+                                key={index}
                                 className="county-list-item"
                                 style={{
                                   display: "inline-flex",
@@ -339,6 +639,7 @@ export default function MapChartExamplePage() {
         >
           <Tabs
             defaultActiveKey="1"
+            className="map-chart-tabs"
             items={[
               {
                 key: "1",
@@ -357,168 +658,294 @@ export default function MapChartExamplePage() {
                     {/* States List */}
                     {filteredStatesData.length > 0 ? (
                       <div>
-                        {filteredStatesData.slice(0, statesToShow).map((state) => {
-                          const stateName = state.name.trim();
-                          // Get only SELECTED counties from this state (counties that were clicked)
-                          const selectedCountiesForState = selectedCountiesData.filter(
-                            (county) => county && county.state && county.state.trim() === stateName
-                          );
-                          const isExpanded = expandedStates.has(stateName);
-                          const countiesToDisplay = isExpanded ? getCountiesToDisplay(stateName, selectedCountiesForState) : [];
-                          const coachCount = getCoachCountForState(selectedCountiesForState);
-                          const hasMoreCounties = countiesToDisplay.length < selectedCountiesForState.length;
+                        {filteredStatesData
+                          .slice(0, statesToShow)
+                          .map((state) => {
+                            const stateName = state.name.trim();
+                            // Get only SELECTED counties from this state (counties that were clicked)
+                            const selectedCountiesForState =
+                              selectedCountiesData.filter(
+                                (county) =>
+                                  county &&
+                                  county.state &&
+                                  county.state.trim() === stateName
+                              );
+                            const isExpanded = expandedStates.has(stateName);
+                            const countiesToDisplay = isExpanded
+                              ? getCountiesToDisplay(
+                                  stateName,
+                                  selectedCountiesForState
+                                )
+                              : [];
+                            const coachCount = getCoachCountForState(
+                              selectedCountiesForState
+                            );
+                            const hasMoreCounties =
+                              countiesToDisplay.length <
+                              selectedCountiesForState.length;
 
-                          return (
-                            <div
-                              key={state.id}
-                              style={{
-                                borderBottom: "1px solid #f0f0f0",
-                                paddingBottom: "16px",
-                                marginBottom: "16px",
-                              }}
-                            >
-                              {/* State Header */}
+                            return (
                               <div
+                                key={state.id}
                                 style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  justifyContent: "space-between",
-                                  cursor: "pointer",
-                                  marginBottom: "8px",
+                                  borderBottom: "1px solid #f0f0f0",
+                                  
                                 }}
-                                onClick={() => toggleStateExpansion(stateName)}
                               >
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                  {isExpanded ? (
-                                    <CaretDownOutlined style={{ fontSize: "12px", color: "#1c1d4d" }} />
-                                  ) : (
-                                    <CaretRightOutlined style={{ fontSize: "12px", color: "#1c1d4d" }} />
-                                  )}
-                                  <Text strong style={{ fontSize: "16px", color: "#1c1d4d" }}>
+                                {/* State Header */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "start",
+                                    justifyContent: "space-between",
+                                    cursor: "pointer",
+                                    textAlign: "left",
+                                    padding: "8px 0",
+                                  }}
+                                  onClick={() =>
+                                    toggleStateExpansion(stateName)
+                                  }
+                                >
+                                  <div>
+                                    <div>
+                                      {isExpanded ? (
+                                        // <CaretDownOutlined style={{ fontSize: "12px", color: "#1c1d4d" }} />
+                                        <div className="flex gap-2 items-center">
+                                          <i className="flex icon-arrow-down-1"></i>
+                                          <Text className="text-xl italic font-semibold">
+                                            {state.name}
+                                          </Text>
+                                        </div>
+                                      ) : (
+                                        // <CaretRightOutlined style={{ fontSize: "12px", color: "#1c1d4d" }} />
+                                        <div className=" flex gap-2 items-center">
+                                          <i className="flex icon-arrow-right-3"></i>
+                                          <Text className="text-xl italic font-semibold">
+                                            {state.name}
+                                          </Text>
+                                        </div>
+                                      )}
+                                      {/* <Text strong style={{ fontSize: "16px", color: "#1c1d4d" }}>
                                     {state.name}
-                                  </Text>
-                                </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                                  <Text type="secondary" style={{ fontSize: "14px" }}>
-                                    {selectedCountiesForState.length} Counties
-                                  </Text>
-                                  {coachCount > 0 && (
-                                    <>
-                                      <Text type="secondary" style={{ fontSize: "14px" }}>
-                                        {coachCount} Coaches
-                                      </Text>
-                                      <Button
-                                        type="link"
-                                        danger
-                                        size="small"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeleteAllAssignments(stateName, selectedCountiesForState);
-                                        }}
-                                        style={{ padding: 0, fontSize: "12px", textDecoration: "underline" }}
-                                      >
-                                        Delete all assignments
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
+                                    </Text> */}
 
-                              {/* Counties List */}
-                              {isExpanded && (
-                                <div style={{ marginLeft: "20px", marginTop: "8px" }}>
-                                  {countiesToDisplay.length > 0 ? (
-                                    <>
-                                      {countiesToDisplay.map((county, index) => {
-                                        const assignedCoach = coachAssignments.get(county.id);
-                                        const isUnassigned = !assignedCoach;
-                                        
-                                        return (
-                                          <div
-                                            key={county.id}
-                                            style={{
-                                              display: "flex",
-                                              alignItems: "center",
-                                              justifyContent: "space-between",
-                                              padding: "8px 0",
-                                              backgroundColor: isUnassigned ? "#f6ffed" : "transparent",
-                                              borderBottom: index < countiesToDisplay.length - 1 ? "1px solid #f0f0f0" : "none",
-                                            }}
-                                          >
-                                            <Text style={{ fontSize: "14px", color: "#1c1d4d" }}>
-                                              {county.name}
-                                            </Text>
-                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                              {assignedCoach ? (
-                                                <>
-                                                  <Text style={{ fontSize: "14px", color: "#1c1d4d" }}>
-                                                    {assignedCoach}
-                                                  </Text>
-                                                  <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                                    <UpOutlined style={{ fontSize: "10px", color: "#1c1d4d", cursor: "pointer" }} />
-                                                    <DownOutlined style={{ fontSize: "10px", color: "#1c1d4d", cursor: "pointer" }} />
-                                                  </div>
-                                                </>
-                                              ) : (
-                                                <Button
-                                                  type="link"
-                                                  size="small"
-                                                  onClick={() => handleAssignCoach(county.id, county.name)}
-                                                  style={{ padding: 0, fontSize: "12px", textDecoration: "underline" }}
-                                                >
-                                                  Assign
-                                                </Button>
-                                              )}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
-                                      {hasMoreCounties && (
-                                        <Button
-                                          type="link"
-                                          size="small"
-                                          onClick={() => showMoreCounties(stateName, selectedCountiesForState.length)}
-                                          style={{ 
-                                            marginTop: "8px", 
-                                            padding: 0, 
-                                            fontSize: "12px",
-                                            textDecoration: "underline",
-                                            color: "#1890ff"
+                                      {isExpanded && (
+                                        <Text className="ml-[20px] text-sm italic">
+                                          {selectedCountiesForState.length} Counties
+                                        </Text>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* <Text type="secondary" style={{ fontSize: "14px" }}>
+                                  {selectedCountiesForState.length} Counties
+                                </Text> */}
+                                  {/* <Text type="secondary" style={{ fontSize: "14px" }}>
+                                  {selectedCountiesForState.length} Counties
+                                </Text> */}
+                                {isExpanded && (
+                                  <div className="block">
+                                    {coachCount > 0 && (
+                                      <div className="grid text-end mt-2">
+                                        <Text
+                                          type="secondary"
+                                          // style={{ fontSize: "14px" }}
+                                          className="text-base italic font-semibold"
+                                        >
+                                          {coachCount} Coaches
+                                        </Text>
+                                        <a 
+                                        href="#"
+                                        className="text-[#C00E1E]"
+                                        style={{
+                                          padding: 0,
+                                          fontSize: "14px",
+                                          fontWeight: "600",
+                                          fontStyle: "italic",
+                                          textDecoration: "underline",
+                                          border: "none !important",
+                                        }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteAllAssignments(
+                                              stateName,
+                                              selectedCountiesForState
+                                            );
                                           }}
                                         >
-                                          Show more counties...
-                                        </Button>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <Text type="secondary" style={{ fontSize: "14px" }}>
-                                      No counties selected
-                                    </Text>
+                                          Delete all assignments
+                                        </a>
+                                      </div>
+                                    )}
+                                  </div>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
+
+                                {/* Counties List */}
+                                {isExpanded && (
+                                  <div
+                                    style={{
+                                      marginLeft: "0px",
+                                      marginTop: "8px",
+                                      textAlign: "left",
+                                    }}
+                                  >
+                                    {countiesToDisplay.length > 0 ? (
+                                      <>
+                                        {countiesToDisplay.map(
+                                          (county, index) => {
+                                            const assignedCoach =
+                                              coachAssignments.get(county.id);
+                                            const isUnassigned = !assignedCoach;
+
+                                            return (
+                                              <div
+                                                key={county.id}
+                                                style={{
+                                                  display: "flex",
+                                                  alignItems: "center",
+                                                  justifyContent:
+                                                    "space-between",
+                                                  padding: "8px 10px 8px 16px",
+                                                  backgroundColor: isUnassigned
+                                                    ? "#f6ffed"
+                                                    : "transparent",
+                                                  borderBottom:
+                                                    index <
+                                                    countiesToDisplay.length - 1
+                                                      ? "1px solid #f0f0f0"
+                                                      : "none",
+                                                }}
+                                              >
+                                                <Text
+                                                  style={{
+                                                    fontSize: "16px",
+                                                    fontStyle: "italic",
+                                                    color: "#1c1d4d",
+                                                  }}
+                                                >
+                                                  {county.name}
+                                                </Text>
+                                                <div
+                                                  style={{
+                                                    display: "flex",
+                                                    alignItems: "start",
+                                                    gap: "8px",
+                                                    
+                                                  }}
+                                                >
+                                                  {assignedCoach ? (
+                                                    <>
+                                                      <Text
+                                                        style={{
+                                                          fontSize: "14px",
+                                                          color: "#1c1d4d",
+                                                        }}
+                                                      >
+                                                        {assignedCoach}
+                                                      </Text>
+                                                      <div
+                                                        style={{
+                                                          display: "flex",
+                                                          flexDirection:
+                                                            "column",
+                                                          gap: "2px",
+                                                        }}
+                                                      >
+                                                       <img src="/svgicons/arrow-top-bottom.svg" alt="" />
+                                                      </div>
+                                                    </>
+                                                  ) : (
+                                                    <a
+                                                     href="#"
+                                                      onClick={() =>
+                                                        handleAssignCoach(
+                                                          county.id,
+                                                          county.name
+                                                        )
+                                                      }
+                                                      style={{
+                                                        padding: 0,
+                                                        fontSize: "14px",
+                                                        textDecoration: "underline",
+                                                        fontWeight: "600",
+                                                        fontStyle: "italic",
+                                                        color: "#126DB8",
+                                                      }}
+                                                    >
+                                                      Assign
+                                                    </a>
+                                                  )}
+                                                </div>
+                                                
+                                              </div>
+                                            );
+                                          }
+                                        )}
+                                        {hasMoreCounties && (
+                                          <a 
+                                          href="#"
+                                          style={{
+                                            padding: "8px 0",
+                                            fontSize: "14px",
+                                            fontWeight: "600",
+                                            fontStyle: "italic",
+                                            textDecoration: "underline",
+                                            color: "#C00E1E !important" , 
+                                            border: "none !important",
+                                            textAlign: "left",
+                                            marginLeft: "15px",
+                                            display: "block",
+                                          }}
+                                          onClick={() =>
+                                            showMoreCounties(
+                                              stateName,
+                                              selectedCountiesForState.length
+                                            )
+                                          }
+                                          >
+                                            Show more counties...
+                                          </a>
+                                        )}
+                                      </>
+                                    ) : (
+                                      <Text
+                                        type="secondary"
+                                        style={{ fontSize: "14px" }}
+                                      >
+                                        Show more counties...
+                                      </Text>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         {filteredStatesData.length > statesToShow && (
-                          <Button
-                            type="link"
-                            size="small"
-                            onClick={() => setStatesToShow(statesToShow + 10)}
-                            style={{ 
-                              marginTop: "8px", 
-                              padding: 0, 
-                              fontSize: "12px",
-                              textDecoration: "underline",
-                              color: "#1890ff"
-                            }}
+                          <a 
+                          href="#"
+                          style={{
+                            padding: "8px 0",
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            fontStyle: "italic",
+                            textDecoration: "underline",
+                            color: "#C00E1E !important" , 
+                            border: "none !important",
+                            textAlign: "left",
+                            marginLeft: "15px",
+                            display: "block",
+                          }}
+                          onClick={() => setStatesToShow(statesToShow + 10)}
                           >
                             Show more states
-                          </Button>
+                          </a>
                         )}
                       </div>
                     ) : (
-                      <Text type="secondary">No states selected. Select states on the map to view counties.</Text>
+                      <Text type="secondary">
+                        No states selected. Select states on the map to view
+                        counties.
+                      </Text>
                     )}
                   </div>
                 ),
@@ -527,36 +954,390 @@ export default function MapChartExamplePage() {
                 key: "2",
                 label: "Coaches",
                 children: (
-                  <Collapse
-                    items={[
-                      {
-                        key: "1",
-                        label: "Coach List",
-                        children: (
-                          <div>
-                            <Text>List of coaches will be displayed here.</Text>
+                  <div>
+                    {/* Search Bar */}
+                    <Input
+                      placeholder="Search..."
+                      prefix={<SearchOutlined />}
+                      value={coachSearchQuery}
+                      onChange={(e) => setCoachSearchQuery(e.target.value)}
+                      style={{ marginBottom: "16px" }}
+                    />
+
+                    {/* Coaches List */}
+                    <div style={{ maxHeight: "600px", overflowY: "auto" }}>
+                      {mockCoaches
+                        .filter(coach =>
+                          coach.name.toLowerCase().includes(coachSearchQuery.toLowerCase()) ||
+                          coach.email.toLowerCase().includes(coachSearchQuery.toLowerCase())
+                        )
+                        .map((coach, index, filteredList) => (
+                          <div
+                            key={coach.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "16px",
+                              padding: "8px 0",
+                              borderBottom: index < filteredList.length - 1 ? "1px solid #f0f0f0" : "none",
+                            }}
+                          >
+                            {/* Profile Picture */}
+                            <Avatar
+                            className="rounded-none h-16 w-20"
+                              src={coach.avatar}
+                            >
+                              {coach.name.charAt(0)}
+                            </Avatar>
+                            
+                            {/* Name and Email */}
+                            <div className="w-full ">
+                              <div style={{ marginBottom: "4px" }}>
+                                <Text
+                                  strong
+                                  style={{
+                                    display:"flex",
+                                    fontSize: "16px",
+                                    fontStyle: "italic",
+                                    color: "#000",
+                                  }}
+                                >
+                                  {coach.name}
+                                </Text>
+                                <a
+                                  href="#"
+                                  style={{
+                                    display:"flex",
+                                    fontSize: "14px",
+                                    color: "#1890ff",
+                                  }}
+                                >
+                                  {coach.email}
+                                </a>
+                              </div>
+                            </div>
                           </div>
-                        ),
-                      },
-                      {
-                        key: "2",
-                        label: "Coach Details",
-                        children: (
-                          <div>
-                            <Text>
-                              Detailed coach information will be shown here.
-                            </Text>
-                          </div>
-                        ),
-                      },
-                    ]}
-                  />
+                        ))}
+                    </div>
+                  </div>
                 ),
               },
             ]}
           />
         </div>
       </div>
+
+      {/* Coach Assignment Modal */}
+      <Modal
+        title={null}
+        open={isAssignModalVisible}
+        onCancel={handleCancelCoachAssignment}
+        footer={null}
+        width={1200}
+        style={{ top: 20 }}
+      >
+        <div
+          style={{ display: "flex", flexDirection: "column", height: "80vh" }}
+        >
+          {/* Header */}
+          <div
+            style={{
+              marginBottom: "24px",
+              paddingBottom: "16px",
+              borderBottom: "1px solid #f0f0f0",
+            }}
+          >
+            <Typography.Title level={4} style={{ margin: 0}}>
+              Assign Coach
+            </Typography.Title>
+            <div className="grid grid-cols-4 gap-4 mt-4 " 
+            // style={{ display: "flex", gap: "16px", alignItems: "center" }}
+            >
+              <Select
+              className="w-full col-span-1"
+                placeholder="Select Counties"
+                mode="multiple"
+                value={selectedCountiesInModal.map((c) => c.id)}
+                onChange={(values) => {
+                  // Add counties from selectedCountiesData
+                  const newCounties = values
+                    .map((id) => {
+                      const existing = selectedCountiesInModal.find(
+                        (c) => c.id === id
+                      );
+                      if (existing) return existing;
+                      const county = selectedCountiesData.find(
+                        (c) => c.id === id
+                      );
+                      return county
+                        ? {
+                            id: county.id,
+                            name: county.name,
+                            state: county.state || "",
+                          }
+                        : null;
+                    })
+                    .filter(Boolean) as Array<{
+                    id: string;
+                    name: string;
+                    state: string;
+                  }>;
+                  setSelectedCountiesInModal(newCounties);
+                }}
+                options={selectedCountiesData.map((county) => ({
+                  label: `${county.name} (${getStateAbbreviation(
+                    county.state || ""
+                  )})`,
+                  value: county.id,
+                }))}
+              />
+              <Input
+              className="w-full col-span-3"
+                placeholder="Search Coach..."
+                prefix={<SearchOutlined />}
+                value={coachSearchQuery}
+                onChange={(e) => setCoachSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Main Content - Two Columns */}
+          <div
+            style={{
+              display: "flex",
+              gap: "24px",
+              flex: 1,
+              overflow: "hidden",
+            }}
+          >
+            {/* Left Panel - Selected Counties */}
+            <div
+              style={{
+                width: "300px",
+                borderRight: "1px solid #f0f0f0",
+                paddingRight: "24px",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Typography.Title level={5} style={{ marginBottom: "16px" }}>
+                Selected Counties
+              </Typography.Title>
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                {selectedCountiesInModal.length > 0 ? (
+                  <Space
+                    direction="vertical"
+                    style={{ width: "100%" }}
+                    size="small"
+                  >
+                    {selectedCountiesInModal.map((county) => (
+                      <Tag
+                        key={county.id}
+                        closable
+                        onClose={() => handleRemoveCountyFromModal(county.id)}
+                        style={{
+                          padding: "8px 12px",
+                          fontSize: "14px",
+                          borderRadius: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        {county.name} ({getStateAbbreviation(county.state)})
+                      </Tag>
+                    ))}
+                  </Space>
+                ) : (
+                  <Text type="secondary">No counties selected</Text>
+                )}
+              </div>
+            </div>
+
+            {/* Right Panel - Coach List */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <Radio.Group
+                value={selectedCoach}
+                onChange={(e) => setSelectedCoach(e.target.value)}
+                style={{ width: "100%" }}
+              >
+                <Space
+                  direction="vertical"
+                  style={{ width: "100%" }}
+                  size="middle"
+                >
+                  {filteredCoaches.map((coach) => (
+                    <div
+                      key={coach.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "16px",
+                        padding: "16px",
+                        borderBottom: "1px solid #f0f0f0",
+                        backgroundColor:
+                          selectedCoach === coach.id ? "#f0f7ff" : "#fff",
+                      }}
+                    >
+                      <Radio value={coach.id} />
+                      <Avatar className="rounded-none h-[61px] w-[61px]" style={{ backgroundColor: "#1890ff" }}>
+                        {coach.name.charAt(0)}
+                      </Avatar>
+                      <div style={{ flex: 1 }}>
+                        <div>
+                          <Text strong style={{ fontSize: "16px" }}>
+                            {coach.name}
+                          </Text>
+                        </div>
+                        <div>
+                          <a href="#" type="secondary" style={{ fontSize: "14px" }}>
+                            {coach.email}
+                          </a>
+                        </div>
+                        {coach.assignedAreas &&
+                          coach.assignedAreas.length > 0 && (
+                            <div style={{ marginTop: "8px" }}>
+                              <Text
+                                type="secondary"
+                                style={{ fontSize: "12px" }}
+                              >
+                                {expandedCoachAreas.has(coach.id)
+                                  ? coach.assignedAreas[0]
+                                  : coach.assignedAreas[0].length > 200
+                                  ? coach.assignedAreas[0].substring(0, 200) +
+                                    "..."
+                                  : coach.assignedAreas[0]}
+                              </Text>
+                              {coach.assignedAreas[0].length > 200 && (
+                                <Button
+                                  type="link"
+                                  size="small"
+                                  style={{
+                                    padding: 0,
+                                    fontSize: "12px",
+                                    marginLeft: "4px",
+                                  }}
+                                  onClick={() => {
+                                    const newExpanded = new Set(
+                                      expandedCoachAreas
+                                    );
+                                    if (newExpanded.has(coach.id)) {
+                                      newExpanded.delete(coach.id);
+                                    } else {
+                                      newExpanded.add(coach.id);
+                                    }
+                                    setExpandedCoachAreas(newExpanded);
+                                  }}
+                                >
+                                  {expandedCoachAreas.has(coach.id)
+                                    ? "Show less"
+                                    : "Show more"}
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        {coach.positions && coach.positions.length > 0 && (
+                          <div style={{ marginTop: "8px" }}>
+                            <Text style={{ fontSize: "14px" }}>
+                              Positions:{" "}
+                              {coach.positions.map((pos, idx) => (
+                                <span key={idx}>
+                                  {pos}{" "}
+                                  <CloseOutlined
+                                    style={{
+                                      fontSize: "10px",
+                                      margin: "0 4px",
+                                    }}
+                                  />
+                                </span>
+                              ))}
+                            </Text>
+                          </div>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          alignItems: "flex-end",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "8px",
+                          }}
+                        >
+                          <Select
+                            value={coach.color}
+                            style={{ width: 100 }}
+                            size="small"
+                            options={[
+                              { label: "Red", value: " Red" },
+                              { label: "Blue", value: "Blue" },
+                              { label: "Green", value: "Green" },
+                              { label: "Yellow", value: "Yellow" },
+                            ]}
+                          />
+                          <Button size="small" type="default">
+                            + HS
+                          </Button>
+                        </div>
+                        <Select
+                          value={coach.position}
+                          className="w-full"
+                          placeholder="Position"
+                          options={[
+                            { label: "Head Coach", value: "Head Coach" },
+                            {
+                              label: "Assistant Coach",
+                              value: "Assistant Coach",
+                            },
+                            {
+                              label: "Position Coach",
+                              value: "Position Coach",
+                            },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </Space>
+              </Radio.Group>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "12px",
+              marginTop: "24px",
+              paddingTop: "16px",
+              borderTop: "1px solid #f0f0f0",
+            }}
+          >
+            <Button onClick={handleCancelCoachAssignment}>Cancel</Button>
+            <Button
+              type="primary"
+              onClick={handleConfirmCoachAssignment}
+              disabled={!selectedCoach || selectedCountiesInModal.length === 0}
+              style={{ backgroundColor: "#1c1d4d", borderColor: "#1c1d4d" }}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
