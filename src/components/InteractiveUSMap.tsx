@@ -142,9 +142,9 @@ interface InteractiveUSMapProps {
   title?: string;
   
   /**
-   * Coach assignments - Map of county ID to coach name
+   * Coach assignments - Map of county ID to { coach: string, color: string }
    */
-  coachAssignments?: Map<string, string>;
+  coachAssignments?: Map<string, { coach: string; color: string }>;
 }
 
 export interface InteractiveUSMapRef {
@@ -592,11 +592,42 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
     return "rgba(176, 176, 191, 0.5)"; // Default - #b0b0bf (more visible)
   }, [hasSelectedCountiesInState, selectedStates]);
 
+  // Color mapping function
+  const getColorHex = (colorName: string): string => {
+    const colorMap: Record<string, string> = {
+      "Red": "#FF0000",
+      "Blue": "#1890ff",
+      "Green": "#52c41a",
+      "Yellow": "#FFD000",
+    };
+    return colorMap[colorName] || "#b0b0bf";
+  };
+
+  // Convert hex to rgba
+  const hexToRgba = (hex: string, alpha: number): string => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   // Get fill color for counties
   const getCountyFill = (geo: any, isHovered: boolean = false) => {
     const countyId = geo.id;
     const county = countiesData.get(countyId);
     const countyStateName = county?.state || "";
+    
+    // Check if this county has an assigned color from coach assignment
+    const assignment = coachAssignments.get(countyId);
+    if (assignment && assignment.color) {
+      const assignedColor = getColorHex(assignment.color);
+      // Always use the assigned color, with full opacity when selected, slightly transparent when not
+      if (selectedCounties.has(countyId)) {
+        return isHovered ? assignedColor : assignedColor; // Full color when selected
+      }
+      // If not selected but has assignment, use a more transparent version
+      return hexToRgba(assignedColor, isHovered ? 0.7 : 0.5);
+    }
     
     // Check if this county's state has any selected counties
     const stateHasSelectedCounties = countyStateName ? hasSelectedCountiesInState(countyStateName) : false;
@@ -950,19 +981,9 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                       return null; // Don't render this county
                     }
                     
-                    // Check if this county's state has any selected counties
-                    const stateHasSelectedCounties = countyStateName ? hasSelectedCountiesInState(countyStateName) : false;
-                    
-                    // Calculate county fill - make it transparent if state has selected counties
-                    let countyFill: string;
-                    if (isSelected) {
-                      countyFill = isHovered ? "#73d13d" : "#52c41a";
-                    } else if (stateHasSelectedCounties) {
-                      // Make unselected counties very transparent so state green shows through
-                      countyFill = isHovered ? "rgba(183, 235, 143, 0.3)" : "rgba(176, 176, 191, 0.2)";
-                    } else {
-                      countyFill = isHovered ? "#b7eb8f" : "#b0b0bf";
-                    }
+                    // Use getCountyFill to get the correct color (includes assigned colors from coach assignments)
+                    const countyFill = getCountyFill(geo, false); // Default state
+                    const countyFillHover = getCountyFill(geo, true); // Hover state
                     
                     return (
                       <Geography
@@ -981,18 +1002,14 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                           },
                           hover: {
                             outline: "none",
-                            fill: isSelected 
-                              ? "#73d13d" 
-                              : (stateHasSelectedCounties ? "rgba(183, 235, 143, 0.4)" : "#b7eb8f"),
+                            fill: countyFillHover,
                             cursor: "pointer",
                             stroke: "#ffffff",
                             strokeWidth: 1,
                           },
                           pressed: {
                             outline: "none",
-                            fill: isSelected 
-                              ? "#73d13d" 
-                              : (stateHasSelectedCounties ? "rgba(183, 235, 143, 0.4)" : "#b7eb8f"),
+                            fill: countyFillHover,
                             stroke: "#ffffff",
                             strokeWidth: 1,
                           },
@@ -1075,271 +1092,346 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
         open={isPrintModalVisible}
         onCancel={() => setIsPrintModalVisible(false)}
         footer={null}
-        width={1400}
+        width={800}
         style={{ top: 20 }}
       >
-        <div style={{ padding: "24px" }}>
-          {/* Process coach assignments data */}
-          {(() => {
-            // Group counties by coach
-            const countiesByCoach = new Map<string, Array<{county: CountyData; state: StateData}>>();
-            const statesByCoach = new Map<string, Set<string>>();
-            
-            Array.from(countiesData.entries()).forEach(([countyId, county]) => {
-              const coachName = coachAssignments.get(countyId);
-              if (coachName) {
-                if (!countiesByCoach.has(coachName)) {
-                  countiesByCoach.set(coachName, []);
-                  statesByCoach.set(coachName, new Set());
-                }
-                countiesByCoach.get(coachName)!.push({ county, state: statesData.get(county.state) || { name: county.state, id: "", fips: "" } });
-                statesByCoach.get(coachName)!.add(county.state);
-              }
-            });
-            
-            // Find states with more than one coach
-            const statesWithMultipleCoaches = new Map<string, string[]>();
-            Array.from(statesByCoach.entries()).forEach(([coach, stateSet]) => {
-              stateSet.forEach(stateName => {
-                if (!statesWithMultipleCoaches.has(stateName)) {
-                  statesWithMultipleCoaches.set(stateName, []);
-                }
-                statesWithMultipleCoaches.get(stateName)!.push(coach);
-              });
-            });
-            
-            const finalStatesWithMultipleCoaches = new Map<string, string[]>();
-            statesWithMultipleCoaches.forEach((coaches, state) => {
-              if (coaches.length > 1) {
-                finalStatesWithMultipleCoaches.set(state, coaches);
-              }
-            });
-            
-            // Mock coach data with avatars - in real app, fetch from API
-            const coachDataMap = new Map<string, {name: string; avatar: string | null; fullStates: string[]; partialStates: Array<{state: string; counties: string[]; highSchools: string[]}>; allCounties: string[]}>();
-            
-            // Process each coach
-            Array.from(countiesByCoach.entries()).forEach(([coachName, assignments]) => {
-              const stateCounts = new Map<string, number>();
-              const stateCounties = new Map<string, string[]>();
+        <div>
+          <Title level={4} className="italic font-semibold !text-[26px] mb-7">Print States and Coaches Report</Title>
+        </div>
+
+        <div className="flex justify-center items-center my-10">
+          <img src="/usa-map-2.svg" alt="USA Map" style={{ width: "80%", height: "auto" }} />
+        </div>
+
+        <div>
+          {/* States with more than one coach - Table */}
+          <div style={{  overflow: "hidden" }}>
+            {/* Table Header */}
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr",
+              borderBottom: "1px solid #f0f0f0"
+            }}>
+              <div style={{ padding: "12px 16px" }}>
+                <Text strong style={{ fontStyle: "italic", color: "#1C1D4D", fontSize: "16px" }}>
+                  States with more than one coach
+                </Text>
+              </div>
+              <div style={{ padding: "12px 16px" }}>
+                <Text strong style={{ fontStyle: "italic", color: "#1C1D4D", fontSize: "16px" }}>
+                  Coches
+                </Text>
+              </div>
+            </div>
+            {/* Table Rows */}
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr",
+              borderBottom: "1px solid #f0f0f0"
+            }}>
+              <div style={{ padding: "12px 16px" }}>
+                <Text style={{ color: "#1C1D4D" }}>Texas</Text>
+              </div>
+              <div style={{ padding: "12px 16px" }}>
+                <Text style={{ color: "#1C1D4D" }}>Jason Mark, Alex Robin</Text>
+              </div>
+            </div>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr",
+              borderBottom: "1px solid #f0f0f0"
+            }}>
+              <div style={{ padding: "12px 16px" }}>
+                <Text style={{ color: "#1C1D4D" }}>New Mexico</Text>
+              </div>
+              <div style={{ padding: "12px 16px" }}>
+                <Text style={{ color: "#1C1D4D" }}>Mario Lucas, Alex Robin</Text>
+              </div>
+            </div>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr"
+            }}>
+              <div style={{ padding: "12px 16px" }}>
+                <Text style={{ color: "#1C1D4D" }}>New York</Text>
+              </div>
+              <div style={{ padding: "12px 16px" }}>
+                <Text style={{ color: "#1C1D4D" }}>Qais Ali, Waqas Ali</Text>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          {/* List of all Coaches */}
+          <Title level={4} style={{ marginBottom: "24px", fontSize: "20px", fontWeight: 700, color: "#1C1D4D", marginTop: "20px" }}>
+            List of all Coaches
+          </Title>
+          
+          {/* Coach Profile - Jeffrey Epstein */}
+          <div style={{ marginBottom: "32px" }}>
+            {/* Coach Header */}
+            <div>
               
-              assignments.forEach(({county, state}) => {
-                const stateName = state.name;
-                stateCounts.set(stateName, (stateCounts.get(stateName) || 0) + 1);
-                if (!stateCounties.has(stateName)) {
-                  stateCounties.set(stateName, []);
-                }
-                stateCounties.get(stateName)!.push(county.name);
-              });
-              
-              // Get total counties for each state from allCountiesByState
-              const fullStates: string[] = [];
-              const partialStates: Array<{state: string; counties: string[]; highSchools: string[]}> = [];
-              
-              stateCounts.forEach((count, stateName) => {
-                const totalCounties = allCountiesByState.get(stateName)?.length || 0;
-                const assignedCounties = stateCounties.get(stateName) || [];
-                
-                if (count === totalCounties && totalCounties > 0) {
-                  fullStates.push(stateName);
-                } else {
-                  partialStates.push({
-                    state: stateName,
-                    counties: assignedCounties,
-                    highSchools: ["Eagle River", "Bartlett", "Dimond", "Chugiak", "Service", "South Anchorage", "West Anchorage", "Barrow HS"] // Mock data
-                  });
-                }
-              });
-              
-              coachDataMap.set(coachName, {
-                name: coachName,
-                avatar: null,
-                fullStates,
-                partialStates,
-                allCounties: Array.from(new Set(assignments.map(a => a.county.name))).sort()
-              });
-            });
+              <div className="flex items-center gap-4 mb-4">
+                <Avatar size={80} src="/c1.svg" className="rounded-none border-none">
+                  J
+                </Avatar>
+                <Title 
+                  level={4} 
+                  className="!text-[24px] font-bold text-[#1C1D4D] !mb-0"
+                >
+                  Jeffrey Epstein
+                </Title>
+              </div>
             
-            // Group coaches by state for the "Coches" section
-            const coachesByStateForCoches = new Map<string, string[]>();
-            Array.from(statesByCoach.entries()).forEach(([coach, stateSet]) => {
-              stateSet.forEach(stateName => {
-                if (!coachesByStateForCoches.has(stateName)) {
-                  coachesByStateForCoches.set(stateName, []);
-                }
-                if (!coachesByStateForCoches.get(stateName)!.includes(coach)) {
-                  coachesByStateForCoches.get(stateName)!.push(coach);
-                }
-              });
-            });
-            
-            // Create coach pairs for states with multiple coaches
-            const coachPairs: Array<{state: string; coaches: string[]}> = [];
-            coachesByStateForCoches.forEach((coaches, state) => {
-              if (coaches.length > 1) {
-                coachPairs.push({ state, coaches });
-              }
-            });
-            
-            return (
-              <div>
-                {/* Header with Title and US Map */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
-                  <Title level={2} style={{ margin: 0 }}>Print States and Coaches Report</Title>
-                  <div style={{ width: "400px", height: "250px", border: "1px solid #d9d9d9", borderRadius: "4px" }}>
-                    {/* US Map placeholder - in real app, render actual map */}
-                    <div style={{ padding: "16px", textAlign: "center", color: "#999" }}>
-                      US Map
-                    </div>
-                  </div>
+              {/* Full States */}
+              <div style={{ 
+                  marginBottom: "16px", 
+                  padding: "12px 16px", 
+                  backgroundColor: "#f6ffed", 
+                  borderRadius: "4px" 
+                }}>
+                  <Text strong style={{ fontSize: "16px", fontStyle: "italic" }}>Full States: </Text>
+                  <span>Colorado (CO), Utah (UI), Wyoming (WY)</span>
                 </div>
                 
-                {/* Two Column Layout */}
-                <div style={{ display: "flex", gap: "32px" }}>
-                  {/* Left Column */}
-                  <div style={{ flex: 1 }}>
-                    {/* States with more than one coach */}
-                    {finalStatesWithMultipleCoaches.size > 0 && (
-                      <div style={{ marginBottom: "32px" }}>
-                        <Title level={4}>States with more than one coach</Title>
-                        {Array.from(finalStatesWithMultipleCoaches.entries()).map(([stateName, coaches]) => (
-                          <div key={stateName} style={{ marginBottom: "8px" }}>
-                            <Text strong>{stateName}</Text>
-                          </div>
-                        ))}
+                {/* Partial States */}
+                <div>
+                  <Text strong style={{ fontSize: "16px", fontStyle: "italic", marginBottom: "8px", display: "block" }}>
+                    Partial States:
+                  </Text>
+                  
+                  {/* New York (NY) - Partial State */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      <EnvironmentOutlined style={{ color: "#ff4d4f", fontSize: "16px" }} />
+                      <Text strong style={{ fontSize: "16px" }}>
+                        New York (NY) - Partial State
+                      </Text>
+                    </div>
+                    <div style={{ marginLeft: "24px" }}>
+                      <div style={{ marginBottom: "4px" }}>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>Counties: </Text>
+                        <Text style={{ fontSize: "14px" }}>Columbia, Dutchess, Essex, Greene, Lewis, Livingston,</Text>
                       </div>
-                    )}
-                    
-                    <Divider />
-                    
-                    {/* List of all Coaches */}
-                    <div style={{ marginBottom: "32px" }}>
-                      <Title level={4}>List of all Coaches</Title>
-                      {Array.from(coachDataMap.entries()).map(([coachName, coachData]) => (
-                        <div key={coachName} style={{ marginBottom: "32px", padding: "16px", border: "1px solid #f0f0f0", borderRadius: "4px" }}>
-                          <div style={{ display: "flex", gap: "16px", marginBottom: "16px" }}>
-                            <Avatar size={64} style={{ backgroundColor: "#1890ff" }}>
-                              {coachName.charAt(0)}
-                            </Avatar>
-                            <div style={{ flex: 1 }}>
-                              <Title level={5} style={{ margin: 0, marginBottom: "8px", fontStyle: "italic" }}>{coachName}</Title>
-                              
-                              {/* Full States */}
-                              {coachData.fullStates.length > 0 && (
-                                <div style={{ marginBottom: "12px", padding: "8px", backgroundColor: "#f6ffed", borderRadius: "4px" }}>
-                                  <Text strong>Full States: </Text>
-                                  {coachData.fullStates.map((state, idx) => (
-                                    <span key={state}>
-                                      {state} ({getStateAbbreviation(state)}){idx < coachData.fullStates.length - 1 ? ", " : ""}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                              
-                              {/* Partial States */}
-                              {coachData.partialStates.length > 0 && (
-                                <div>
-                                  <Text strong>Partial States:</Text>
-                                  {coachData.partialStates.map((partial, idx) => (
-                                    <div key={idx} style={{ marginLeft: "16px", marginTop: "8px" }}>
-                                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                        <EnvironmentOutlined style={{ color: "#ff4d4f", fontSize: "14px" }} />
-                                        <Text strong>{partial.state} ({getStateAbbreviation(partial.state)}) - Partial State:</Text>
-                                      </div>
-                                      <div style={{ marginLeft: "20px", marginTop: "4px" }}>
-                                        <div>
-                                          <Text strong>Counties: </Text>
-                                          {partial.counties.join(", ")}
-                                        </div>
-                                        <div style={{ marginTop: "4px" }}>
-                                          <Text strong>High Schools: </Text>
-                                          {partial.highSchools.join(", ")}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                      <div>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>High Schools: </Text>
+                        <Text style={{ fontSize: "14px" }}>Eagle River, Bartlett, Dimond, Chugiak, Service, South Anchorage, West Anchorage, Barrow HS</Text>
+                      </div>
                     </div>
                   </div>
                   
-                  {/* Right Column - Coches */}
-                  <div style={{ width: "300px" }}>
-                    <Title level={4}>Coches</Title>
-                    <div style={{ marginTop: "16px" }}>
-                      {coachPairs.map((pair, idx) => (
-                        <div key={idx} style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: idx < coachPairs.length - 1 ? "1px solid #f0f0f0" : "none" }}>
-                          {pair.coaches.map((coach, coachIdx) => (
-                            <div key={coachIdx}>
-                              <Text>{coach}</Text>
-                              {coachIdx < pair.coaches.length - 1 && <Text>, </Text>}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
+                  {/* Washington D.C - Partial State */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      <EnvironmentOutlined style={{ color: "#ff4d4f", fontSize: "16px" }} />
+                      <Text strong style={{ fontSize: "16px" }}>
+                        Washington D.C - Partial State
+                      </Text>
                     </div>
-                  </div>
-                </div>
-                
-                <Divider />
-                
-                {/* California Map Section */}
-                <div style={{ marginBottom: "32px" }}>
-                  <Title level={4}>California Map</Title>
-                  <div style={{ display: "flex", gap: "24px" }}>
-                    <div style={{ flex: 1, border: "1px solid #d9d9d9", borderRadius: "4px", padding: "16px", minHeight: "400px" }}>
-                      {/* California map placeholder */}
-                      <div style={{ textAlign: "center", color: "#999", padding: "100px 0" }}>
-                        California County Map
+                    <div style={{ marginLeft: "24px" }}>
+                      <div style={{ marginBottom: "4px" }}>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>Counties: </Text>
+                        <Text style={{ fontSize: "14px" }}>Columbia, Dutchess, Essex, Greene, Lewis, Livingston,</Text>
+                      </div>
+                      <div>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>High Schools: </Text>
+                        <Text style={{ fontSize: "14px" }}>Eagle River, Bartlett, Dimond, Chugiak, Service, South Anchorage, West Anchorage, Barrow HS</Text>
                       </div>
                     </div>
-                    <div style={{ width: "200px" }}>
-                      <Text strong>Legend:</Text>
-                      <div style={{ marginTop: "12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                          <div style={{ width: "20px", height: "20px", backgroundColor: "#87CEEB", border: "1px solid #ccc" }}></div>
-                          <Text>Jason Mark</Text>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                          <div style={{ width: "20px", height: "20px", backgroundColor: "#FF6B6B", border: "1px solid #ccc" }}></div>
-                          <Text>Alex D'cook</Text>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                          <div style={{ width: "20px", height: "20px", backgroundColor: "#FFD93D", border: "1px solid #ccc" }}></div>
-                          <Text>Jeffrey Epstein</Text>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                          <div style={{ width: "20px", height: "20px", backgroundColor: "#6BCF7F", border: "1px solid #ccc" }}></div>
-                          <Text>Mario Kingman</Text>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                          <div style={{ width: "20px", height: "20px", backgroundColor: "#4ECDC4", border: "1px solid #ccc" }}></div>
-                          <Text>Michael Ale</Text>
-                        </div>
+                  </div>
+                  
+                  {/* California (CA) - Partial State */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      <EnvironmentOutlined style={{ color: "#ff4d4f", fontSize: "16px" }} />
+                      <Text strong style={{ fontSize: "16px" }}>
+                        California (CA) - Partial State
+                      </Text>
+                    </div>
+                    <div style={{ marginLeft: "24px" }}>
+                      <div style={{ marginBottom: "4px" }}>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>Counties: </Text>
+                        <Text style={{ fontSize: "14px" }}>Columbia, Dutchess, Essex, Greene, Lewis, Livingston,</Text>
+                      </div>
+                      <div>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>High Schools: </Text>
+                        <Text style={{ fontSize: "14px" }}>Eagle River, Bartlett, Dimond, Chugiak, Service, South Anchorage, West Anchorage, Barrow HS</Text>
                       </div>
                     </div>
                   </div>
                 </div>
-                
-                <Divider />
-                
-                {/* Coaches with Counties */}
-                <div>
-                  <Title level={4}>Coaches with Counties</Title>
-                  {Array.from(coachDataMap.entries()).map(([coachName, coachData]) => (
-                    <div key={coachName} style={{ marginBottom: "16px" }}>
-                      <Text strong>{coachName}:</Text> {coachData.allCounties.join(", ")}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
+            </div>
+          </div>
         </div>
+
+        <div>
+          {/* Coach Profile - Mario Kingman */}
+          <div style={{ marginBottom: "32px" }}>
+            <div>
+              <div className="flex items-center gap-4 mb-4">
+                <Avatar size={80} src="/c4.svg" className="rounded-none border-none">
+                  M
+                </Avatar>
+                <Title 
+                  level={4} 
+                  className="!text-[24px] font-bold text-[#1C1D4D] !mb-0"
+                >
+                  Mario Kingman
+                </Title>
+              </div>
+            
+              {/* Full States */}
+              <div style={{ 
+                  marginBottom: "16px", 
+                  padding: "12px 16px", 
+                  backgroundColor: "#f6ffed", 
+                  borderRadius: "4px" 
+                }}>
+                  <Text strong style={{ fontSize: "16px", fontStyle: "italic" }}>Full States: </Text>
+                  <span>Colorado (CO), Utah (UI), Wyoming (WY)</span>
+                </div>
+                
+                {/* Partial States */}
+                <div>
+                  <Text strong style={{ fontSize: "16px", fontStyle: "italic", marginBottom: "8px", display: "block" }}>
+                    Partial States:
+                  </Text>
+                  
+                  {/* New York (NY) - Partial State */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      <EnvironmentOutlined style={{ color: "#ff4d4f", fontSize: "16px" }} />
+                      <Text strong style={{ fontSize: "16px" }}>
+                        New York (NY) - Partial State
+                      </Text>
+                    </div>
+                    <div style={{ marginLeft: "24px" }}>
+                      <div style={{ marginBottom: "4px" }}>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>Counties: </Text>
+                        <Text style={{ fontSize: "14px" }}>Columbia, Dutchess, Essex, Greene, Lewis, Livingston,</Text>
+                      </div>
+                      <div>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>High Schools: </Text>
+                        <Text style={{ fontSize: "14px" }}>Eagle River, Bartlett, Dimond, Chugiak, Service, South Anchorage, West Anchorage, Barrow HS</Text>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Washington D.C - Partial State */}
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                      <EnvironmentOutlined style={{ color: "#ff4d4f", fontSize: "16px" }} />
+                      <Text strong style={{ fontSize: "16px" }}>
+                        Washington D.C - Partial State
+                      </Text>
+                    </div>
+                    <div style={{ marginLeft: "24px" }}>
+                      <div style={{ marginBottom: "4px" }}>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>Counties: </Text>
+                        <Text style={{ fontSize: "14px" }}>Columbia, Dutchess, Essex, Greene, Lewis, Livingston,</Text>
+                      </div>
+                      <div>
+                        <Text strong style={{ fontSize: "14px", fontStyle: "italic" }}>High Schools: </Text>
+                        <Text style={{ fontSize: "14px" }}>Eagle River, Bartlett, Dimond, Chugiak, Service, South Anchorage, West Anchorage, Barrow HS</Text>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-center items-center my-10">
+          <img src="/map22.svg" alt="USA Map" style={{ width: "80%", height: "auto" }} />
+        </div>
+
+        <div>
+          {/* Coaches with Counties */}
+          <Title level={4} style={{ marginBottom: "24px", fontSize: "20px", fontWeight: 700, fontStyle: "italic", color: "#1C1D4D" }}>
+            Coaches with Counties
+          </Title>
+          
+          {/* Coach List */}
+          <div>
+            {/* Jason Mark */}
+            <div style={{ display: "flex", gap: "16px", paddingBottom: "16px", marginBottom: "16px", borderBottom: "1px solid #f0f0f0" }}>
+              <Avatar size={64} src="/c1.svg" style={{ flexShrink: 0, borderRadius: 0 }}>
+                J
+              </Avatar>
+              <div style={{ flex: 1 }}>
+                <Title level={4} style={{ margin: 0, marginBottom: "8px", fontSize: "20px", fontWeight: 700, fontStyle: "italic", color: "#1C1D4D" }}>
+                  Jason Mark
+                </Title>
+                <Text style={{ fontSize: "14px", color: "#000" }}>
+                  Anderson, Andrews, Angelina, Aransas, Archer, Armstrong, Atascosa, Austin, Bailey, Bandera, Bastrop, Baylor, Bee, Bell, Bexar, Blanco
+                </Text>
+              </div>
+            </div>
+            
+            {/* Alex D'cook */}
+            <div style={{ display: "flex", gap: "16px", paddingBottom: "16px", marginBottom: "16px", borderBottom: "1px solid #f0f0f0" }}>
+              <Avatar size={64} src="/c3.svg" style={{ flexShrink: 0, borderRadius: 0 }}>
+                A
+              </Avatar>
+              <div style={{ flex: 1 }}>
+                <Title level={4} style={{ margin: 0, marginBottom: "8px", fontSize: "20px", fontWeight: 700, fontStyle: "italic", color: "#1C1D4D" }}>
+                  Alex D'cook
+                </Title>
+                <Text style={{ fontSize: "14px", color: "#000" }}>
+                  Anderson, Andrews, Angelina, Aransas, Archer, Armstrong, Atascosa, Austin, Bailey, Bandera, Bastrop, Baylor, Bee, Bell, Bexar, Blanco
+                </Text>
+              </div>
+            </div>
+            
+            {/* Jeffrey Epstien */}
+            <div style={{ display: "flex", gap: "16px", paddingBottom: "16px", marginBottom: "16px", borderBottom: "1px solid #f0f0f0" }}>
+              <Avatar size={64} src="/c1.svg" style={{ flexShrink: 0, borderRadius: 0 }}>
+                J
+              </Avatar>
+              <div style={{ flex: 1 }}>
+                <Title level={4} style={{ margin: 0, marginBottom: "8px", fontSize: "20px", fontWeight: 700, fontStyle: "italic", color: "#1C1D4D" }}>
+                  Jeffrey Epstien
+                </Title>
+                <Text style={{ fontSize: "14px", color: "#000" }}>
+                  Anderson, Andrews, Angelina, Aransas, Archer, Armstrong, Atascosa, Austin, Bailey, Bandera, Bastrop, Baylor, Bee, Bell, Bexar, Blanco
+                </Text>
+              </div>
+            </div>
+            
+            {/* Mario Kingman */}
+            <div style={{ display: "flex", gap: "16px", paddingBottom: "16px", marginBottom: "16px", borderBottom: "1px solid #f0f0f0" }}>
+              <Avatar size={64} src="/c4.svg" style={{ flexShrink: 0, borderRadius: 0 }}>
+                M
+              </Avatar>
+              <div style={{ flex: 1 }}>
+                <Title level={4} style={{ margin: 0, marginBottom: "8px", fontSize: "20px", fontWeight: 700, fontStyle: "italic", color: "#1C1D4D" }}>
+                  Mario Kingman
+                </Title>
+                <Text style={{ fontSize: "14px", color: "#000" }}>
+                  Anderson, Andrews, Angelina, Aransas, Archer, Armstrong, Atascosa, Austin, Bailey, Bandera, Bastrop, Baylor, Bee, Bell, Bexar, Blanco
+                </Text>
+              </div>
+            </div>
+            
+            {/* Michael Ale */}
+            <div style={{ display: "flex", gap: "16px", paddingBottom: "16px", marginBottom: "16px" }}>
+              <Avatar size={64} src="/c1.svg" style={{ flexShrink: 0, borderRadius: 0 }}>
+                M
+              </Avatar>
+              <div style={{ flex: 1 }}>
+                <Title level={4} style={{ margin: 0, marginBottom: "8px", fontSize: "20px", fontWeight: 700, fontStyle: "italic", color: "#1C1D4D" }}>
+                  Michael Ale
+                </Title>
+                <Text style={{ fontSize: "14px", color: "#000" }}>
+                  Anderson, Andrews, Angelina, Aransas, Archer, Armstrong, Atascosa, Austin, Bailey, Bandera, Bastrop, Baylor, Bee, Bell, Bexar, Blanco
+                </Text>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </Modal>
     </Card>
   );

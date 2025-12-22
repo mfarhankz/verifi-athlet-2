@@ -69,15 +69,20 @@ export default function MapChartExamplePage() {
   );
   const [statesToShow, setStatesToShow] = useState(10);
   // Mock coach assignments - in real app, this would come from API
-  const [coachAssignments, setCoachAssignments] = useState<Map<string, string>>(
-    new Map()
-  );
+  // Map of county ID to { coach: string, color: string }
+  const [coachAssignments, setCoachAssignments] = useState<
+    Map<string, { coach: string; color: string }>
+  >(new Map());
 
   // Modal state for coach assignment
   const [isAssignModalVisible, setIsAssignModalVisible] = useState(false);
   const [selectedCountyForAssignment, setSelectedCountyForAssignment] =
     useState<{ id: string; name: string; state: string } | null>(null);
   const [selectedCoach, setSelectedCoach] = useState<string>("");
+  // Map of coach ID to selected color
+  const [coachColors, setCoachColors] = useState<Map<string, string>>(
+    new Map()
+  );
   const [coachSearchQuery, setCoachSearchQuery] = useState("");
   const [selectedCountiesInModal, setSelectedCountiesInModal] = useState<
     Array<{ id: string; name: string; state: string }>
@@ -85,6 +90,19 @@ export default function MapChartExamplePage() {
   const [expandedCoachAreas, setExpandedCoachAreas] = useState<Set<string>>(
     new Set()
   );
+
+  // High School Assignment Modal state
+  const [isHighSchoolModalVisible, setIsHighSchoolModalVisible] =
+    useState(false);
+  const [selectedCoachForHighSchool, setSelectedCoachForHighSchool] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    avatar: string | null;
+  } | null>(null);
+  const [highSchoolSearchQuery, setHighSchoolSearchQuery] = useState("");
+  const [selectedStateFilter, setSelectedStateFilter] =
+    useState<string>("All States");
 
   // Mock coaches list - in real app, this would come from API
   const mockCoaches = [
@@ -102,7 +120,7 @@ export default function MapChartExamplePage() {
       id: "2",
       name: "Jenny Wilson",
       email: "jginspace@mac.com",
-      avatar: null,
+      avatar: "/c4.svg",
       color: "Blue",
       position: "Position",
       assignedAreas: [] as string[],
@@ -112,7 +130,7 @@ export default function MapChartExamplePage() {
       id: "3",
       name: "Devon Lane",
       email: "fwitness@yahoo.ca",
-      avatar: null,
+      avatar: "/c3.svg",
       color: "Green",
       position: "Position",
       assignedAreas: [] as string[],
@@ -122,7 +140,7 @@ export default function MapChartExamplePage() {
       id: "4",
       name: "Floyd Miles",
       email: "smallpaul@me.com",
-      avatar: null,
+      avatar: "/c1.svg",
       color: "Yellow",
       position: "Position",
       assignedAreas: [] as string[],
@@ -132,7 +150,7 @@ export default function MapChartExamplePage() {
       id: "5",
       name: "Eleanor Pena",
       email: "plover@aol.com",
-      avatar: null,
+      avatar: "/c1.svg",
       color: "Purple",
       position: "Position",
       assignedAreas: [] as string[],
@@ -142,7 +160,7 @@ export default function MapChartExamplePage() {
       id: "6",
       name: "Ronald Richards",
       email: "mccurley@yahoo.ca",
-      avatar: null,
+      avatar: "/c1.svg",
       color: "Red",
       position: "Position",
       assignedAreas: [] as string[],
@@ -231,6 +249,87 @@ export default function MapChartExamplePage() {
       positions: [] as string[],
     },
   ];
+
+  // Mock high schools data - in real app, this would come from API
+  const mockHighSchools = [
+    {
+      id: "1",
+      name: "Eagle River High School",
+      state: "Arizona",
+      assigned: true,
+    },
+    { id: "2", name: "Bartlett High School", state: "Arizona", assigned: true },
+    { id: "3", name: "Dimond High School", state: "Arizona", assigned: true },
+    { id: "4", name: "Chugiak High School", state: "Arizona", assigned: true },
+    { id: "5", name: "Service High School", state: "New York", assigned: true },
+    {
+      id: "6",
+      name: "South Anchorage High School",
+      state: "New York",
+      assigned: true,
+    },
+    {
+      id: "7",
+      name: "West Anchorage High School",
+      state: "Arizona",
+      assigned: true,
+    },
+    { id: "8", name: "Barrow High School", state: "Arizona", assigned: true },
+    {
+      id: "9",
+      name: "Lathrop High School (Fairbanks)",
+      state: "Washinton D.C",
+      assigned: true,
+    },
+    {
+      id: "10",
+      name: "West Valley High School (Fairbanks area)",
+      state: "Washinton D.C",
+      assigned: true,
+    },
+    {
+      id: "11",
+      name: "Colony High School (Palmer)",
+      state: "California",
+      assigned: true,
+    },
+  ];
+
+  // Handle opening high school assignment modal
+  const handleOpenHighSchoolModal = (coach: {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string | null;
+  }) => {
+    setSelectedCoachForHighSchool(coach);
+    setIsHighSchoolModalVisible(true);
+    setHighSchoolSearchQuery("");
+    setSelectedStateFilter("All States");
+  };
+
+  // Handle closing high school assignment modal
+  const handleCloseHighSchoolModal = () => {
+    setIsHighSchoolModalVisible(false);
+    setSelectedCoachForHighSchool(null);
+    setHighSchoolSearchQuery("");
+    setSelectedStateFilter("All States");
+  };
+
+  // Get unique states from high schools
+  const uniqueStates = Array.from(
+    new Set(mockHighSchools.map((hs) => hs.state))
+  ).sort();
+
+  // Filter high schools based on search and state filter
+  const filteredHighSchools = mockHighSchools.filter((hs) => {
+    const matchesSearch =
+      !highSchoolSearchQuery ||
+      hs.name.toLowerCase().includes(highSchoolSearchQuery.toLowerCase());
+    const matchesState =
+      selectedStateFilter === "All States" || hs.state === selectedStateFilter;
+    return matchesSearch && matchesState;
+  });
 
   const handleStateSelect = (states: any[], allCounties: any[]) => {
     // Create a set of currently selected state names for quick lookup
@@ -346,6 +445,9 @@ export default function MapChartExamplePage() {
     const county = selectedCountiesData.find((c) => c.id === countyId);
     const stateName = county?.state || "";
 
+    // Check if county already has an assignment
+    const existingAssignment = coachAssignments.get(countyId);
+
     // Initialize with the clicked county
     setSelectedCountiesInModal([
       { id: countyId, name: countyName, state: stateName },
@@ -356,6 +458,17 @@ export default function MapChartExamplePage() {
       state: stateName,
     });
     setSelectedCoach("");
+    // Initialize coach colors map - set default "Red" for all coaches if not already set
+    const newCoachColors = new Map<string, string>();
+    mockCoaches.forEach((coach) => {
+      // If county has existing assignment and coach matches, use that color
+      if (existingAssignment && existingAssignment.coach === coach.name) {
+        newCoachColors.set(coach.id, existingAssignment.color);
+      } else {
+        newCoachColors.set(coach.id, coachColors.get(coach.id) || "Red");
+      }
+    });
+    setCoachColors(newCoachColors);
     setCoachSearchQuery("");
     setIsAssignModalVisible(true);
   };
@@ -370,10 +483,15 @@ export default function MapChartExamplePage() {
     if (selectedCountiesInModal.length > 0 && selectedCoach) {
       const coachName =
         mockCoaches.find((c) => c.id === selectedCoach)?.name || selectedCoach;
-      // Assign coach to all selected counties
+      // Get the color for the selected coach
+      const selectedColorForCoach = coachColors.get(selectedCoach) || "Red";
+      // Assign coach and color to all selected counties
       const newAssignments = new Map(coachAssignments);
       selectedCountiesInModal.forEach((county) => {
-        newAssignments.set(county.id, coachName);
+        newAssignments.set(county.id, {
+          coach: coachName,
+          color: selectedColorForCoach,
+        });
       });
       setCoachAssignments(newAssignments);
       setIsAssignModalVisible(false);
@@ -471,9 +589,9 @@ export default function MapChartExamplePage() {
   const getCoachCountForState = (counties: any[]) => {
     const uniqueCoaches = new Set<string>();
     counties.forEach((county) => {
-      const coach = coachAssignments.get(county.id);
-      if (coach) {
-        uniqueCoaches.add(coach);
+      const assignment = coachAssignments.get(county.id);
+      if (assignment && assignment.coach) {
+        uniqueCoaches.add(assignment.coach);
       }
     });
     return uniqueCoaches.size;
@@ -576,7 +694,7 @@ export default function MapChartExamplePage() {
                               )
                             }
                           >
-                            <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1">
+                            <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1 !ml-0">
                               Select Entire State
                             </h6>
                           </Checkbox>
@@ -635,6 +753,7 @@ export default function MapChartExamplePage() {
             display: "flex",
             flexDirection: "column",
             height: "100%",
+            background: "#fff",
           }}
         >
           <Tabs
@@ -647,12 +766,21 @@ export default function MapChartExamplePage() {
                 children: (
                   <div>
                     {/* Search Bar */}
-                    <Input
+                    {/* <Input
                       placeholder="Search..."
                       prefix={<SearchOutlined />}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       style={{ marginBottom: "16px" }}
+                    /> */}
+                    <Input.Search
+                      style={{ width: 300, marginBottom: "10px" }}
+                      className="search-input"
+                      placeholder="Search..."
+                      allowClear
+                      value={""}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onSearch={() => ""}
                     />
 
                     {/* States List */}
@@ -689,7 +817,6 @@ export default function MapChartExamplePage() {
                                 key={state.id}
                                 style={{
                                   borderBottom: "1px solid #f0f0f0",
-                                  
                                 }}
                               >
                                 {/* State Header */}
@@ -731,7 +858,8 @@ export default function MapChartExamplePage() {
 
                                       {isExpanded && (
                                         <Text className="ml-[20px] text-sm italic">
-                                          {selectedCountiesForState.length} Counties
+                                          {selectedCountiesForState.length}{" "}
+                                          Counties
                                         </Text>
                                       )}
                                     </div>
@@ -742,41 +870,41 @@ export default function MapChartExamplePage() {
                                   {/* <Text type="secondary" style={{ fontSize: "14px" }}>
                                   {selectedCountiesForState.length} Counties
                                 </Text> */}
-                                {isExpanded && (
-                                  <div className="block">
-                                    {coachCount > 0 && (
-                                      <div className="grid text-end mt-2">
-                                        <Text
-                                          type="secondary"
-                                          // style={{ fontSize: "14px" }}
-                                          className="text-base italic font-semibold"
-                                        >
-                                          {coachCount} Coaches
-                                        </Text>
-                                        <a 
-                                        href="#"
-                                        className="text-[#C00E1E]"
-                                        style={{
-                                          padding: 0,
-                                          fontSize: "14px",
-                                          fontWeight: "600",
-                                          fontStyle: "italic",
-                                          textDecoration: "underline",
-                                          border: "none !important",
-                                        }}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteAllAssignments(
-                                              stateName,
-                                              selectedCountiesForState
-                                            );
-                                          }}
-                                        >
-                                          Delete all assignments
-                                        </a>
-                                      </div>
-                                    )}
-                                  </div>
+                                  {isExpanded && (
+                                    <div className="block">
+                                      {coachCount > 0 && (
+                                        <div className="grid text-end mt-2">
+                                          <Text
+                                            type="secondary"
+                                            // style={{ fontSize: "14px" }}
+                                            className="text-base italic font-semibold"
+                                          >
+                                            {coachCount} Coaches
+                                          </Text>
+                                          <a
+                                            href="#"
+                                            className="text-[#C00E1E]"
+                                            style={{
+                                              padding: 0,
+                                              fontSize: "14px",
+                                              fontWeight: "600",
+                                              fontStyle: "italic",
+                                              textDecoration: "underline",
+                                              border: "none !important",
+                                            }}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeleteAllAssignments(
+                                                stateName,
+                                                selectedCountiesForState
+                                              );
+                                            }}
+                                          >
+                                            Delete all assignments
+                                          </a>
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
 
@@ -793,8 +921,10 @@ export default function MapChartExamplePage() {
                                       <>
                                         {countiesToDisplay.map(
                                           (county, index) => {
-                                            const assignedCoach =
+                                            const assignment =
                                               coachAssignments.get(county.id);
+                                            const assignedCoach =
+                                              assignment?.coach;
                                             const isUnassigned = !assignedCoach;
 
                                             return (
@@ -830,7 +960,6 @@ export default function MapChartExamplePage() {
                                                     display: "flex",
                                                     alignItems: "start",
                                                     gap: "8px",
-                                                    
                                                   }}
                                                 >
                                                   {assignedCoach ? (
@@ -851,12 +980,15 @@ export default function MapChartExamplePage() {
                                                           gap: "2px",
                                                         }}
                                                       >
-                                                       <img src="/svgicons/arrow-top-bottom.svg" alt="" />
+                                                        <img
+                                                          src="/svgicons/arrow-top-bottom.svg"
+                                                          alt=""
+                                                        />
                                                       </div>
                                                     </>
                                                   ) : (
                                                     <a
-                                                     href="#"
+                                                      href="#"
                                                       onClick={() =>
                                                         handleAssignCoach(
                                                           county.id,
@@ -866,7 +998,8 @@ export default function MapChartExamplePage() {
                                                       style={{
                                                         padding: 0,
                                                         fontSize: "14px",
-                                                        textDecoration: "underline",
+                                                        textDecoration:
+                                                          "underline",
                                                         fontWeight: "600",
                                                         fontStyle: "italic",
                                                         color: "#126DB8",
@@ -876,32 +1009,31 @@ export default function MapChartExamplePage() {
                                                     </a>
                                                   )}
                                                 </div>
-                                                
                                               </div>
                                             );
                                           }
                                         )}
                                         {hasMoreCounties && (
-                                          <a 
-                                          href="#"
-                                          style={{
-                                            padding: "8px 0",
-                                            fontSize: "14px",
-                                            fontWeight: "600",
-                                            fontStyle: "italic",
-                                            textDecoration: "underline",
-                                            color: "#C00E1E !important" , 
-                                            border: "none !important",
-                                            textAlign: "left",
-                                            marginLeft: "15px",
-                                            display: "block",
-                                          }}
-                                          onClick={() =>
-                                            showMoreCounties(
-                                              stateName,
-                                              selectedCountiesForState.length
-                                            )
-                                          }
+                                          <a
+                                            href="#"
+                                            style={{
+                                              padding: "8px 0",
+                                              fontSize: "14px",
+                                              fontWeight: "600",
+                                              fontStyle: "italic",
+                                              textDecoration: "underline",
+                                              color: "#C00E1E !important",
+                                              border: "none !important",
+                                              textAlign: "left",
+                                              marginLeft: "15px",
+                                              display: "block",
+                                            }}
+                                            onClick={() =>
+                                              showMoreCounties(
+                                                stateName,
+                                                selectedCountiesForState.length
+                                              )
+                                            }
                                           >
                                             Show more counties...
                                           </a>
@@ -921,21 +1053,21 @@ export default function MapChartExamplePage() {
                             );
                           })}
                         {filteredStatesData.length > statesToShow && (
-                          <a 
-                          href="#"
-                          style={{
-                            padding: "8px 0",
-                            fontSize: "14px",
-                            fontWeight: "600",
-                            fontStyle: "italic",
-                            textDecoration: "underline",
-                            color: "#C00E1E !important" , 
-                            border: "none !important",
-                            textAlign: "left",
-                            marginLeft: "15px",
-                            display: "block",
-                          }}
-                          onClick={() => setStatesToShow(statesToShow + 10)}
+                          <a
+                            href="#"
+                            style={{
+                              padding: "8px 0",
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              fontStyle: "italic",
+                              textDecoration: "underline",
+                              color: "#C00E1E !important",
+                              border: "none !important",
+                              textAlign: "left",
+                              marginLeft: "15px",
+                              display: "block",
+                            }}
+                            onClick={() => setStatesToShow(statesToShow + 10)}
                           >
                             Show more states
                           </a>
@@ -956,47 +1088,66 @@ export default function MapChartExamplePage() {
                 children: (
                   <div>
                     {/* Search Bar */}
-                    <Input
+                    {/* <Input
                       placeholder="Search..."
                       prefix={<SearchOutlined />}
                       value={coachSearchQuery}
                       onChange={(e) => setCoachSearchQuery(e.target.value)}
                       style={{ marginBottom: "16px" }}
+                    /> */}
+                    <Input.Search
+                      style={{ width: 300 }}
+                      className="search-input"
+                      placeholder="Search..."
+                      onChange={(e) => setCoachSearchQuery(e.target.value)}
+                      allowClear
+                      value={""}
+                      onSearch={() => ""}
                     />
 
                     {/* Coaches List */}
-                    <div style={{ maxHeight: "600px", overflowY: "auto" }}>
+                    <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
                       {mockCoaches
-                        .filter(coach =>
-                          coach.name.toLowerCase().includes(coachSearchQuery.toLowerCase()) ||
-                          coach.email.toLowerCase().includes(coachSearchQuery.toLowerCase())
+                        .filter(
+                          (coach) =>
+                            coach.name
+                              .toLowerCase()
+                              .includes(coachSearchQuery.toLowerCase()) ||
+                            coach.email
+                              .toLowerCase()
+                              .includes(coachSearchQuery.toLowerCase())
                         )
                         .map((coach, index, filteredList) => (
                           <div
                             key={coach.id}
+                            onClick={() => handleOpenHighSchoolModal(coach)}
                             style={{
                               display: "flex",
                               alignItems: "center",
                               gap: "16px",
                               padding: "8px 0",
-                              borderBottom: index < filteredList.length - 1 ? "1px solid #f0f0f0" : "none",
+                              borderBottom:
+                                index < filteredList.length - 1
+                                  ? "1px solid #f0f0f0"
+                                  : "none",
+                              cursor: "pointer",
                             }}
                           >
                             {/* Profile Picture */}
                             <Avatar
-                            className="rounded-none h-16 w-20"
+                              className="rounded-none h-16 w-20"
                               src={coach.avatar}
                             >
                               {coach.name.charAt(0)}
                             </Avatar>
-                            
+
                             {/* Name and Email */}
                             <div className="w-full ">
-                              <div style={{ marginBottom: "4px" }}>
+                              <div>
                                 <Text
                                   strong
                                   style={{
-                                    display:"flex",
+                                    display: "flex",
                                     fontSize: "16px",
                                     fontStyle: "italic",
                                     color: "#000",
@@ -1007,7 +1158,7 @@ export default function MapChartExamplePage() {
                                 <a
                                   href="#"
                                   style={{
-                                    display:"flex",
+                                    display: "flex",
                                     fontSize: "14px",
                                     color: "#1890ff",
                                   }}
@@ -1019,6 +1170,24 @@ export default function MapChartExamplePage() {
                           </div>
                         ))}
                     </div>
+                    <a
+                      href="#"
+                      style={{
+                        padding: "8px 0",
+                        fontSize: "14px",
+                        fontWeight: "600",
+                        fontStyle: "italic",
+                        textDecoration: "underline",
+                        color: "#C00E1E !important",
+                        border: "none !important",
+                        textAlign: "left",
+                        marginLeft: "0px",
+                        display: "block",
+                        marginTop: "20px",
+                      }}
+                    >
+                      Show more coaches
+                    </a>
                   </div>
                 ),
               },
@@ -1033,8 +1202,9 @@ export default function MapChartExamplePage() {
         open={isAssignModalVisible}
         onCancel={handleCancelCoachAssignment}
         footer={null}
-        width={1200}
+        width={900}
         style={{ top: 20 }}
+        className="coach-assignment-modal"
       >
         <div
           style={{ display: "flex", flexDirection: "column", height: "80vh" }}
@@ -1042,70 +1212,74 @@ export default function MapChartExamplePage() {
           {/* Header */}
           <div
             style={{
-              marginBottom: "24px",
               paddingBottom: "16px",
               borderBottom: "1px solid #f0f0f0",
             }}
           >
-            <Typography.Title level={4} style={{ margin: 0}}>
+            <Typography.Title
+              level={3}
+              className="italic font-semibold !text-[22px]"
+            >
               Assign Coach
             </Typography.Title>
-            <div className="grid grid-cols-4 gap-4 mt-4 " 
+          </div>
+
+          <div
+            className="grid grid-cols-3 mt-4 gap-3 mb-5"
             // style={{ display: "flex", gap: "16px", alignItems: "center" }}
-            >
-              <Select
+          >
+            <Select
               className="w-full col-span-1"
-                placeholder="Select Counties"
-                mode="multiple"
-                value={selectedCountiesInModal.map((c) => c.id)}
-                onChange={(values) => {
-                  // Add counties from selectedCountiesData
-                  const newCounties = values
-                    .map((id) => {
-                      const existing = selectedCountiesInModal.find(
-                        (c) => c.id === id
-                      );
-                      if (existing) return existing;
-                      const county = selectedCountiesData.find(
-                        (c) => c.id === id
-                      );
-                      return county
-                        ? {
-                            id: county.id,
-                            name: county.name,
-                            state: county.state || "",
-                          }
-                        : null;
-                    })
-                    .filter(Boolean) as Array<{
-                    id: string;
-                    name: string;
-                    state: string;
-                  }>;
-                  setSelectedCountiesInModal(newCounties);
-                }}
-                options={selectedCountiesData.map((county) => ({
-                  label: `${county.name} (${getStateAbbreviation(
-                    county.state || ""
-                  )})`,
-                  value: county.id,
-                }))}
-              />
-              <Input
-              className="w-full col-span-3"
-                placeholder="Search Coach..."
-                prefix={<SearchOutlined />}
-                value={coachSearchQuery}
-                onChange={(e) => setCoachSearchQuery(e.target.value)}
-              />
-            </div>
+              placeholder="Select Counties"
+              mode="multiple"
+              value={selectedCountiesInModal.map((c) => c.id)}
+              onChange={(values) => {
+                // Add counties from selectedCountiesData
+                const newCounties = values
+                  .map((id) => {
+                    const existing = selectedCountiesInModal.find(
+                      (c) => c.id === id
+                    );
+                    if (existing) return existing;
+                    const county = selectedCountiesData.find(
+                      (c) => c.id === id
+                    );
+                    return county
+                      ? {
+                          id: county.id,
+                          name: county.name,
+                          state: county.state || "",
+                        }
+                      : null;
+                  })
+                  .filter(Boolean) as Array<{
+                  id: string;
+                  name: string;
+                  state: string;
+                }>;
+                setSelectedCountiesInModal(newCounties);
+              }}
+              options={selectedCountiesData.map((county) => ({
+                label: `${county.name} (${getStateAbbreviation(
+                  county.state || ""
+                )})`,
+                value: county.id,
+              }))}
+            />
+
+            <Input.Search
+              className="w-full col-span-2 search-input !mt-0"
+              placeholder="Search Coach..."
+              allowClear
+              value={""}
+              onChange={(e) => setCoachSearchQuery(e.target.value)}
+            />
           </div>
 
           {/* Main Content - Two Columns */}
           <div
             style={{
               display: "flex",
-              gap: "24px",
               flex: 1,
               overflow: "hidden",
             }}
@@ -1114,7 +1288,7 @@ export default function MapChartExamplePage() {
             <div
               style={{
                 width: "300px",
-                borderRight: "1px solid #f0f0f0",
+                // borderRight: "1px solid #f0f0f0",
                 paddingRight: "24px",
                 display: "flex",
                 flexDirection: "column",
@@ -1137,11 +1311,17 @@ export default function MapChartExamplePage() {
                         onClose={() => handleRemoveCountyFromModal(county.id)}
                         style={{
                           padding: "8px 12px",
-                          fontSize: "14px",
+                          fontSize: "16px",
                           borderRadius: "4px",
                           display: "flex",
                           alignItems: "center",
-                          gap: "8px",
+                          margin: "0",
+                          justifyContent: "space-between",
+                          background: "rgba(18, 109, 184, 0.05)",
+                          border: "none",
+                          color: "#1C1D4D",
+                          fontWeight: "500",
+                          fontStyle: "italic",
                         }}
                       >
                         {county.name} ({getStateAbbreviation(county.state)})
@@ -1166,7 +1346,7 @@ export default function MapChartExamplePage() {
               <Radio.Group
                 value={selectedCoach}
                 onChange={(e) => setSelectedCoach(e.target.value)}
-                style={{ width: "100%" }}
+                style={{ width: "100%", border: "none" }}
               >
                 <Space
                   direction="vertical"
@@ -1177,36 +1357,147 @@ export default function MapChartExamplePage() {
                     <div
                       key={coach.id}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "16px",
-                        padding: "16px",
+                        padding: "10px",
                         borderBottom: "1px solid #f0f0f0",
                         backgroundColor:
                           selectedCoach === coach.id ? "#f0f7ff" : "#fff",
                       }}
                     >
-                      <Radio value={coach.id} />
-                      <Avatar className="rounded-none h-[61px] w-[61px]" style={{ backgroundColor: "#1890ff" }}>
-                        {coach.name.charAt(0)}
-                      </Avatar>
-                      <div style={{ flex: 1 }}>
-                        <div>
-                          <Text strong style={{ fontSize: "16px" }}>
-                            {coach.name}
-                          </Text>
+                      <div className="flex items-center justify-between gap-2">
+                        <Radio value={coach.id} />
+                        <Avatar
+                          className="rounded-none h-[61px] w-[61px]"
+                          style={{ backgroundColor: "#1890ff" }}
+                        >
+                          {coach.name.charAt(0)}
+                        </Avatar>
+                        <div style={{ flex: 1 }}>
+                          <div>
+                            <Text className="text-lg italic font-semibold">
+                              {coach.name}
+                            </Text>
+                          </div>
+                          <div>
+                            <a
+                              href="#"
+                              type="secondary"
+                              style={{ fontSize: "14px" }}
+                            >
+                              {coach.email}
+                            </a>
+                          </div>
+
+                          {coach.positions && coach.positions.length > 0 && (
+                            <div style={{ marginTop: "8px" }}>
+                              <Text className="text-sm italic font-semibold">
+                                Positions:{" "}
+                                {coach.positions.map((pos, idx) => (
+                                  <span key={idx}>
+                                    {pos}{" "}
+                                    <CloseOutlined
+                                      style={{
+                                        fontSize: "10px",
+                                        margin: "0 4px",
+                                      }}
+                                    />
+                                  </span>
+                                ))}
+                              </Text>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <a href="#" type="secondary" style={{ fontSize: "14px" }}>
-                            {coach.email}
-                          </a>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "6px",
+                            alignItems: "flex-end",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "6px",
+                            }}
+                          >
+                            <Select
+                              value={coachColors.get(coach.id) || "Red"}
+                              onChange={(value) => {
+                                const newCoachColors = new Map(coachColors);
+                                newCoachColors.set(coach.id, value);
+                                setCoachColors(newCoachColors);
+                              }}
+                              style={{ width: 100 }}
+                              size="small"
+                            >
+                              <Select.Option value="Red">
+                                <div className="flex items-center gap-2">
+                                  <i
+                                    className="w-[10px] h-[10px] flex"
+                                    style={{ backgroundColor: "#FF0000" }}
+                                  ></i>
+                                  <span>Red</span>
+                                </div>
+                              </Select.Option>
+                              <Select.Option value="Blue">
+                                <div className="flex items-center gap-2">
+                                  <i
+                                    className="w-[10px] h-[10px] flex"
+                                    style={{ backgroundColor: "#1890ff" }}
+                                  ></i>
+                                  <span>Blue</span>
+                                </div>
+                              </Select.Option>
+                              <Select.Option value="Green">
+                                <div className="flex items-center gap-2">
+                                  <i
+                                    className="w-[10px] h-[10px] flex"
+                                    style={{ backgroundColor: "#52c41a" }}
+                                  ></i>
+                                  <span>Green</span>
+                                </div>
+                              </Select.Option>
+                              <Select.Option value="Yellow">
+                                <div className="flex items-center gap-2">
+                                  <i
+                                    className="w-[10px] h-[10px] flex"
+                                    style={{ backgroundColor: "#FFD000" }}
+                                  ></i>
+                                  <span>Yellow</span>
+                                </div>
+                              </Select.Option>
+                            </Select>
+                            <Button size="small" type="default">
+                              + HS
+                            </Button>
+                          </div>
+                          <Select
+                            value={coach.position}
+                            className="w-full"
+                            placeholder="Position"
+                            options={[
+                              { label: "Head Coach", value: "Head Coach" },
+                              {
+                                label: "Assistant Coach",
+                                value: "Assistant Coach",
+                              },
+                              {
+                                label: "Position Coach",
+                                value: "Position Coach",
+                              },
+                            ]}
+                          />
                         </div>
+                      </div>
+
+                      <div className="ml-[32px]">
                         {coach.assignedAreas &&
                           coach.assignedAreas.length > 0 && (
                             <div style={{ marginTop: "8px" }}>
                               <Text
                                 type="secondary"
-                                style={{ fontSize: "12px" }}
+                                className="text-sm italic font-medium"
                               >
                                 {expandedCoachAreas.has(coach.id)
                                   ? coach.assignedAreas[0]
@@ -1219,11 +1510,7 @@ export default function MapChartExamplePage() {
                                 <Button
                                   type="link"
                                   size="small"
-                                  style={{
-                                    padding: 0,
-                                    fontSize: "12px",
-                                    marginLeft: "4px",
-                                  }}
+                                  className="text-sm italic font-medium !border-none !text-[#126DB8] !underline"
                                   onClick={() => {
                                     const newExpanded = new Set(
                                       expandedCoachAreas
@@ -1243,70 +1530,6 @@ export default function MapChartExamplePage() {
                               )}
                             </div>
                           )}
-                        {coach.positions && coach.positions.length > 0 && (
-                          <div style={{ marginTop: "8px" }}>
-                            <Text style={{ fontSize: "14px" }}>
-                              Positions:{" "}
-                              {coach.positions.map((pos, idx) => (
-                                <span key={idx}>
-                                  {pos}{" "}
-                                  <CloseOutlined
-                                    style={{
-                                      fontSize: "10px",
-                                      margin: "0 4px",
-                                    }}
-                                  />
-                                </span>
-                              ))}
-                            </Text>
-                          </div>
-                        )}
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "8px",
-                          alignItems: "flex-end",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "8px",
-                          }}
-                        >
-                          <Select
-                            value={coach.color}
-                            style={{ width: 100 }}
-                            size="small"
-                            options={[
-                              { label: "Red", value: " Red" },
-                              { label: "Blue", value: "Blue" },
-                              { label: "Green", value: "Green" },
-                              { label: "Yellow", value: "Yellow" },
-                            ]}
-                          />
-                          <Button size="small" type="default">
-                            + HS
-                          </Button>
-                        </div>
-                        <Select
-                          value={coach.position}
-                          className="w-full"
-                          placeholder="Position"
-                          options={[
-                            { label: "Head Coach", value: "Head Coach" },
-                            {
-                              label: "Assistant Coach",
-                              value: "Assistant Coach",
-                            },
-                            {
-                              label: "Position Coach",
-                              value: "Position Coach",
-                            },
-                          ]}
-                        />
                       </div>
                     </div>
                   ))}
@@ -1326,17 +1549,226 @@ export default function MapChartExamplePage() {
               borderTop: "1px solid #f0f0f0",
             }}
           >
-            <Button onClick={handleCancelCoachAssignment}>Cancel</Button>
+            <Button type="text" onClick={handleCancelCoachAssignment}>
+              Cancel
+            </Button>
             <Button
               type="primary"
               onClick={handleConfirmCoachAssignment}
               disabled={!selectedCoach || selectedCountiesInModal.length === 0}
-              style={{ backgroundColor: "#1c1d4d", borderColor: "#1c1d4d" }}
             >
               Save
             </Button>
           </div>
         </div>
+      </Modal>
+
+      {/* High School Assignment Modal */}
+      <Modal
+        open={isHighSchoolModalVisible}
+        onCancel={handleCloseHighSchoolModal}
+        footer={null}
+        width={800}
+        style={{ top: 20 }}
+      >
+        {selectedCoachForHighSchool && (
+          <div>
+            {/* Header */}
+            <Typography.Title
+              level={4}
+              className="italic font-semibold !text-[22px] mb-7"
+            >
+              Assign High School
+            </Typography.Title>
+
+            {/* Coach Profile Section */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "16px",
+                marginBottom: "24px",
+              }}
+            >
+              <Avatar
+                className="rounded-none border-none"
+                size={64}
+                src={selectedCoachForHighSchool.avatar}
+              >
+                {selectedCoachForHighSchool.name.charAt(0)}
+              </Avatar>
+              <div>
+                <Text
+                  strong
+                  style={{
+                    display: "block",
+                    fontSize: "18px",
+                    fontWeight: 700,
+                    color: "#1C1D4D",
+                  }}
+                >
+                  {selectedCoachForHighSchool.name}
+                </Text>
+                <a
+                  href="#"
+                  style={{
+                    fontSize: "14px",
+                    color: "#1890ff",
+                  }}
+                >
+                  {selectedCoachForHighSchool.email}
+                </a>
+              </div>
+            </div>
+
+            {/* Search and Filter Section */}
+            <div className="grid grid-cols-3 mt-4 gap-3 mb-5">
+                <Input.Search
+                  className="w-full col-span-2 search-input !mt-0"
+                  placeholder="Search Coach..."
+                  allowClear
+                  value={""}
+                  onChange={(e) => setHighSchoolSearchQuery(e.target.value)}
+                />
+                <Select
+                  value={selectedStateFilter}
+                  onChange={(value) => setSelectedStateFilter(value)}
+                  className="col-span-1"
+                >
+                  <Select.Option value="All States">All States</Select.Option>
+                  {uniqueStates.map((state) => (
+                    <Select.Option key={state} value={state}>
+                      {state}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+
+            {/* High School List */}
+            <div
+              style={{
+                maxHeight: "600px",
+                overflowY: "auto",
+                marginBottom: "24px",
+              }}
+            >
+              {/* Table Header */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "2fr 1fr 100px",
+                  padding: "6px 0",
+                  borderBottom: "2px solid #f0f0f0",
+                  marginBottom: "8px",
+                }}
+              >
+                <Text
+                  strong
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    color: "#1C1D4D",
+                  }}
+                >
+                  School Name
+                </Text>
+                <Text
+                  strong
+                  style={{
+                    fontSize: "16px",
+                    fontWeight: 700,
+                    color: "#1C1D4D",
+                    textAlign: "center",
+                  }}
+                >
+                  State
+                </Text>
+                <div></div>
+              </div>
+
+              {/* Table Rows */}
+              {filteredHighSchools.map((school) => (
+                <div
+                  key={school.id}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 100px",
+                    padding: "2px 0",
+                    borderBottom: "1px solid #f0f0f0",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: "16px",
+                      fontStyle: "italic",
+                      color: "#1C1D4D",
+                    }}
+                  >
+                    {school.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: "16px",
+                      fontStyle: "italic",
+                      color: "#1C1D4D",
+                      textAlign: "center",
+                    }}
+                  >
+                    {school.state}
+                  </Text>
+                  <div style={{ textAlign: "right" }}>
+                    <Button
+                      type="link"
+                      className="text-sm italic font-medium !border-none !text-[#126DB8] !underline"
+                      onClick={() => {
+                        // Handle unassign logic here
+                        console.log("Unassign", school.name);
+                      }}
+                    >
+                      Unassign
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer Buttons */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "16px",
+              }}
+            >
+              <Button
+                onClick={handleCloseHighSchoolModal}
+                style={{
+                  minWidth: "100px",
+                  borderColor: "#d9d9d9",
+                  color: "#1C1D4D",
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="primary"
+                style={{
+                  minWidth: "100px",
+                  backgroundColor: "#1C1D4D",
+                  borderColor: "#1C1D4D",
+                }}
+                onClick={() => {
+                  // Handle save logic here
+                  console.log("Save high school assignments");
+                  handleCloseHighSchoolModal();
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

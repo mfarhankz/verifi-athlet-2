@@ -570,7 +570,7 @@ color: var(--success);
   }
 }
 .ant-modal-content {
-  padding: 25px 15px 15px !important;
+  padding: 15px 15px 15px !important;
   .ant-modal-body {
     .main-container {
       padding: 0 !important;
@@ -1103,6 +1103,18 @@ button:hover{
     white-space: break-spaces !important;
     line-height: 22px;
     font-weight: 500 !important;
-    font-size: 20px !important;
+    font-size: 18px !important;
+  }
+}
+
+.coach-assignment-modal {
+  .ant-select-selector {
+    min-height: 35px !important;
+  }
+  .ant-select-single, .ant-btn-default {
+    height: 35px;
+  }
+  .ant-space-gap-row-middle {
+    row-gap: 0 !important;
   }
 }
