@@ -6,10 +6,11 @@ import {
   Geographies,
   Geography,
   Marker,
+  ZoomableGroup,
 } from "react-simple-maps";
 import { geoCentroid, geoPath, geoArea } from "d3-geo";
 import { Card, Button, Select, message, Space, Typography, Tag, Checkbox, Collapse, Modal, Avatar, Divider } from "antd";
-import { ReloadOutlined, CloseOutlined, EnvironmentOutlined } from "@ant-design/icons";
+import { ReloadOutlined, CloseOutlined, EnvironmentOutlined, PlusOutlined, MinusOutlined } from "@ant-design/icons";
 
 const { Title, Text } = Typography;
 
@@ -185,6 +186,67 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
   const countiesProcessed = useRef(false);
   const stateGeographiesRef = useRef<Map<string, { name: string; fips: string }>>(new Map());
   const [isPrintModalVisible, setIsPrintModalVisible] = useState(false);
+  const [position, setPosition] = useState({ coordinates: [0, 0] as [number, number], zoom: 1 });
+  const [targetPosition, setTargetPosition] = useState({ coordinates: [0, 0] as [number, number], zoom: 1 });
+  const animationFrameRef = useRef<number | null>(null);
+  
+  // Smooth animation for zoom and pan
+  useEffect(() => {
+    // Check if we need to animate
+    const needsAnimation = 
+      Math.abs(position.zoom - targetPosition.zoom) > 0.01 ||
+      Math.abs(position.coordinates[0] - targetPosition.coordinates[0]) > 0.01 ||
+      Math.abs(position.coordinates[1] - targetPosition.coordinates[1]) > 0.01;
+    
+    if (!needsAnimation) {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      return;
+    }
+    
+    const animate = () => {
+      setPosition(prev => {
+        const currentZoom = prev.zoom;
+        const targetZoom = targetPosition.zoom;
+        const currentCoords = prev.coordinates;
+        const targetCoords = targetPosition.coordinates;
+        
+        const zoomDiff = Math.abs(targetZoom - currentZoom);
+        const coordDiff = Math.abs(targetCoords[0] - currentCoords[0]) + Math.abs(targetCoords[1] - currentCoords[1]);
+        
+        // If close enough, snap to target
+        if (zoomDiff < 0.01 && coordDiff < 0.01) {
+          if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+          }
+          return targetPosition;
+        }
+        
+        // Smooth interpolation (easing function)
+        const easing = 0.15; // Adjust for speed (lower = slower, smoother)
+        const newZoom = currentZoom + (targetZoom - currentZoom) * easing;
+        const newCoords: [number, number] = [
+          currentCoords[0] + (targetCoords[0] - currentCoords[0]) * easing,
+          currentCoords[1] + (targetCoords[1] - currentCoords[1]) * easing
+        ];
+        
+        animationFrameRef.current = requestAnimationFrame(animate);
+        return { coordinates: newCoords, zoom: newZoom };
+      });
+    };
+    
+    animationFrameRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [targetPosition]);
   
   // Update county state names when state geographies become available
   useEffect(() => {
@@ -242,6 +304,8 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
         newSelectedStates.delete(stateId);
         newStatesData.delete(stateId);
         message.info(`Deselected: ${stateName}`);
+        // Reset zoom when deselecting
+        setTargetPosition({ coordinates: [0, 0], zoom: 1 });
       } else {
         // Select
         if (!multiSelect && newSelectedStates.size > 0) {
@@ -252,6 +316,20 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
         newSelectedStates.add(stateId);
         newStatesData.set(stateId, newStateData);
         message.success(`Selected: ${stateName}`);
+        
+        // Zoom and center on the selected state
+        try {
+          const centroid = geoCentroid(geo.geometry);
+          if (centroid && Array.isArray(centroid) && centroid.length === 2) {
+            // Zoom to 2.5x and center on the state (with animation)
+            setTargetPosition({ 
+              coordinates: [centroid[0], centroid[1]], 
+              zoom: 2.5 
+            });
+          }
+        } catch (error) {
+          console.error("Error calculating state centroid:", error);
+        }
       }
 
       // If this state was deselected, clear its counties
@@ -676,7 +754,37 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
       style={{ width, textAlign: "left" }}
       bodyStyle={{ padding: 0, height: typeof height === "number" ? `${height}px` : height }}
     >
-      <div style={{ height: typeof height === "number" ? `${height}px` : height, width: "100%" }}>
+      <div style={{ height: typeof height === "number" ? `${height}px` : height, width: "100%", position: "relative" }}>
+        {/* Zoom Controls */}
+        <div style={{ 
+          position: "absolute", 
+          top: "16px", 
+          right: "16px", 
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px"
+        }}>
+          <Button
+            icon={<PlusOutlined />}
+            onClick={() => {
+              const newZoom = Math.min(targetPosition.zoom * 1.5, 4);
+              setTargetPosition({ ...targetPosition, zoom: newZoom });
+            }}
+            size="small"
+            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
+          />
+          <Button
+            icon={<MinusOutlined />}
+            onClick={() => {
+              const newZoom = Math.max(targetPosition.zoom / 1.5, 0.5);
+              setTargetPosition({ ...targetPosition, zoom: newZoom });
+            }}
+            size="small"
+            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
+          />
+        </div>
+        
         <ComposableMap
           projection="geoAlbersUsa"
           projectionConfig={{
@@ -695,7 +803,15 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
               <stop offset="97.61%" stopColor="#C8FF24" stopOpacity="0.9" />
             </linearGradient>
           </defs>
-          <g>
+          <ZoomableGroup
+            zoom={position.zoom}
+            center={position.coordinates}
+            onMoveEnd={(newPosition: any) => {
+              setPosition(newPosition);
+              setTargetPosition(newPosition);
+            }}
+          >
+            <g>
             {/* Render states first (below counties) - fill area allows clicks to pass through to counties */}
             <Geographies geography={US_STATES_URL}>
               {({ geographies, projection }: { geographies: any[]; projection?: any }) => {
@@ -1026,7 +1142,8 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                 }}
               </Geographies>
             )}
-          </g>
+            </g>
+          </ZoomableGroup>
         </ComposableMap>
       </div>
 
