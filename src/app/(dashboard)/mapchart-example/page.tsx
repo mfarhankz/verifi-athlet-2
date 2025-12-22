@@ -677,27 +677,45 @@ export default function MapChartExamplePage() {
                           style={{
                             display: "flex",
                             alignItems: "center",
+                            justifyContent: "space-between",
                             gap: "8px",
                             marginBottom: "10px",
                           }}
                         >
-                          <h4 className="!text-[40px] font-bold !mb-0 leading-[40px]">
-                            {state.name}
-                          </h4>
-                          <Checkbox
-                            checked={entireStateSelected.has(stateName)}
-                            onChange={(e) =>
-                              handleSelectEntireState(
-                                stateName,
-                                state.id,
-                                e.target.checked
-                              )
-                            }
-                          >
-                            <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1 !ml-0">
-                              Select Entire State
-                            </h6>
-                          </Checkbox>
+                          <div className="flex items-center gap-2">
+                            <h4 className="!text-[40px] font-bold !mb-0 leading-[40px]">
+                              {state.name}
+                            </h4>
+                            <Checkbox
+                              checked={entireStateSelected.has(stateName)}
+                              onChange={(e) =>
+                                handleSelectEntireState(
+                                  stateName,
+                                  state.id,
+                                  e.target.checked
+                                )
+                              }
+                            >
+                              <h6 className="!text-[16px] italic leading-[16px] !mb-0 !mt-1 !ml-0">
+                                Select Entire State
+                              </h6>
+                            </Checkbox>
+                          </div>
+
+                          <div>
+                            <Button
+                              type="link"
+                              className="text-sm italic font-medium !border-none !text-[#1c1d4d] !underline mr-4"
+                            >
+                              Clear all
+                            </Button>
+                            <Button
+                              type="link"
+                              className="gd !text-[#1c1d4d] !border-none !text-base !font-medium"
+                            >
+                              Assign
+                            </Button>
+                          </div>
                         </div>
                         {countiesForState.length > 0 ? (
                           <div className="flex gap-1 flex-wrap mb-0">
@@ -1088,7 +1106,7 @@ export default function MapChartExamplePage() {
                 children: (
                   <div>
                     {/* Search Bar */}
-                   
+
                     <Input.Search
                       style={{ width: 300 }}
                       className="search-input"
@@ -1198,13 +1216,12 @@ export default function MapChartExamplePage() {
               borderBottom: "1px solid #f0f0f0",
             }}
           >
-          
-            <h4 className="italic font-semibold !text-[22px] mb-0">Assign Coach</h4>
+            <h4 className="italic font-semibold !text-[22px] mb-0">
+              Assign Coach
+            </h4>
           </div>
 
-          <div
-            className="grid grid-cols-3 mt-4 gap-3 mb-5"
-          >
+          <div className="grid grid-cols-3 mt-4 gap-3 mb-5">
             <Select
               className="w-full col-span-1"
               placeholder="Select Counties"
@@ -1445,7 +1462,11 @@ export default function MapChartExamplePage() {
                                 </div>
                               </Select.Option>
                             </Select>
-                            <Button size="small" type="default" onClick={() => handleOpenHighSchoolModal(coach)}>
+                            <Button
+                              size="small"
+                              type="default"
+                              onClick={() => handleOpenHighSchoolModal(coach)}
+                            >
                               + HS
                             </Button>
                           </div>
@@ -1551,9 +1572,10 @@ export default function MapChartExamplePage() {
         {selectedCoachForHighSchool && (
           <div>
             {/* Header */}
-           
-            <h4 className="italic font-semibold !text-[22px] mb-0">Assign High School</h4>
 
+            <h4 className="italic font-semibold !text-[22px] mb-0">
+              Assign High School
+            </h4>
 
             {/* Coach Profile Section */}
             <div
@@ -1597,26 +1619,26 @@ export default function MapChartExamplePage() {
 
             {/* Search and Filter Section */}
             <div className="grid grid-cols-3 mt-4 gap-3 mb-5">
-                <Input.Search
-                  className="w-full col-span-2 search-input !mt-0"
-                  placeholder="Search Coach..."
-                  allowClear
-                  value={""}
-                  onChange={(e) => setHighSchoolSearchQuery(e.target.value)}
-                />
-                <Select
-                  value={selectedStateFilter}
-                  onChange={(value) => setSelectedStateFilter(value)}
-                  className="col-span-1"
-                >
-                  <Select.Option value="All States">All States</Select.Option>
-                  {uniqueStates.map((state) => (
-                    <Select.Option key={state} value={state}>
-                      {state}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </div>
+              <Input.Search
+                className="w-full col-span-2 search-input !mt-0"
+                placeholder="Search Coach..."
+                allowClear
+                value={""}
+                onChange={(e) => setHighSchoolSearchQuery(e.target.value)}
+              />
+              <Select
+                value={selectedStateFilter}
+                onChange={(value) => setSelectedStateFilter(value)}
+                className="col-span-1"
+              >
+                <Select.Option value="All States">All States</Select.Option>
+                {uniqueStates.map((state) => (
+                  <Select.Option key={state} value={state}>
+                    {state}
+                  </Select.Option>
+                ))}
+              </Select>
+            </div>
 
             {/* High School List */}
             <div
