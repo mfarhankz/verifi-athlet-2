@@ -1002,7 +1002,7 @@ export default function MapChartExamplePage() {
                                                           "underline",
                                                         fontWeight: "600",
                                                         fontStyle: "italic",
-                                                        color: "#126DB8",
+                                                        color: "#1c1d4d",
                                                       }}
                                                     >
                                                       Assign
@@ -1061,7 +1061,7 @@ export default function MapChartExamplePage() {
                               fontWeight: "600",
                               fontStyle: "italic",
                               textDecoration: "underline",
-                              color: "#C00E1E !important",
+                              color: "#1c1d4d !important",
                               border: "none !important",
                               textAlign: "left",
                               marginLeft: "15px",
@@ -1088,13 +1088,7 @@ export default function MapChartExamplePage() {
                 children: (
                   <div>
                     {/* Search Bar */}
-                    {/* <Input
-                      placeholder="Search..."
-                      prefix={<SearchOutlined />}
-                      value={coachSearchQuery}
-                      onChange={(e) => setCoachSearchQuery(e.target.value)}
-                      style={{ marginBottom: "16px" }}
-                    /> */}
+                   
                     <Input.Search
                       style={{ width: 300 }}
                       className="search-input"
@@ -1160,7 +1154,7 @@ export default function MapChartExamplePage() {
                                   style={{
                                     display: "flex",
                                     fontSize: "14px",
-                                    color: "#1890ff",
+                                    color: "#1c1d4d",
                                   }}
                                 >
                                   {coach.email}
@@ -1172,19 +1166,7 @@ export default function MapChartExamplePage() {
                     </div>
                     <a
                       href="#"
-                      style={{
-                        padding: "8px 0",
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        fontStyle: "italic",
-                        textDecoration: "underline",
-                        color: "#C00E1E !important",
-                        border: "none !important",
-                        textAlign: "left",
-                        marginLeft: "0px",
-                        display: "block",
-                        marginTop: "20px",
-                      }}
+                      className="text-[#1c1d4d] underline font-semibold text-base text-left mt-6 block"
                     >
                       Show more coaches
                     </a>
@@ -1216,17 +1198,12 @@ export default function MapChartExamplePage() {
               borderBottom: "1px solid #f0f0f0",
             }}
           >
-            <Typography.Title
-              level={3}
-              className="italic font-semibold !text-[22px]"
-            >
-              Assign Coach
-            </Typography.Title>
+          
+            <h4 className="italic font-semibold !text-[22px] mb-0">Assign Coach</h4>
           </div>
 
           <div
             className="grid grid-cols-3 mt-4 gap-3 mb-5"
-            // style={{ display: "flex", gap: "16px", alignItems: "center" }}
           >
             <Select
               className="w-full col-span-1"
@@ -1381,7 +1358,7 @@ export default function MapChartExamplePage() {
                             <a
                               href="#"
                               type="secondary"
-                              style={{ fontSize: "14px" }}
+                              style={{ fontSize: "14px", color: "#1c1d4d" }}
                             >
                               {coach.email}
                             </a>
@@ -1468,7 +1445,7 @@ export default function MapChartExamplePage() {
                                 </div>
                               </Select.Option>
                             </Select>
-                            <Button size="small" type="default">
+                            <Button size="small" type="default" onClick={() => handleOpenHighSchoolModal(coach)}>
                               + HS
                             </Button>
                           </div>
@@ -1574,12 +1551,9 @@ export default function MapChartExamplePage() {
         {selectedCoachForHighSchool && (
           <div>
             {/* Header */}
-            <Typography.Title
-              level={4}
-              className="italic font-semibold !text-[22px] mb-7"
-            >
-              Assign High School
-            </Typography.Title>
+           
+            <h4 className="italic font-semibold !text-[22px] mb-0">Assign High School</h4>
+
 
             {/* Coach Profile Section */}
             <div
@@ -1613,7 +1587,7 @@ export default function MapChartExamplePage() {
                   href="#"
                   style={{
                     fontSize: "14px",
-                    color: "#1890ff",
+                    color: "#1c1d4d",
                   }}
                 >
                   {selectedCoachForHighSchool.email}
@@ -1720,7 +1694,7 @@ export default function MapChartExamplePage() {
                   <div style={{ textAlign: "right" }}>
                     <Button
                       type="link"
-                      className="text-sm italic font-medium !border-none !text-[#126DB8] !underline"
+                      className="text-sm italic font-medium !border-none !text-[#1c1d4d] !underline"
                       onClick={() => {
                         // Handle unassign logic here
                         console.log("Unassign", school.name);

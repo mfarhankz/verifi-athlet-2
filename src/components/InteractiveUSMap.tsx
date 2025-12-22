@@ -725,10 +725,10 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
   return (
     <Card
       title={
-        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <h4 className="italic font-semibold !text-[22px] mb-0">
           <i className="icon-svg-left-arrow"></i>
           {title}
-        </span>
+        </h4>
       }
       extra={
         <Space>
