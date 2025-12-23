@@ -59,6 +59,9 @@ export default function MapChartExamplePage() {
   const [entireStateSelected, setEntireStateSelected] = useState<Set<string>>(
     new Set()
   );
+  const [expandedCountyLists, setExpandedCountyLists] = useState<Set<string>>(
+    new Set()
+  );
   const mapRef = useRef<InteractiveUSMapRef>(null);
 
   // UI state for the right panel
@@ -670,6 +673,22 @@ export default function MapChartExamplePage() {
                     const stateName = state.name.trim();
                     const countiesForState =
                       countiesByState.get(stateName) || [];
+                    const totalCountiesInState =
+                      (allCountiesByState.get(stateName) || []).length;
+                    // Treat full-state selection either when the checkbox was used
+                    // or when all counties are selected via chips.
+                    const isAllCountiesSelected =
+                      entireStateSelected.has(stateName) ||
+                      (totalCountiesInState > 0 &&
+                        countiesForState.length >= totalCountiesInState);
+                    const isExpanded = expandedCountyLists.has(stateName);
+                    const maxCountyChips = 10;
+                    const displayedCounties = isExpanded
+                      ? countiesForState
+                      : countiesForState.slice(0, maxCountyChips);
+                    const remainingCounties = isExpanded
+                      ? 0
+                      : countiesForState.length - displayedCounties.length;
 
                     return (
                       <div key={state.id} className="state-county-list-item">
@@ -683,7 +702,7 @@ export default function MapChartExamplePage() {
                           }}
                         >
                           <div className="flex items-center gap-2">
-                            <h4 className="!text-[40px] font-bold !mb-0 leading-[40px]">
+                            <h4 className="!text-[32px] font-bold !mb-0 leading-[32px]">
                               {state.name}
                             </h4>
                             <Checkbox
@@ -705,12 +724,37 @@ export default function MapChartExamplePage() {
                           <div>
                             <Button
                               type="link"
-                              className="text-sm italic font-medium !border-none !text-[#1c1d4d] !underline mr-4"
+                              className="text-sm italic font-medium !border-none !text-[#1c1d4d] !underline mr-2"
                             >
                               Clear all
                             </Button>
                             <Button
                               type="link"
+                              onClick={() => {
+                                // Open modal with all counties for this state
+                                if (countiesForState.length > 0) {
+                                  const countiesToAssign = countiesForState.map((county) => ({
+                                    id: county.id,
+                                    name: county.name,
+                                    state: county.state || stateName,
+                                  }));
+                                  setSelectedCountiesInModal(countiesToAssign);
+                                  setSelectedCountyForAssignment({
+                                    id: countiesForState[0].id,
+                                    name: countiesForState[0].name,
+                                    state: countiesForState[0].state || stateName,
+                                  });
+                                  setSelectedCoach("");
+                                  // Initialize coach colors map
+                                  const newCoachColors = new Map<string, string>();
+                                  mockCoaches.forEach((coach) => {
+                                    newCoachColors.set(coach.id, coachColors.get(coach.id) || "Red");
+                                  });
+                                  setCoachColors(newCoachColors);
+                                  setCoachSearchQuery("");
+                                  setIsAssignModalVisible(true);
+                                }
+                              }}
                               className="gd !text-[#1c1d4d] !border-none !text-base !font-medium"
                             >
                               Assign
@@ -718,38 +762,94 @@ export default function MapChartExamplePage() {
                           </div>
                         </div>
                         {countiesForState.length > 0 ? (
-                          <div className="flex gap-1 flex-wrap mb-0">
-                            {countiesForState.map((county, index) => (
-                              <h6
-                                key={index}
-                                className="county-list-item"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                  paddingRight: "4px",
-                                }}
-                              >
-                                {county.name}
-                                <CloseOutlined
-                                  onClick={() => handleRemoveCounty(county.id)}
+                          <div className="flex flex-col gap-2 mb-1">
+                            <div className="flex gap-1 flex-wrap">
+                              {displayedCounties.map((county, index) => (
+                                <h6
+                                  key={index}
+                                  className="county-list-item"
                                   style={{
-                                    cursor: "pointer",
-                                    fontSize: "12px",
-                                    marginLeft: "4px",
-                                    backgroundColor: "#fff",
-                                    padding: "2px 4px",
-                                    borderRadius: "50px",
-                                    color: "#1c1d4d",
-                                    width: "20px",
-                                    height: "20px",
-                                    display: "flex",
+                                    display: "inline-flex",
                                     alignItems: "center",
-                                    justifyContent: "center",
+                                    gap: "4px",
+                                    paddingRight: "4px",
                                   }}
-                                />
-                              </h6>
-                            ))}
+                                >
+                                  {county.name}
+                                  <CloseOutlined
+                                    onClick={() => handleRemoveCounty(county.id)}
+                                    style={{
+                                      cursor: "pointer",
+                                      fontSize: "12px",
+                                      marginLeft: "4px",
+                                      backgroundColor: "#fff",
+                                      padding: "2px 4px",
+                                      borderRadius: "50px",
+                                      color: "#1c1d4d",
+                                      width: "20px",
+                                      height: "20px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                    }}
+                                  />
+                                </h6>
+                              ))}
+                            </div>
+                            {(remainingCounties > 0 || isAllCountiesSelected) && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Text className="text-base font-semibold italic text-[#1c1d4d]">
+                                  You have selected{" "}
+                                  {(isAllCountiesSelected &&
+                                    (totalCountiesInState ||
+                                      countiesForState.length)) ||
+                                    countiesForState.length}{" "}
+                                  counties in {state.name} state. Showing{" "}
+                                  {isExpanded
+                                    ? "all"
+                                    : `first ${displayedCounties.length}`}
+                                  {remainingCounties > 0
+                                    ? `, +${remainingCounties} more`
+                                    : ""}.
+                                </Text>
+                                {remainingCounties > 0 && (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    className="!p-0 !h-auto !text-[#1c1d4d] !border-none text-base underline"
+                                    onClick={() => {
+                                      setExpandedCountyLists((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(stateName)) {
+                                          next.delete(stateName);
+                                        } else {
+                                          next.add(stateName);
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    Show all
+                                  </Button>
+                                )}
+                                {isExpanded && (
+                                  <Button
+                                    type="link"
+                                    size="small"
+                                    className="!p-0 !h-auto !text-[#1c1d4d] !border-none text-base underline"
+                                    onClick={() => {
+                                      setExpandedCountyLists((prev) => {
+                                        const next = new Set(prev);
+                                        next.delete(stateName);
+                                        return next;
+                                      });
+                                    }}
+                                  >
+                                    Hide
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <Text type="secondary">No counties selected</Text>
@@ -1034,18 +1134,8 @@ export default function MapChartExamplePage() {
                                         {hasMoreCounties && (
                                           <a
                                             href="#"
-                                            style={{
-                                              padding: "8px 0",
-                                              fontSize: "14px",
-                                              fontWeight: "600",
-                                              fontStyle: "italic",
-                                              textDecoration: "underline",
-                                              color: "#C00E1E !important",
-                                              border: "none !important",
-                                              textAlign: "left",
-                                              marginLeft: "15px",
-                                              display: "block",
-                                            }}
+                                            className="text-[#1c1d4d] underline font-semibold text-base text-left block mt-6 pb-3"
+                                           
                                             onClick={() =>
                                               showMoreCounties(
                                                 stateName,
@@ -1226,6 +1316,8 @@ export default function MapChartExamplePage() {
               className="w-full col-span-1"
               placeholder="Select Counties"
               mode="multiple"
+              // Hide tags in the multiselect input; selections are listed below.
+              tagRender={() => <></>}
               value={selectedCountiesInModal.map((c) => c.id)}
               onChange={(values) => {
                 // Add counties from selectedCountiesData
@@ -1360,8 +1452,8 @@ export default function MapChartExamplePage() {
                       <div className="flex items-center justify-between gap-2">
                         <Radio value={coach.id} />
                         <Avatar
-                          className="rounded-none h-[61px] w-[61px]"
-                          style={{ backgroundColor: "#1890ff" }}
+                          className="!rounded-none !h-[61px] !w-[61px]"
+                          src={coach.avatar}
                         >
                           {coach.name.charAt(0)}
                         </Avatar>
@@ -1573,7 +1665,7 @@ export default function MapChartExamplePage() {
           <div>
             {/* Header */}
 
-            <h4 className="italic font-semibold !text-[22px] mb-0">
+            <h4 className="italic font-semibold !text-[22px] mb-6">
               Assign High School
             </h4>
 
