@@ -180,11 +180,20 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
   const [stateGeographies, setStateGeographies] = useState<Map<string, { name: string; fips: string }>>(new Map());
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const [hoveredCounty, setHoveredCounty] = useState<string | null>(null);
+  const [hoveredSelectedState, setHoveredSelectedState] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [buttonPosition, setButtonPosition] = useState<{ x: number; y: number } | null>(null);
   const [showCountiesLayer, setShowCountiesLayer] = useState(showCounties !== false); // Use prop or default to true
   const [renderKey, setRenderKey] = useState(0); // Force re-render when counties change
   const stateGeoProcessed = useRef(false);
   const countiesProcessed = useRef(false);
   const stateGeographiesRef = useRef<Map<string, { name: string; fips: string }>>(new Map());
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hoveredStateIdRef = useRef<string | null>(null);
+  const hoveredCountyIdRef = useRef<string | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const [isPrintModalVisible, setIsPrintModalVisible] = useState(false);
   const [position, setPosition] = useState({ coordinates: [0, 0] as [number, number], zoom: 1 });
   const [targetPosition, setTargetPosition] = useState({ coordinates: [0, 0] as [number, number], zoom: 1 });
@@ -754,7 +763,10 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
       style={{ width, textAlign: "left" }}
       bodyStyle={{ padding: 0, height: typeof height === "number" ? `${height}px` : height }}
     >
-      <div style={{ height: typeof height === "number" ? `${height}px` : height, width: "100%", position: "relative" }}>
+      <div 
+        ref={mapContainerRef}
+        style={{ height: typeof height === "number" ? `${height}px` : height, width: "100%", position: "relative" }}
+      >
         {/* Zoom Controls */}
         <div style={{ 
           position: "absolute", 
@@ -784,6 +796,65 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
             style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}
           />
         </div>
+
+        {/* Hover-select action for selected state */}
+        {hoveredSelectedState && buttonPosition && mapContainerRef.current && (() => {
+          const rect = mapContainerRef.current!.getBoundingClientRect();
+          const buttonWidth = 250; // Approximate button width
+          const buttonHeight = 40; // Approximate button height
+          let left = buttonPosition.x + 10;
+          let top = buttonPosition.y - buttonHeight - 10;
+          
+          // Keep button within bounds
+          if (left + buttonWidth > rect.width) {
+            left = buttonPosition.x - buttonWidth - 10;
+          }
+          if (left < 0) {
+            left = 10;
+          }
+          if (top < 0) {
+            top = buttonPosition.y + 10;
+          }
+          if (top + buttonHeight > rect.height) {
+            top = rect.height - buttonHeight - 10;
+          }
+          
+          return (
+            <div
+              style={{
+                position: "absolute",
+                left: `${left}px`,
+                top: `${top}px`,
+                zIndex: 1001,
+                display: "flex",
+                gap: "8px",
+                pointerEvents: "auto",
+                backgroundColor: "rgba(255, 255, 255, 0.95)",
+                padding: "8px",
+                borderRadius: "4px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+              }}
+            >
+            <Button
+              type="primary"
+              size="small"
+              style={{
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                pointerEvents: "auto",
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSelectAllCountiesForState(
+                  hoveredSelectedState.name.trim(),
+                  hoveredSelectedState.id
+                );
+              }}
+            >
+              Select all counties in {hoveredSelectedState.name}
+            </Button>
+          </div>
+          );
+        })()}
         
         <ComposableMap
           projection="geoAlbersUsa"
@@ -950,8 +1021,51 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                             strokeWidth: 2,
                           },
                         }}
-                        onMouseEnter={() => setHoveredState(stateId)}
-                        onMouseLeave={() => setHoveredState(null)}
+                        onMouseEnter={(e: any) => {
+                          setHoveredState(stateId);
+                          hoveredStateIdRef.current = stateId;
+                          // Clear any pending timeout
+                          if (hoverTimeoutRef.current) {
+                            clearTimeout(hoverTimeoutRef.current);
+                            hoverTimeoutRef.current = null;
+                          }
+                          if (selectedStates.has(stateId)) {
+                            setHoveredSelectedState({ id: stateId, name: stateName });
+                            // Set initial button position
+                            if (mapContainerRef.current) {
+                              const rect = mapContainerRef.current.getBoundingClientRect();
+                              setButtonPosition({
+                                x: e.clientX - rect.left,
+                                y: e.clientY - rect.top,
+                              });
+                            }
+                          } else {
+                            setHoveredSelectedState(null);
+                            setButtonPosition(null);
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredState(null);
+                          const currentStateId = hoveredStateIdRef.current;
+                          hoveredStateIdRef.current = null;
+                          // Clear hover timeout if exists
+                          if (hoverTimeoutRef.current) {
+                            clearTimeout(hoverTimeoutRef.current);
+                          }
+                          // Delay clearing to allow county hover to set it first
+                          hoverTimeoutRef.current = setTimeout(() => {
+                            // Only clear if we're still not hovering over this state or its counties
+                            if (hoveredStateIdRef.current !== currentStateId && hoveredCountyIdRef.current === null) {
+                              setHoveredSelectedState((prev) => {
+                                if (prev && prev.id === currentStateId) {
+                                  return null;
+                                }
+                                return prev;
+                              });
+                              setButtonPosition(null);
+                            }
+                          }, 100);
+                        }}
                         onClick={() => {
                           handleStateClick(geo);
                         }}
@@ -1130,8 +1244,55 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                             strokeWidth: 1,
                           },
                         }}
-                        onMouseEnter={() => setHoveredCounty(countyId)}
-                        onMouseLeave={() => setHoveredCounty(null)}
+                        onMouseEnter={(e: any) => {
+                          setHoveredCounty(countyId);
+                          hoveredCountyIdRef.current = countyId;
+                          // Clear any pending timeout
+                          if (hoverTimeoutRef.current) {
+                            clearTimeout(hoverTimeoutRef.current);
+                            hoverTimeoutRef.current = null;
+                          }
+                          // If this county's state is selected, show the "Select all counties" button
+                          if (countyStateName) {
+                            for (const [stateId, stateData] of Array.from(statesData.entries())) {
+                              if (selectedStates.has(stateId) && stateData.name === countyStateName) {
+                                hoveredStateIdRef.current = stateId;
+                                setHoveredSelectedState({ id: stateId, name: countyStateName });
+                                // Set initial button position
+                                if (mapContainerRef.current) {
+                                  const rect = mapContainerRef.current.getBoundingClientRect();
+                                  setButtonPosition({
+                                    x: e.clientX - rect.left,
+                                    y: e.clientY - rect.top,
+                                  });
+                                }
+                                break;
+                              }
+                            }
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredCounty(null);
+                          hoveredCountyIdRef.current = null;
+                          const currentStateId = hoveredStateIdRef.current;
+                          // Clear hover timeout if exists
+                          if (hoverTimeoutRef.current) {
+                            clearTimeout(hoverTimeoutRef.current);
+                          }
+                          // Delay clearing to allow moving to another county or back to state
+                          hoverTimeoutRef.current = setTimeout(() => {
+                            // Only clear if we're still not hovering over this state or its counties
+                            if (hoveredStateIdRef.current !== currentStateId && hoveredCountyIdRef.current === null) {
+                              setHoveredSelectedState((prev) => {
+                                if (prev && prev.id === currentStateId) {
+                                  return null;
+                                }
+                                return prev;
+                              });
+                              setButtonPosition(null);
+                            }
+                          }, 100);
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCountyClick(geo);
