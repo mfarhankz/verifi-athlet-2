@@ -481,6 +481,16 @@ export default function MapChartExamplePage() {
     setSelectedCountiesInModal((prev) => prev.filter((c) => c.id !== countyId));
   };
 
+  // Handle selecting all counties in modal
+  const handleSelectAllCounties = () => {
+    const allCounties = selectedCountiesData.map((county) => ({
+      id: county.id,
+      name: county.name,
+      state: county.state || "",
+    }));
+    setSelectedCountiesInModal(allCounties);
+  };
+
   // Handle coach selection in modal
   const handleConfirmCoachAssignment = () => {
     if (selectedCountiesInModal.length > 0 && selectedCoach) {
@@ -957,7 +967,7 @@ export default function MapChartExamplePage() {
                                         // <CaretDownOutlined style={{ fontSize: "12px", color: "#1c1d4d" }} />
                                         <div className="flex gap-2 items-center">
                                           <i className="flex icon-arrow-down-1"></i>
-                                          <Text className="text-xl italic font-semibold">
+                                          <Text className="text-[24px] italic font-semibold">
                                             {state.name}
                                           </Text>
                                         </div>
@@ -965,7 +975,7 @@ export default function MapChartExamplePage() {
                                         // <CaretRightOutlined style={{ fontSize: "12px", color: "#1c1d4d" }} />
                                         <div className=" flex gap-2 items-center">
                                           <i className="flex icon-arrow-right-3"></i>
-                                          <Text className="text-xl italic font-semibold">
+                                          <Text className="!text-[24px] italic font-semibold">
                                             {state.name}
                                           </Text>
                                         </div>
@@ -1065,11 +1075,7 @@ export default function MapChartExamplePage() {
                                                 }}
                                               >
                                                 <Text
-                                                  style={{
-                                                    fontSize: "16px",
-                                                    fontStyle: "italic",
-                                                    color: "#1c1d4d",
-                                                  }}
+                                                  className="text-[16px] italic font-normal text-[#1c1d4d]"
                                                 >
                                                   {county.name}
                                                 </Text>
@@ -1311,7 +1317,10 @@ export default function MapChartExamplePage() {
             </h4>
           </div>
 
-          <div className="grid grid-cols-3 mt-4 gap-3 mb-5">
+          <div className="grid grid-cols-3 mt-4 gap-3 mb-5 relative">
+            <label className="text-[16px] italic font-normal text-[#1c1d4d] absolute left-[10px] top-[8px] z-10">
+              Select Counties
+            </label>
             <Select
               className="w-full col-span-1"
               placeholder="Select Counties"
@@ -1380,9 +1389,26 @@ export default function MapChartExamplePage() {
                 flexDirection: "column",
               }}
             >
-              <Typography.Title level={5} style={{ marginBottom: "16px" }}>
-                Selected Counties
-              </Typography.Title>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "16px",
+                }}
+              >
+                <Typography.Title level={5} style={{ margin: 0 }}>
+                  Selected Counties
+                </Typography.Title>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={handleSelectAllCounties}
+                  className="!p-0 !h-auto !text-[#1c1d4d] !border-none text-base underline"
+                >
+                  Select all
+                </Button>
+              </div>
               <div style={{ flex: 1, overflowY: "auto" }}>
                 {selectedCountiesInModal.length > 0 ? (
                   <Space
