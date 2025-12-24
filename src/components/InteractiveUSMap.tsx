@@ -679,35 +679,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
     return "rgba(176, 176, 191, 0.5)"; // Default - #b0b0bf (more visible)
   }, [hasSelectedCountiesInState, selectedStates]);
 
-  // Get unique border color for each selected state
-  const getStateBorderColor = useCallback((stateId: string): string => {
-    if (!selectedStates.has(stateId)) {
-      return "#ffffff"; // Default white border for unselected states
-    }
-    
-    // Array of distinct colors for selected states
-    const stateColors = [
-      "#0958d9", // Blue
-      "#cf1322", // Red
-      "#389e0d", // Green
-      "#d48806", // Orange
-      "#722ed1", // Purple
-      "#eb2f96", // Pink
-      "#13c2c2", // Cyan
-      "#fa8c16", // Orange-red
-      "#2f54eb", // Indigo
-      "#52c41a", // Light green
-      "#faad14", // Gold
-      "#f5222d", // Bright red
-    ];
-    
-    // Get the index of this state in the selectedStates set
-    const selectedStatesArray = Array.from(selectedStates);
-    const stateIndex = selectedStatesArray.indexOf(stateId);
-    
-    // Use modulo to cycle through colors if more states than colors
-    return stateColors[stateIndex % stateColors.length];
-  }, [selectedStates]);
 
   // Color mapping function
   const getColorHex = (colorName: string): string => {
@@ -797,56 +768,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
         ref={mapContainerRef}
         style={{ height: typeof height === "number" ? `${height}px` : height, width: "100%", position: "relative" }}
       >
-        {/* State Color Legend */}
-        {selectedStates.size > 0 && (
-          <div style={{
-            position: "absolute",
-            top: "16px",
-            left: "16px",
-            zIndex: 1000,
-            backgroundColor: "rgba(255, 255, 255, 0.95)",
-            padding: "12px",
-            borderRadius: "4px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            maxWidth: "250px",
-            maxHeight: "400px",
-            overflowY: "auto",
-          }}>
-            <Text strong style={{ fontSize: "14px", marginBottom: "8px", display: "block" }}>
-              Selected States:
-            </Text>
-            <Space direction="vertical" size="small" style={{ width: "100%" }}>
-              {Array.from(selectedStates).map((stateId, index) => {
-                const stateData = statesData.get(stateId);
-                if (!stateData) return null;
-                const borderColor = getStateBorderColor(stateId);
-                return (
-                  <div
-                    key={stateId}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "4px 0",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        backgroundColor: borderColor,
-                        border: "2px solid #fff",
-                        borderRadius: "2px",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <Text style={{ fontSize: "13px" }}>{stateData.name}</Text>
-                  </div>
-                );
-              })}
-            </Space>
-          </div>
-        )}
 
         {/* Zoom Controls */}
         <div style={{ 
@@ -1067,8 +988,8 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                     fontSize = minFontSize + (normalizedArea * (maxFontSize - minFontSize));
                   }
                   
-                  // Get unique border color for this state if selected
-                  const borderColor = isSelected ? getStateBorderColor(stateId) : (hasCountiesSelected ? "#389e0d" : "#ffffff");
+                  // Get border color for this state
+                  const borderColor = isSelected ? "#389e0d" : (hasCountiesSelected ? "#389e0d" : "#ffffff");
                   const borderWidth = isSelected ? 4 : (hasCountiesSelected ? 3 : 2);
                   
                   // Use a wrapper to ensure fill is applied
@@ -1080,8 +1001,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                         fill={fillColor}
                         stroke={borderColor}
                         strokeWidth={borderWidth}
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
                         style={{
                           default: {
                             outline: "none",
@@ -1089,8 +1008,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                             fill: fillColor,
                             stroke: borderColor,
                             strokeWidth: borderWidth,
-                            strokeLinejoin: "round",
-                            strokeLinecap: "round",
                           },
                           hover: {
                             outline: "none",
@@ -1100,8 +1017,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                             cursor: "pointer",
                             stroke: borderColor,
                             strokeWidth: isSelected ? 5 : (hasCountiesSelected ? 4 : 2),
-                            strokeLinejoin: "round",
-                            strokeLinecap: "round",
                           },
                           pressed: {
                             outline: "none",
@@ -1110,8 +1025,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                               : "rgba(144, 238, 144, 0.6)",
                             stroke: borderColor,
                             strokeWidth: isSelected ? 5 : (hasCountiesSelected ? 4 : 2),
-                            strokeLinejoin: "round",
-                            strokeLinecap: "round",
                           },
                         }}
                         onMouseEnter={(e: any) => {
@@ -1389,44 +1302,6 @@ const InteractiveUSMap = forwardRef<InteractiveUSMapRef, InteractiveUSMapProps>(
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCountyClick(geo);
-                        }}
-                      />
-                    );
-                  });
-                }}
-              </Geographies>
-            )}
-            
-            {/* State border overlay - renders on top of counties to ensure full border visibility */}
-            {selectedStates.size > 0 && (
-              <Geographies geography={US_STATES_URL}>
-                {({ geographies }: { geographies: any[] }) => {
-                  return geographies.map((geo: any) => {
-                    const stateId = geo.properties?.state || geo.id;
-                    if (!selectedStates.has(stateId)) {
-                      return null;
-                    }
-                    
-                    const borderColor = getStateBorderColor(stateId);
-                    return (
-                      <Geography
-                        key={`border-${stateId}`}
-                        geography={geo}
-                        fill="none"
-                        stroke={borderColor}
-                        strokeWidth={2}
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
-                        style={{
-                          default: {
-                            outline: "none",
-                            pointerEvents: "none",
-                            fill: "none",
-                            stroke: borderColor,
-                            strokeWidth: 2,
-                            strokeLinejoin: "round",
-                            strokeLinecap: "round",
-                          },
                         }}
                       />
                     );
